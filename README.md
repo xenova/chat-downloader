@@ -31,8 +31,10 @@ optional arguments:
 ```
 python chat_replay_downloader.py <video_url> -output <file_name>
 ```
-If the file name ends in `.json`, the array will be written to the file in JSON format ([Example](example.json)). Otherwise, the chat messages will be outputted to the file in the following format:\
-`[<time>] <author>: <message>` ([Example](example.txt))
+
+
+If the file name ends in `.json`, the array will be written to the file in JSON format. Otherwise, the chat messages will be outputted to the file in the following format:\
+`[<time>] <author>: <message>`
 
 ##### 2. Output file of chat messages, starting at a certain time (in seconds) until the end
 ```
@@ -47,6 +49,17 @@ python chat_replay_downloader.py <video_url> -end_time <time_in_seconds> -output
 ##### 4. Output file of chat messages, starting and ending at certain times (in seconds)
 ```
 python chat_replay_downloader.py <video_url> -start_time <time_in_seconds> -end_time <time_in_seconds> -output <file_name>
+```
+
+#### Example outputs
+[JSON Example](example.json):
+```
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.json
+```
+
+[Text Example](example.txt):
+```
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.txt
 ```
 
 ### Python module
