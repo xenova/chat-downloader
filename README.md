@@ -94,8 +94,4 @@ messages = get_chat_replay('video_url', end_time = 60) # Start at 0 seconds (beg
 ##### 5. Return list of chat messages, starting and ending at certain times (in seconds)
 ```python
 messages = get_chat_replay('video_url', start_time = 60, end_time = 120) # Start at 60 seconds and end at 120 seconds
-<<<<<<< HEAD
 ```
-=======
-```
->>>>>>> 1e8879fe5caec19932c94ea7c999b72f35442bf3
