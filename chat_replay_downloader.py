@@ -44,9 +44,10 @@ class ChatReplayDownloader:
 			'message':message
 		}
 
+	# Ensure printing to standard output can be done
 	def __print_item(self,item):
-		print('['+item['time_text']+']',item['author']+':',item['message'])
-
+		print('['+item['time_text']+']',item['author']+':',item['message'].encode('utf-8').decode('utf-8','ignore'))
+		
 	# Parse run method - Reads YouTube formatted messages
 	def __parse_message_runs(self, runs):
 		message_text = ''
