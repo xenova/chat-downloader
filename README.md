@@ -2,7 +2,7 @@
 ## Retrieve YouTube/Twitch chat for past broadcasts/VODs.
 
 ### Requirements:
-Please run `pip install -r requirements.txt` to ensure you have all the necessary dependencies.
+Please run `pip install -r requirements.txt` to ensure you have the necessary dependencies.
 
 ### Command line:
 #### Usage
