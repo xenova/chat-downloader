@@ -10,14 +10,14 @@ class InvalidURL(Exception):
 
 class ChatReplayDownloader:
 	__HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36'}
-	
+
 	__YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
 	__YOUTUBE_API_TEMPLATE = 'https://www.youtube.com/live_chat_replay/get_live_chat_replay?continuation={}&playerOffsetMs={}&hidden=false&pbj=1'
 
 	__TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
 	__TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko' # public client id
 	__TWITCH_API_TEMPLATE = 'https://api.twitch.tv/v5/videos/{}/comments?client_id={}'
-	
+
 	def __init__(self):
 		self.session = requests.Session()
 
@@ -43,7 +43,7 @@ class ChatReplayDownloader:
 			'author':author,
 			'message':message
 		}
-	
+
 	def __print_item(self,item):
 		print('['+item['time_text']+']',item['author']+':',item['message'])
 
@@ -88,7 +88,7 @@ class ChatReplayDownloader:
 		info = self.__session_get_json(chat_url)
 		return info['response']['continuationContents']['liveChatContinuation']
 
-	
+
 
 	def get_youtube_messages(self, video_id, start_time = 0, end_time = None):
 		messages = []
@@ -101,7 +101,7 @@ class ChatReplayDownloader:
 		# Live chat replay - All messages are visible
 
 		first_time = True
-		
+
 		try:
 			while True:
 				# must run to get first few messages, otherwise might miss some
@@ -110,7 +110,7 @@ class ChatReplayDownloader:
 					first_time = False
 				else:
 					info = self.__get_info(continuation,offset_milliseconds)
-				
+
 				if('actions' not in info):
 					break
 
@@ -137,7 +137,7 @@ class ChatReplayDownloader:
 						data = self.__create_item(timestampUsec,timestampText,time_in_seconds,author,message)
 						messages.append(data)
 						self.__print_item(data)
-				
+
 				continuation = info['continuations'][0]['liveChatReplayContinuationData']['continuation']
 			return messages
 
@@ -147,7 +147,7 @@ class ChatReplayDownloader:
 	def get_twitch_messages(self, video_id, start_time = 0, end_time = None):
 		messages = []
 		api_url = self.__TWITCH_API_TEMPLATE.format(video_id,self.__TWITCH_CLIENT_ID)
-		
+
 		cursor = ''
 		try:
 			while True:
@@ -180,9 +180,9 @@ class ChatReplayDownloader:
 					return messages
 		except KeyboardInterrupt:
 			return messages
-		
+
 	def get_chat_replay(self, url, start_time = 0, end_time = None):
-		
+
 		match = re.search(self.__YT_REGEX,url)
 		if(match):
 			return self.get_youtube_messages(match.group(1), start_time, end_time)
@@ -215,7 +215,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	try:
-		
+
 		chat_messages = chat_downloader.get_chat_replay(args.url,start_time=args.start_time, end_time=args.end_time)
 
 		if(args.output != None):
@@ -227,7 +227,7 @@ if __name__ == '__main__':
 				for message in chat_messages:
 					print('['+message['time_text']+']',message['author']+':',message['message'],file=f)
 				f.close()
-			
+
 			print('Finished writing',len(chat_messages),'messages to',args.output)
 
 	except InvalidURL:
