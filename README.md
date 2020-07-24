@@ -31,8 +31,8 @@ optional arguments:
 ```
 python chat_replay_downloader.py <video_url> -output <file_name>
 ```
-If the file name ends in `.json`, the array will be written to the file in JSON format. Otherwise, the chat messages will be outputted to the file in the following format:\
-`[<time>] <author>: <message>`
+If the file name ends in `.json`, the array will be written to the file in JSON format ([Example](example.json)). Otherwise, the chat messages will be outputted to the file in the following format:\
+`[<time>] <author>: <message>` ([Example](example.txt))
 
 ##### 2. Output file of chat messages, starting at a certain time (in seconds) until the end
 ```
