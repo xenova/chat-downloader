@@ -3,4 +3,3 @@ requests
 datetime
 regex
 argparse
-bs4
