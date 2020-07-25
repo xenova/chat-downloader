@@ -7,9 +7,9 @@ Please run `pip install -r requirements.txt` to ensure you have the necessary de
 ### Command line:
 #### Usage
 ```
-usage: ChatReplayDownloader.py [-h] [-start_time START_TIME]
-                               [-end_time END_TIME] [-output OUTPUT]
-                               url
+usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
+                                 [-end_time END_TIME] [-output OUTPUT]
+                                 url
 
 Retrieve YouTube/Twitch chat for past broadcasts/VODs.
 
@@ -19,9 +19,10 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -start_time START_TIME, -from START_TIME
-                        start time in seconds (default: 0)
+                        start time in seconds or hh:mm:ss (default: 0)
   -end_time END_TIME, -to END_TIME
-                        end time in seconds (default: None = until the end)
+                        end time in seconds or hh:mm:ss (default: None = until
+                        the end)
   -output OUTPUT, -o OUTPUT
                         output file (default: None = print to standard output)
 ```
@@ -36,25 +37,30 @@ python chat_replay_downloader.py <video_url> -output <file_name>
 If the file name ends in `.json`, the array will be written to the file in JSON format. Otherwise, the chat messages will be outputted to the file in the following format:\
 `[<time>] <author>: <message>`
 
-##### 2. Output file of chat messages, starting at a certain time (in seconds) until the end
+##### 2. Output file of chat messages, starting at a certain time (in seconds or hh:mm:ss) until the end
 ```
-python chat_replay_downloader.py <video_url> -start_time <time_in_seconds> -output <file_name>
-```
-
-##### 3. Output file of chat messages, starting from the beginning and ending at a certain time (in seconds)
-```
-python chat_replay_downloader.py <video_url> -end_time <time_in_seconds> -output <file_name>
+python chat_replay_downloader.py <video_url> -start_time <time> -output <file_name>
 ```
 
-##### 4. Output file of chat messages, starting and ending at certain times (in seconds)
+##### 3. Output file of chat messages, starting from the beginning and ending at a certain time (in seconds or hh:mm:ss)
 ```
-python chat_replay_downloader.py <video_url> -start_time <time_in_seconds> -end_time <time_in_seconds> -output <file_name>
+python chat_replay_downloader.py <video_url> -end_time <time> -output <file_name>
+```
+
+##### 4. Output file of chat messages, starting and ending at certain times (in seconds or hh:mm:ss)
+```
+python chat_replay_downloader.py <video_url> -start_time <time> -end_time <time> -output <file_name>
 ```
 
 #### Example outputs
 [JSON Example](example.json):
 ```
 python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.json
+```
+
+[CSV Example](example.csv):
+```
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.csv
 ```
 
 [Text Example](example.txt):
@@ -91,20 +97,20 @@ twitch_messages = get_twitch_messages('xxxxxxxxx')
 <br/>
 
 The following examples use parameters which all three methods (`get_chat_replay`, `get_youtube_messages`, `get_twitch_messages`) have. Both of the following parameters are optional:
-* `start_time`: start time in seconds (Default is 0, which is the start of the video)
-* `end_time`: end time in seconds (Default is None, which means it will continue until the video ends)
+* `start_time`: start time in seconds or hh:mm:ss (Default is 0, which is the start of the video)
+* `end_time`: end time in seconds or hh:mm:ss (Default is None, which means it will continue until the video ends)
 
-##### 3. Return list of chat messages, starting at a certain time (in seconds)
+##### 3. Return list of chat messages, starting at a certain time (in seconds or hh:mm:ss)
 ```python
 messages = get_chat_replay('video_url', start_time = 60) # Start at 60 seconds and continue until the end
 ```
 
-##### 4. Return list of chat messages, ending at a certain time (in seconds)
+##### 4. Return list of chat messages, ending at a certain time (in seconds or hh:mm:ss)
 ```python
 messages = get_chat_replay('video_url', end_time = 60) # Start at 0 seconds (beginning) and end at 60 seconds
 ```
 
-##### 5. Return list of chat messages, starting and ending at certain times (in seconds)
+##### 5. Return list of chat messages, starting and ending at certain times (in seconds or hh:mm:ss)
 ```python
 messages = get_chat_replay('video_url', start_time = 60, end_time = 120) # Start at 60 seconds and end at 120 seconds
 ```
