@@ -4,3 +4,4 @@ datetime
 regex
 argparse
 csv
+emoji

@@ -1,4 +1,4 @@
-import requests, json, datetime, re, argparse, bs4, csv
+import requests, json, datetime, re, argparse, bs4, csv, emoji
 
 class NoChatReplay(Exception):
     """Raised when the video does not contain a chat replay"""
@@ -44,9 +44,11 @@ class ChatReplayDownloader:
 			'message':message
 		}
 
-	# Ensure printing to standard output can be done
+	# Ensure printing to standard output can be done (usually issues with printing emojis and non utf-8 characters)
 	def __print_item(self,item):
-		print('['+item['time_text']+']',item['author']+':',item['message'].encode('utf-8').decode('utf-8','ignore'))
+		# safe for printing to console, especially on windows
+		message = emoji.demojize(item['message']).encode('utf-8').decode('utf-8','ignore')
+		print('['+item['time_text']+']',item['author']+':',message)
 		
 	# Parse run method - Reads YouTube formatted messages
 	def __parse_message_runs(self, runs):
