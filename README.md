@@ -53,19 +53,19 @@ python chat_replay_downloader.py <video_url> -start_time <time> -end_time <time>
 ```
 
 #### Example outputs
-[JSON Example](example.json):
+[JSON Example](examples/example.json):
 ```
-python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output examples/example.json
-```
-
-[CSV Example](example.csv):
-```
-python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output examples/example.csv
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.json
 ```
 
-[Text Example](example.txt):
+[CSV Example](examples/example.csv):
 ```
-python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output examples/example.txt
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.csv
+```
+
+[Text Example](examples/example.txt):
+```
+python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.txt
 ```
 
 ### Python module
