@@ -209,13 +209,13 @@ class ChatReplayDownloader:
 chat_downloader = ChatReplayDownloader()
 
 def get_chat_replay(url, start_time = 0, end_time = None):
-	chat_downloader.get_chat_replay(url,start_time,end_time)
+	return chat_downloader.get_chat_replay(url,start_time,end_time)
 
 def get_youtube_messages(url, start_time = 0, end_time = None):
-	chat_downloader.get_youtube_messages(url,start_time,end_time)
+	return chat_downloader.get_youtube_messages(url,start_time,end_time)
 
 def get_twitch_messages(url, start_time = 0, end_time = None):
-	chat_downloader.get_twitch_messages(url,start_time,end_time)
+	return chat_downloader.get_twitch_messages(url,start_time,end_time)
 
 
 if __name__ == '__main__':
