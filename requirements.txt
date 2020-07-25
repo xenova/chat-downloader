@@ -3,3 +3,4 @@ requests
 datetime
 regex
 argparse
+csv

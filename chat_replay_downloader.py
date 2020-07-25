@@ -1,4 +1,4 @@
-import requests, json, datetime, re, argparse, bs4
+import requests, json, datetime, re, argparse, bs4, csv
 
 class NoChatReplay(Exception):
     """Raised when the video does not contain a chat replay"""
@@ -89,9 +89,18 @@ class ChatReplayDownloader:
 		info = self.__session_get_json(chat_url)
 		return info['response']['continuationContents']['liveChatContinuation']
 
-
+	def __ensure_seconds(self,time, default = 0):
+		try:
+			return int(time)
+		except ValueError:
+			return self.__time_to_seconds(time)
+		except:
+			return default
 
 	def get_youtube_messages(self, video_id, start_time = 0, end_time = None):
+		start_time = self.__ensure_seconds(start_time, 0)
+		end_time = self.__ensure_seconds(end_time, None)
+
 		messages = []
 
 		offset_milliseconds = start_time * 1000
@@ -146,6 +155,9 @@ class ChatReplayDownloader:
 			return messages
 
 	def get_twitch_messages(self, video_id, start_time = 0, end_time = None):
+		start_time = self.__ensure_seconds(start_time, 0)
+		end_time = self.__ensure_seconds(end_time, None)
+
 		messages = []
 		api_url = self.__TWITCH_API_TEMPLATE.format(video_id,self.__TWITCH_CLIENT_ID)
 
@@ -209,8 +221,8 @@ def get_twitch_messages(url, start_time = 0, end_time = None):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Retrieve YouTube/Twitch chat for past broadcasts/VODs.')
 	parser.add_argument('url', help='YouTube/Twitch video URL')
-	parser.add_argument('-start_time','-from', default=0, type=int, help='start time in seconds (default: 0)')
-	parser.add_argument('-end_time', '-to', default=None, type=int, help='end time in seconds (default: None = until the end)')
+	parser.add_argument('-start_time','-from', default=0, help='start time in seconds or hh:mm:ss (default: 0)')
+	parser.add_argument('-end_time', '-to', default=None, help='end time in seconds or hh:mm:ss (default: None = until the end)')
 	parser.add_argument('-output','-o', default=None, help='output file (default: None = print to standard output)')
 
 	args = parser.parse_args()
@@ -223,6 +235,12 @@ if __name__ == '__main__':
 			if(args.output.endswith('.json')):
 				with open(args.output, 'w') as fp:
 					json.dump(chat_messages, fp)
+			elif(args.output.endswith('.csv')):
+				with open(args.output, 'w', newline='',encoding='utf-8') as fp:
+					if(len(chat_messages)>0):
+						fc = csv.DictWriter(fp,fieldnames=chat_messages[0].keys())
+						fc.writeheader()
+						fc.writerows(chat_messages)
 			else:
 				f = open(args.output,'w',encoding='utf-8')
 				for message in chat_messages:
