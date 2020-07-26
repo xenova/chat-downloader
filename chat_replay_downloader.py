@@ -9,7 +9,10 @@ class InvalidURL(Exception):
     pass
 
 class ChatReplayDownloader:
-	__HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36'}
+	__HEADERS = {
+		'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36',
+		'Accept-Language': 'en-US, en'
+		}
 
 	__YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
 	__YOUTUBE_API_TEMPLATE = 'https://www.youtube.com/live_chat_replay/get_live_chat_replay?continuation={}&playerOffsetMs={}&hidden=false&pbj=1'
