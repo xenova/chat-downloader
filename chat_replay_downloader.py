@@ -224,7 +224,7 @@ def get_twitch_messages(url, start_time = 0, end_time = None):
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Retrieve YouTube/Twitch chat for past broadcasts/VODs.')
+	parser = argparse.ArgumentParser(description='Retrieve YouTube/Twitch chat from past broadcasts/VODs.')
 	parser.add_argument('url', help='YouTube/Twitch video URL')
 	parser.add_argument('-start_time','-from', default=0, help='start time in seconds or hh:mm:ss (default: 0)')
 	parser.add_argument('-end_time', '-to', default=None, help='end time in seconds or hh:mm:ss (default: None = until the end)')

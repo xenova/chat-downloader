@@ -1,5 +1,5 @@
 # Chat Replay Downloader
-## Retrieve YouTube/Twitch chat for past broadcasts/VODs.
+A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!
 
 ### Requirements:
 Please run `pip install -r requirements.txt` to ensure you have the necessary dependencies.
@@ -11,7 +11,7 @@ usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
                                  [-end_time END_TIME] [-output OUTPUT]
                                  url
 
-Retrieve YouTube/Twitch chat for past broadcasts/VODs.
+Retrieve YouTube/Twitch chat from past broadcasts/VODs.
 
 positional arguments:
   url                   YouTube/Twitch video URL
