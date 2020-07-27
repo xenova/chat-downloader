@@ -2,7 +2,8 @@
 A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!
 
 ### Requirements:
-Please run `pip install -r requirements.txt` to ensure you have the necessary dependencies.
+* This tool was created in a Python 3 environment.
+* Run `pip install -r requirements.txt` to ensure you have the necessary dependencies.
 
 ### Command line:
 #### Usage
@@ -34,7 +35,7 @@ python chat_replay_downloader.py <video_url> -output <file_name>
 ```
 
 
-If the file name ends in `.json`, the array will be written to the file in JSON format. Otherwise, the chat messages will be outputted to the file in the following format:\
+If the file name ends in `.json`, the array will be written to the file in JSON format. Similarly, if the file name ends in `.csv`, the data will be written in CSV format. <br> Otherwise, the chat messages will be outputted to the file in the following format:<br>
 `[<time>] <author>: <message>`
 
 ##### 2. Output file of chat messages, starting at a certain time (in seconds or hh:mm:ss) until the end
