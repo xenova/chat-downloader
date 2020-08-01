@@ -1,4 +1,4 @@
-import requests, json, datetime, re, argparse, bs4, csv, emoji
+import requests, json, datetime, re, argparse, bs4, csv, emoji, time
 
 class NoChatReplay(Exception):
     """Raised when the video does not contain a chat replay"""
@@ -15,7 +15,7 @@ class ChatReplayDownloader:
 		}
 
 	__YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
-	__YOUTUBE_API_TEMPLATE = 'https://www.youtube.com/live_chat_replay/get_live_chat_replay?continuation={}&playerOffsetMs={}&hidden=false&pbj=1'
+	__YOUTUBE_API_TEMPLATE = 'https://www.youtube.com/{}/{}?continuation={}&playerOffsetMs={}&hidden=false&pbj=1'
 
 	__TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
 	__TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko' # public client id
@@ -49,9 +49,11 @@ class ChatReplayDownloader:
 
 	# Ensure printing to standard output can be done (usually issues with printing emojis and non utf-8 characters)
 	def __print_item(self,item):
+		time = str(item['timestamp']) if item['time_text'] is None else item['time_text']
+
 		# safe for printing to console, especially on windows
 		message = emoji.demojize(item['message']).encode('utf-8').decode('utf-8','ignore')
-		print('['+item['time_text']+']',item['author']+':',message)
+		print('['+time+']',item['author']+':',message)
 		
 	# Parse run method - Reads YouTube formatted messages
 	def __parse_message_runs(self, runs):
@@ -89,8 +91,14 @@ class ChatReplayDownloader:
 
 		return continuation_by_title_map
 
-	def __get_info(self, cont,offset_microseconds):
-		chat_url = self.__YOUTUBE_API_TEMPLATE.format(cont,offset_microseconds)
+	def __get_info(self, cont,offset_microseconds, is_live):
+
+		chat_url = self.__YOUTUBE_API_TEMPLATE.format(
+			'live_chat' if is_live else 'live_chat_replay',
+			'get_live_chat' if is_live else 'get_live_chat_replay',
+			cont,
+			offset_microseconds)
+
 		info = self.__session_get_json(chat_url)
 		return info['response']['continuationContents']['liveChatContinuation']
 
@@ -111,30 +119,51 @@ class ChatReplayDownloader:
 		offset_milliseconds = start_time * 1000 if start_time > 0 else 0
 
 		continuation_by_title_map = self.__get_initial_youtube_info(video_id)
-		continuation = continuation_by_title_map['Live chat replay']
+		
+		if('Live chat replay' in continuation_by_title_map):
+			is_live = False
+			continuation_title = 'Live chat replay'
+		elif('Live chat' in continuation_by_title_map):
+			is_live = True
+			continuation_title = 'Live chat'
+		else:
+			raise NoChatReplay
+
+		continuation = continuation_by_title_map[continuation_title]
 		# Top chat replay - Some messages, such as potential spam, may not be visible
 		# Live chat replay - All messages are visible
 
 		first_time = True
-
+		# addChatItemAction vs replayChatItemAction
 		try:
 			while True:
 				# must run to get first few messages, otherwise might miss some
 				if(first_time):
-					info = self.__get_info(continuation,0)
+					info = self.__get_info(continuation,0,is_live)
 					first_time = False
 				else:
-					info = self.__get_info(continuation,offset_milliseconds)
-
+					info = self.__get_info(continuation,offset_milliseconds,is_live)
+				
 				if('actions' not in info):
-					break
+					if(is_live):
+						continue # may have more messages for live chat
+					else:
+						break # no more messages for chat replay
 
 				actions = info['actions']
-
+				
 				for action in actions:
-					if 'addChatItemAction' not in action['replayChatItemAction']['actions'][0]:
-						continue
-					item = action['replayChatItemAction']['actions'][0]['addChatItemAction']['item']
+					
+					# test if it is not a message
+					if(is_live):
+						if 'addChatItemAction' not in action:
+							continue
+						item = action['addChatItemAction']['item']
+					else:
+						if 'addChatItemAction' not in action['replayChatItemAction']['actions'][0]:
+							continue
+						item = action['replayChatItemAction']['actions'][0]['addChatItemAction']['item']
+					
 					if 'liveChatTextMessageRenderer' not in item:
 						continue
 					item_info = item['liveChatTextMessageRenderer']
@@ -142,18 +171,29 @@ class ChatReplayDownloader:
 					message = self.__parse_message_runs(item_info['message']['runs'])
 					author = item_info['authorName']['simpleText']
 					timestampUsec = int(item_info['timestampUsec'])
-					timestampText = item_info['timestampText']['simpleText']
 
-					time_in_seconds = int(self.__time_to_seconds(timestampText))
-					if(end_time is not None and time_in_seconds > end_time):
-						return messages
+					if(is_live):
+						timestampText = None
+						time_in_seconds = None
+					else:
+						timestampText = item_info['timestampText']['simpleText']
+						time_in_seconds = int(self.__time_to_seconds(timestampText))
 
-					if(time_in_seconds >= start_time):
+						if(end_time is not None and time_in_seconds > end_time):
+							return messages
+
+					if(is_live or time_in_seconds >= start_time):
 						data = self.__create_item(timestampUsec,timestampText,time_in_seconds,author,message)
 						messages.append(data)
 						self.__print_item(data)
 
-				continuation = info['continuations'][0]['liveChatReplayContinuationData']['continuation']
+				if(is_live):
+					continuation_info = info['continuations'][0]['timedContinuationData']
+					continuation = continuation_info['continuation']
+					time.sleep(continuation_info['timeoutMs']/1000) #must wait before calling again
+				else:
+					continuation = info['continuations'][0]['liveChatReplayContinuationData']['continuation']
+				
 			return messages
 
 		except KeyboardInterrupt:
