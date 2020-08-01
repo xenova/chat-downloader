@@ -54,7 +54,7 @@ class ChatReplayDownloader:
 		# safe for printing to console, especially on windows
 		message = emoji.demojize(item['message']).encode('utf-8').decode('utf-8','ignore')
 		print('['+time+']',item['author']+':',message)
-		
+
 	# Parse run method - Reads YouTube formatted messages
 	def __parse_message_runs(self, runs):
 		message_text = ''
@@ -119,7 +119,7 @@ class ChatReplayDownloader:
 		offset_milliseconds = start_time * 1000 if start_time > 0 else 0
 
 		continuation_by_title_map = self.__get_initial_youtube_info(video_id)
-		
+
 		if('Live chat replay' in continuation_by_title_map):
 			is_live = False
 			continuation_title = 'Live chat replay'
@@ -143,7 +143,7 @@ class ChatReplayDownloader:
 					first_time = False
 				else:
 					info = self.__get_info(continuation,offset_milliseconds,is_live)
-				
+
 				if('actions' not in info):
 					if(is_live):
 						continue # may have more messages for live chat
@@ -151,9 +151,9 @@ class ChatReplayDownloader:
 						break # no more messages for chat replay
 
 				actions = info['actions']
-				
+
 				for action in actions:
-					
+
 					# test if it is not a message
 					if(is_live):
 						if 'addChatItemAction' not in action:
@@ -163,7 +163,7 @@ class ChatReplayDownloader:
 						if 'addChatItemAction' not in action['replayChatItemAction']['actions'][0]:
 							continue
 						item = action['replayChatItemAction']['actions'][0]['addChatItemAction']['item']
-					
+
 					if 'liveChatTextMessageRenderer' not in item:
 						continue
 					item_info = item['liveChatTextMessageRenderer']
@@ -187,13 +187,14 @@ class ChatReplayDownloader:
 						messages.append(data)
 						self.__print_item(data)
 
-				if(is_live):
-					continuation_info = info['continuations'][0]['timedContinuationData']
-					continuation = continuation_info['continuation']
-					time.sleep(continuation_info['timeoutMs']/1000) #must wait before calling again
-				else:
-					continuation = info['continuations'][0]['liveChatReplayContinuationData']['continuation']
-				
+				continuation_info = info['continuations'][0]
+				for key in ('invalidationContinuationData','timedContinuationData','liveChatReplayContinuationData'):
+					if key in continuation_info:
+						continuation = continuation_info[key]['continuation']
+
+				if 'timeoutMs' in continuation_info: # must wait before calling again
+					time.sleep(continuation_info['timeoutMs']/1000)
+
 			return messages
 
 		except KeyboardInterrupt:
@@ -244,7 +245,7 @@ class ChatReplayDownloader:
 		match = re.search(self.__YT_REGEX,url)
 		if(match):
 			return self.get_youtube_messages(match.group(1), start_time, end_time)
-		
+
 		match = re.search(self.__TWITCH_REGEX,url)
 		if(match):
 			return self.get_twitch_messages(match.group(1), start_time, end_time)
