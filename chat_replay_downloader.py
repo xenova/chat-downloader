@@ -108,7 +108,7 @@ class ChatReplayDownloader:
 
 		messages = []
 
-		offset_milliseconds = start_time * 1000
+		offset_milliseconds = start_time * 1000 if start_time > 0 else 0
 
 		continuation_by_title_map = self.__get_initial_youtube_info(video_id)
 		continuation = continuation_by_title_map['Live chat replay']
