@@ -9,7 +9,9 @@ A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No
 #### Usage
 ```
 usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
-                                 [-end_time END_TIME] [-output OUTPUT]
+                                 [-end_time END_TIME]
+                                 [-message_type {messages,superchat,all}]
+                                 [-output OUTPUT]
                                  url
 
 Retrieve YouTube/Twitch chat from past broadcasts/VODs.
@@ -20,12 +22,17 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -start_time START_TIME, -from START_TIME
-                        start time in seconds or hh:mm:ss (default: 0)
+                        start time in seconds or hh:mm:ss
+                        (default: 0)
   -end_time END_TIME, -to END_TIME
-                        end time in seconds or hh:mm:ss (default: None = until
-                        the end)
+                        end time in seconds or hh:mm:ss
+                        (default: None = until the end)
+  -message_type {messages,superchat,all}
+                        types of messages to include [YouTube only]
+                        (default: messages)
   -output OUTPUT, -o OUTPUT
-                        output file (default: None = print to standard output)
+                        name of output file
+                        (default: None = print to standard output)
 ```
 
 #### Examples
