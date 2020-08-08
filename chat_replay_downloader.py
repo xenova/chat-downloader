@@ -449,6 +449,7 @@ if __name__ == '__main__':
 			args.url, start_time=args.start_time, end_time=args.end_time, message_type=args.message_type)
 
 		if(args.output != None):
+			num_of_messages = len(chat_messages)
 			if(args.output.endswith('.json')):
 				with open(args.output, 'w') as fp:
 					json.dump(chat_messages, fp)
@@ -459,17 +460,20 @@ if __name__ == '__main__':
 					for message in chat_messages:
 						fieldnames+=message.keys()
 
-					if(len(chat_messages) > 0):
+					if(num_of_messages > 0):
 						fc = csv.DictWriter(fp,fieldnames=list(set(fieldnames)))
 						fc.writeheader()
 						fc.writerows(chat_messages)
 			else:
 				f = open(args.output, 'w', encoding='utf-8')
+				num_of_messages = 0 # reset count
 				for message in chat_messages:
-					print(chat_downloader.message_to_string(message), file=f)
+					if('ticker_duration' not in message): # needed for duplicates
+						num_of_messages += 1
+						print(chat_downloader.message_to_string(message), file=f)
 				f.close()
 
-			print('Finished writing', len(chat_messages),
+			print('Finished writing', num_of_messages,
 				  'messages to', args.output)
 
 	except InvalidURL:
