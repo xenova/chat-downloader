@@ -40,7 +40,8 @@ class ChatReplayDownloader:
 
 	__TYPES_OF_MESSAGES = {
 		'ignore': [
-			'liveChatViewerEngagementMessageRenderer', # message saying Live Chat replay is on
+			# message saying Live Chat replay is on
+			'liveChatViewerEngagementMessageRenderer',
 			'liveChatPlaceholderItemRenderer',  # placeholder
 			'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
 		],
@@ -117,22 +118,22 @@ class ChatReplayDownloader:
 			'hex': hex_colour
 		}
 
+	def message_to_string(self, item):
+		return '[{}] {}{}: {}'.format(
+			item['time_text'] or str(item['timestamp']),
+			'*{}* '.format(item['amount']) if 'amount' in item else '',
+			item['author'],
+			item['message'] or ''
+		)
+
 	# Ensure printing to standard output can be done
 	# (usually issues with printing emojis and non utf-8 characters)
 	# safe for printing to console, especially on windows
 	def __print_item(self, item):
-		message_text = item['message'] or ''
-		message = emoji.demojize(message_text).encode(
+		message = self.message_to_string(item)
+		safe_string = emoji.demojize(message).encode(
 			'utf-8').decode('utf-8', 'ignore')
-
-		output_string = '[{}] {}{}: {}'.format(
-			item['time_text'] or str(item['timestamp']),
-			'*{}* '.format(item['amount']) if 'amount' in item else '',
-			item['author'],
-			message
-		)
-
-		print(output_string)
+		print(safe_string)
 
 	# Parse run method - Reads YouTube formatted messages
 	def __parse_message_runs(self, runs):
@@ -318,7 +319,7 @@ class ChatReplayDownloader:
 					# user wants everything, keep going
 					if(message_type == 'all'):
 						pass
-					
+
 					# user does not want superchat + message is superchat
 					elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']):
 						continue
@@ -435,7 +436,7 @@ if __name__ == '__main__':
 	parser.add_argument('-end_time', '-to', default=None,
 						help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-	parser.add_argument('-message_type', choices=['messages','superchat','all'], default='messages',
+	parser.add_argument('-message_type', choices=['messages', 'superchat', 'all'], default='messages',
 						help='types of messages to include [YouTube only]\n(default: %(default)s)')
 
 	parser.add_argument('-output', '-o', default=None,
@@ -453,16 +454,19 @@ if __name__ == '__main__':
 					json.dump(chat_messages, fp)
 			elif(args.output.endswith('.csv')):
 				with open(args.output, 'w', newline='', encoding='utf-8') as fp:
+
+					fieldnames = []
+					for message in chat_messages:
+						fieldnames+=message.keys()
+
 					if(len(chat_messages) > 0):
-						fc = csv.DictWriter(
-							fp, fieldnames=chat_messages[0].keys())
+						fc = csv.DictWriter(fp,fieldnames=list(set(fieldnames)))
 						fc.writeheader()
 						fc.writerows(chat_messages)
 			else:
 				f = open(args.output, 'w', encoding='utf-8')
 				for message in chat_messages:
-					print('['+message['time_text']+']',
-						  message['author']+':', message['message'], file=f)
+					print(chat_downloader.message_to_string(message), file=f)
 				f.close()
 
 			print('Finished writing', len(chat_messages),
