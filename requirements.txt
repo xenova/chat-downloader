@@ -3,5 +3,4 @@ requests
 datetime
 regex
 argparse
-csv
 emoji
