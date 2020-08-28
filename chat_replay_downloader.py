@@ -92,7 +92,7 @@ class ChatReplayDownloader:
 
 	# convert timestamp to seconds
 	def __time_to_seconds(self, time):
-		return sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.split(':')))) * (-1 if time[0] == '-' else 1)
+		return sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',','').split(':')))) * (-1 if time[0] == '-' else 1)
 
 	# convert seconds to timestamp
 	def __seconds_to_time(self, seconds):
