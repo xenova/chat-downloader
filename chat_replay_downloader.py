@@ -9,6 +9,11 @@ import emoji
 import time
 
 
+class VideoUnavailable(Exception):
+    """Raised when video is unavailable (e.g. if video is private)"""
+    pass
+
+
 class NoChatReplay(Exception):
     """Raised when the video does not contain a chat replay"""
     pass
@@ -157,6 +162,9 @@ class ChatReplayDownloader:
             'script') if script.string and 'ytInitialData' in script.string)
         ytInitialData = json.loads(next(line.strip()[len('window["ytInitialData"] = '):-1]
                                         for line in ytInitialData_script.splitlines() if 'ytInitialData' in line))
+
+        if('contents' not in ytInitialData):
+            raise VideoUnavailable
 
         columns = ytInitialData['contents']['twoColumnWatchNextResults']
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
@@ -481,5 +489,7 @@ if __name__ == '__main__':
         print('Invalid URL.')
     except NoChatReplay:
         print('Video does not have a chat replay.')
+    except VideoUnavailable:
+            print('Video is unavailable (may be private).')
     except KeyboardInterrupt:
         print('Interrupted.')
