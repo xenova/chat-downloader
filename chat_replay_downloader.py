@@ -47,6 +47,7 @@ class ChatReplayDownloader:
         'ignore': [
             # message saying Live Chat replay is on
             'liveChatViewerEngagementMessageRenderer',
+            'liveChatPurchasedProductMessageRenderer',  # produce purchased
             'liveChatPlaceholderItemRenderer',  # placeholder
             'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
         ],
@@ -490,6 +491,6 @@ if __name__ == '__main__':
     except NoChatReplay:
         print('Video does not have a chat replay.')
     except VideoUnavailable:
-            print('Video is unavailable (may be private).')
+        print('Video is unavailable (may be private).')
     except KeyboardInterrupt:
         print('Interrupted.')
