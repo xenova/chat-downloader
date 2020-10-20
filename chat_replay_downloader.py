@@ -251,7 +251,7 @@ class ChatReplayDownloader:
 
         return data
 
-    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages'):
+    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live'):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
 
@@ -261,17 +261,22 @@ class ChatReplayDownloader:
 
         continuation_by_title_map = self.__get_initial_youtube_info(video_id)
 
-        if('Live chat replay' in continuation_by_title_map):
+        # choose between live chat and top chat
+        # Top chat replay - Some messages, such as potential spam, may not be visible
+        # Live chat replay - All messages are visible
+        chat_type_field = chat_type.title()
+        chat_replay_field = '{} chat replay'.format(chat_type_field)
+        chat_live_field = '{} chat'.format(chat_type_field)
+
+        if(chat_replay_field in continuation_by_title_map):
             is_live = False
-            continuation_title = 'Live chat replay'
-        elif('Live chat' in continuation_by_title_map):
+            continuation_title = chat_replay_field
+        elif(chat_live_field in continuation_by_title_map):
             is_live = True
-            continuation_title = 'Live chat'
+            continuation_title = chat_live_field
         else:
             raise NoChatReplay
 
-        # Top chat replay - Some messages, such as potential spam, may not be visible
-        # Live chat replay - All messages are visible
         continuation = continuation_by_title_map[continuation_title]
 
         first_time = True
@@ -405,11 +410,11 @@ class ChatReplayDownloader:
         except KeyboardInterrupt:
             return messages
 
-    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages'):
+    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
 
         match = re.search(self.__YT_REGEX, url)
         if(match):
-            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type)
+            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type)
 
         match = re.search(self.__TWITCH_REGEX, url)
         if(match):
@@ -421,12 +426,12 @@ class ChatReplayDownloader:
 chat_downloader = ChatReplayDownloader()
 
 
-def get_chat_replay(url, start_time=0, end_time=None, message_type='messages'):
-    return chat_downloader.get_chat_replay(url, start_time, end_time, message_type)
+def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+    return chat_downloader.get_chat_replay(url, start_time, end_time, message_type, chat_type)
 
 
-def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages'):
-    return chat_downloader.get_youtube_messages(url, start_time, end_time, message_type)
+def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+    return chat_downloader.get_youtube_messages(url, start_time, end_time, message_type, chat_type)
 
 
 def get_twitch_messages(url, start_time=0, end_time=None):
@@ -448,6 +453,9 @@ if __name__ == '__main__':
     parser.add_argument('-message_type', choices=['messages', 'superchat', 'all'], default='messages',
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
 
+    parser.add_argument('-chat_type', choices=['live', 'top'], default='live',
+                        help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
+
     parser.add_argument('-output', '-o', default=None,
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
@@ -455,7 +463,7 @@ if __name__ == '__main__':
 
     try:
         chat_messages = chat_downloader.get_chat_replay(
-            args.url, start_time=args.start_time, end_time=args.end_time, message_type=args.message_type)
+            args.url, start_time=args.start_time, end_time=args.end_time, message_type=args.message_type, chat_type=args.chat_type)
 
         if(args.output != None):
             num_of_messages = len(chat_messages)

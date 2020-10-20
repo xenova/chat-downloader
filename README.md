@@ -11,7 +11,7 @@ A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No
 usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
                                  [-end_time END_TIME]
                                  [-message_type {messages,superchat,all}]
-                                 [-output OUTPUT]
+                                 [-chat_type {live,top}] [-output OUTPUT]
                                  url
 
 Retrieve YouTube/Twitch chat from past broadcasts/VODs.
@@ -30,6 +30,9 @@ optional arguments:
   -message_type {messages,superchat,all}
                         types of messages to include [YouTube only]
                         (default: messages)
+  -chat_type {live,top}
+                        which chat to get messages from [YouTube only]
+                        (default: live)
   -output OUTPUT, -o OUTPUT
                         name of output file
                         (default: None = print to standard output)
