@@ -9,6 +9,11 @@ import emoji
 import time
 
 
+class ParsingError(Exception):
+    """Raised when video data cannot be parsed"""
+    pass
+
+
 class VideoUnavailable(Exception):
     """Raised when video is unavailable (e.g. if video is private)"""
     pass
@@ -31,7 +36,7 @@ class NoContinuation(Exception):
 
 class ChatReplayDownloader:
     __HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
         'Accept-Language': 'en-US, en'
     }
 
@@ -126,7 +131,8 @@ class ChatReplayDownloader:
 
     def message_to_string(self, item):
         return '[{}] {}{}: {}'.format(
-            item['time_text'] or str(item['timestamp']),
+            item['time_text'] if 'time_text' in item else (
+                str(item['timestamp']) if 'timestamp' in item else ''),
             '*{}* '.format(item['amount']) if 'amount' in item else '',
             item['author'],
             item['message'] or ''
@@ -161,13 +167,19 @@ class ChatReplayDownloader:
         soup = bs4.BeautifulSoup(html.text, 'html.parser')
         ytInitialData_script = next(script.string for script in soup.find_all(
             'script') if script.string and 'ytInitialData' in script.string)
-        ytInitialData = json.loads(next(line.strip()[len('window["ytInitialData"] = '):-1]
-                                        for line in ytInitialData_script.splitlines() if 'ytInitialData' in line))
+        json_data = next(line.strip()[len('window["ytInitialData"] = '):-1]
+                         for line in ytInitialData_script.splitlines() if 'ytInitialData' in line)
+
+        try:
+            ytInitialData = json.loads(json_data)
+        except:
+            raise ParsingError
 
         if('contents' not in ytInitialData):
             raise VideoUnavailable
 
         columns = ytInitialData['contents']['twoColumnWatchNextResults']
+
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
             raise NoChatReplay
 
@@ -237,13 +249,10 @@ class ChatReplayDownloader:
         data['message'] = self.__parse_message_runs(
             data['message']['runs']) if 'message' in data else None
 
-        if('timestamp' in data):
-            data['timestamp'] = int(data['timestamp'])
-            data['time_in_seconds'] = int(
-                self.__time_to_seconds(data['time_text']))
-        else:
-            data['timestamp'] = None
-            data['time_in_seconds'] = None
+        data['timestamp'] = int(
+            data['timestamp']) if 'timestamp' in data else None
+        data['time_in_seconds'] = int(
+            self.__time_to_seconds(data['time_text'])) if 'time_text' in data else None
 
         for colour_key in ('header_color', 'body_color'):
             if(colour_key in data):
@@ -287,7 +296,10 @@ class ChatReplayDownloader:
                         info = self.__get_live_info(continuation)
 
                         if('actions' not in info):
-                            continuation_info = info['continuations'][0]['timedContinuationData']
+                            continuation_info = info['continuations'][0]
+                            continuation_info = continuation_info[next(
+                                iter(continuation_info))]
+
                             if 'timeoutMs' in continuation_info:
                                 # must wait before calling again
                                 # prevents 429 errors (too many requests)
@@ -496,6 +508,8 @@ if __name__ == '__main__':
 
     except InvalidURL:
         print('Invalid URL.')
+    except ParsingError:
+        print('Unable to parse video data.')
     except NoChatReplay:
         print('Video does not have a chat replay.')
     except VideoUnavailable:
