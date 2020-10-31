@@ -79,7 +79,7 @@ python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -st
 python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.txt
 ```
 
-For more examples, check out the [examples](examples) folder:
+You can find more examples [here](EXAMPLES.md). The output for each can be found in the [examples](examples) folder.
 
 ### Python module
 
