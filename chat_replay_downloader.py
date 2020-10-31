@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import requests
 import json
 import datetime
@@ -9,32 +10,44 @@ import emoji
 import time
 
 
+class VideoNotFound(Exception):
+    """Raised when video cannot be found."""
+    pass
+
+
 class ParsingError(Exception):
-    """Raised when video data cannot be parsed"""
+    """Raised when video data cannot be parsed."""
     pass
 
 
 class VideoUnavailable(Exception):
-    """Raised when video is unavailable (e.g. if video is private)"""
+    """Raised when video is unavailable (e.g. if video is private)."""
     pass
 
 
 class NoChatReplay(Exception):
-    """Raised when the video does not contain a chat replay"""
+    """Raised when the video does not contain a chat replay."""
     pass
 
 
 class InvalidURL(Exception):
-    """Raised when the url given is invalid (neither YouTube nor Twitch)"""
+    """Raised when the url given is invalid (neither YouTube nor Twitch)."""
+    pass
+
+
+class TwitchError(Exception):
+    """Raised when an error occurs with a Twitch video."""
     pass
 
 
 class NoContinuation(Exception):
-    """Raised when there are no more messages to retrieve (in a live stream)"""
+    """Raised when there are no more messages to retrieve (in a live stream)."""
     pass
 
 
 class ChatReplayDownloader:
+    """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
+
     __HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
         'Accept-Language': 'en-US, en'
@@ -52,7 +65,7 @@ class ChatReplayDownloader:
         'ignore': [
             # message saying Live Chat replay is on
             'liveChatViewerEngagementMessageRenderer',
-            'liveChatPurchasedProductMessageRenderer',  # produce purchased
+            'liveChatPurchasedProductMessageRenderer',  # product purchased
             'liveChatPlaceholderItemRenderer',  # placeholder
             'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
         ],
@@ -78,6 +91,7 @@ class ChatReplayDownloader:
 
     __IMPORTANT_KEYS_AND_REMAPPINGS = {
         'timestampUsec': 'timestamp',
+        'authorExternalChannelId': 'author_id',
         'authorName': 'author',
         'purchaseAmountText': 'amount',
         'message': 'message',
@@ -93,35 +107,51 @@ class ChatReplayDownloader:
     }
 
     def __init__(self):
+        """Initialise a new session for making requests."""
         self.session = requests.Session()
 
     def __session_get(self, url):
+        """Make a request using the current session."""
         return self.session.get(url, headers=self.__HEADERS)
 
     def __session_get_json(self, url):
+        """Make a request using the current session and get json data."""
         return self.__session_get(url).json()
 
-    # convert timestamp to seconds
+    def __timestamp_to_microseconds(self, timestamp):
+        """
+        Convert RFC3339 timestamp to microseconds.
+        This is needed as datetime.datetime.strptime() does not support nanosecond precision.
+        """
+        info = list(filter(None, re.split('[\.|Z]{1}', timestamp))) + [0]
+        return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
+
     def __time_to_seconds(self, time):
+        """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
         return sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1)
 
-    # convert seconds to timestamp
     def __seconds_to_time(self, seconds):
+        """Convert seconds to timestamp."""
         return re.sub(r'^0:0?', '', str(datetime.timedelta(0, seconds)))
 
-    # convert argb integer to rgba array
+    def __microseconds_to_timestamp(self, microseconds):
+        """Convert unix time to human-readable timestamp."""
+        return datetime.datetime.fromtimestamp(microseconds//1000000).strftime('%Y-%m-%d %H:%M:%S')
+
     def __arbg_int_to_rgba(self, argb_int):
+        """Convert ARGB integer to RGBA array."""
         red = (argb_int >> 16) & 255
         green = (argb_int >> 8) & 255
         blue = argb_int & 255
         alpha = (argb_int >> 24) & 255
         return [red, green, blue, alpha]
 
-    # convert rgba colours to hex
     def __rgba_to_hex(self, colours):
+        """Convert RGBA array to hex colour."""
         return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
     def __get_colours(self, argb_int):
+        """Given an ARGB integer, return both RGBA and hex values."""
         rgba_colour = self.__arbg_int_to_rgba(argb_int)
         hex_colour = self.__rgba_to_hex(rgba_colour)
         return {
@@ -130,25 +160,27 @@ class ChatReplayDownloader:
         }
 
     def message_to_string(self, item):
+        """Format item for printing to standard output."""
         return '[{}] {}{}: {}'.format(
             item['time_text'] if 'time_text' in item else (
-                str(item['timestamp']) if 'timestamp' in item else ''),
+                self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
             '*{}* '.format(item['amount']) if 'amount' in item else '',
             item['author'],
             item['message'] or ''
         )
 
-    # Ensure printing to standard output can be done
-    # (usually issues with printing emojis and non utf-8 characters)
-    # safe for printing to console, especially on windows
     def __print_item(self, item):
+        """
+        Ensure printing to standard output can be done safely (especially on Windows).
+        There are usually issues with printing emojis and non utf-8 characters.
+        """
         message = self.message_to_string(item)
         safe_string = emoji.demojize(message).encode(
             'utf-8').decode('utf-8', 'ignore')
         print(safe_string)
 
-    # Parse run method - Reads YouTube formatted messages
     def __parse_message_runs(self, runs):
+        """ Reads and parses YouTube formatted messages (i.e. runs). """
         message_text = ''
         for run in runs:
             if 'text' in run:
@@ -160,8 +192,8 @@ class ChatReplayDownloader:
 
         return message_text
 
-    # Get initial video information
     def __get_initial_youtube_info(self, video_id):
+        """ Get initial YouTube video information. """
         original_url = 'https://www.youtube.com/watch?v={}'.format(video_id)
         html = self.__session_get(original_url)
         soup = bs4.BeautifulSoup(html.text, 'html.parser')
@@ -172,16 +204,26 @@ class ChatReplayDownloader:
 
         try:
             ytInitialData = json.loads(json_data)
-        except:
-            raise ParsingError
+        except Exception as e:
+            try:
+                # for some reason, it sometimes cuts out and this fixes it
+                ytInitialData = json.loads('{"resp'+json_data)
+            except Exception:
+                raise ParsingError(
+                    'Unable to parse video data. Please try again.')
 
         if('contents' not in ytInitialData):
-            raise VideoUnavailable
+            raise VideoUnavailable('Video is unavailable (may be private).')
 
         columns = ytInitialData['contents']['twoColumnWatchNextResults']
 
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
-            raise NoChatReplay
+            error_message = 'Video does not have a chat replay.'
+            try:
+                error_message = self.__parse_message_runs(
+                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
+            finally:
+                raise NoChatReplay(error_message)
 
         livechat_header = columns['conversationBar']['liveChatRenderer']['header']
         viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
@@ -195,16 +237,19 @@ class ChatReplayDownloader:
         return continuation_by_title_map
 
     def __get_replay_info(self, continuation, offset_microseconds):
+        """Get YouTube replay info, given a continuation or a certain offset."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(
             'live_chat_replay', 'get_live_chat_replay', continuation) + self.__YOUTUBE_API_PARAMETERS_TEMPLATE.format(offset_microseconds)
         return self.__get_continuation_info(url)
 
     def __get_live_info(self, continuation):
+        """Get YouTube live info, given a continuation."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(
             'live_chat', 'get_live_chat', continuation)
         return(self.__get_continuation_info(url))
 
     def __get_continuation_info(self, url):
+        """Get continuation info for a YouTube video."""
         info = self.__session_get_json(url)
         if('continuationContents' in info['response']):
             return info['response']['continuationContents']['liveChatContinuation']
@@ -212,6 +257,7 @@ class ChatReplayDownloader:
             raise NoContinuation
 
     def __ensure_seconds(self, time, default=0):
+        """Ensure time is returned in seconds."""
         try:
             return int(time)
         except ValueError:
@@ -220,6 +266,7 @@ class ChatReplayDownloader:
             return default
 
     def __parse_item(self, item):
+        """Parse YouTube item information."""
         data = {}
         index = list(item.keys())[0]
         item_info = item[index]
@@ -241,6 +288,14 @@ class ChatReplayDownloader:
             if(type(data[new_key]) is dict and 'simpleText' in data[new_key]):
                 data[new_key] = data[new_key]['simpleText']
 
+        if('authorBadges' in item_info):
+            badges = []
+            for badge in item_info['authorBadges']:
+                if('liveChatAuthorBadgeRenderer' in badge and 'tooltip' in badge['liveChatAuthorBadgeRenderer']):
+                    badges.append(
+                        badge['liveChatAuthorBadgeRenderer']['tooltip'])
+            data['badges'] = ', '.join(badges)
+
         if('showItemEndpoint' in item_info):  # has additional information
             data.update(self.__parse_item(
                 item_info['showItemEndpoint']['showLiveChatItemEndpoint']['renderer']))
@@ -261,6 +316,8 @@ class ChatReplayDownloader:
         return data
 
     def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+        """ Get chat messages for a YouTube video. """
+
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
 
@@ -270,7 +327,6 @@ class ChatReplayDownloader:
 
         continuation_by_title_map = self.__get_initial_youtube_info(video_id)
 
-        # choose between live chat and top chat
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
         chat_type_field = chat_type.title()
@@ -284,7 +340,7 @@ class ChatReplayDownloader:
             is_live = True
             continuation_title = chat_live_field
         else:
-            raise NoChatReplay
+            raise NoChatReplay('Video does not have a chat replay.')
 
         continuation = continuation_by_title_map[continuation_title]
 
@@ -324,11 +380,15 @@ class ChatReplayDownloader:
                     print('No continuation found, stream may have ended.')
                     break
 
-                actions = info['actions']
+                for action in info['actions']:
+                    data = {}
 
-                for action in actions:
                     if('replayChatItemAction' in action):
-                        action = action['replayChatItemAction']['actions'][0]
+                        replay_chat_item_action = action['replayChatItemAction']
+                        if('videoOffsetTimeMsec' in replay_chat_item_action):
+                            data['video_offset_time_msec'] = int(
+                                replay_chat_item_action['videoOffsetTimeMsec'])
+                        action = replay_chat_item_action['actions'][0]
 
                     action_name = list(action.keys())[0]
                     if('item' not in action[action_name]):
@@ -354,7 +414,7 @@ class ChatReplayDownloader:
                     elif(message_type != 'messages' and index in self.__TYPES_OF_MESSAGES['message']):
                         continue
 
-                    data = self.__parse_item(item)
+                    data = dict(self.__parse_item(item), **data)
 
                     time_in_seconds = data['time_in_seconds']
                     if(end_time is not None and time_in_seconds > end_time):
@@ -392,6 +452,9 @@ class ChatReplayDownloader:
                     api_url, cursor, start_time)
                 info = self.__session_get_json(url)
 
+                if('error' in info):
+                    raise TwitchError(info['message'])
+
                 for comment in info['comments']:
                     time_in_seconds = float(comment['content_offset_seconds'])
                     if(time_in_seconds < start_time):
@@ -403,8 +466,7 @@ class ChatReplayDownloader:
                     created_at = comment['created_at']
 
                     data = {
-                        'timestamp': int(datetime.datetime.strptime(
-                            created_at, '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in created_at else '%Y-%m-%dT%H:%M:%SZ').timestamp()*1e6),
+                        'timestamp': self.__timestamp_to_microseconds(created_at),
                         'time_text': self.__seconds_to_time(int(time_in_seconds)),
                         'time_in_seconds': time_in_seconds,
                         'author': comment['commenter']['display_name'],
@@ -423,7 +485,6 @@ class ChatReplayDownloader:
             return messages
 
     def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
-
         match = re.search(self.__YT_REGEX, url)
         if(match):
             return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type)
@@ -432,7 +493,7 @@ class ChatReplayDownloader:
         if(match):
             return self.get_twitch_messages(match.group(1), start_time, end_time)
 
-        raise InvalidURL
+        raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
 chat_downloader = ChatReplayDownloader()
@@ -452,7 +513,7 @@ def get_twitch_messages(url, start_time=0, end_time=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Retrieve YouTube/Twitch chat from past broadcasts/VODs.',
+        description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('url', help='YouTube/Twitch video URL')
@@ -481,10 +542,9 @@ if __name__ == '__main__':
             num_of_messages = len(chat_messages)
             if(args.output.endswith('.json')):
                 with open(args.output, 'w') as fp:
-                    json.dump(chat_messages, fp)
+                    json.dump(chat_messages, fp, sort_keys=True) #, indent=4
             elif(args.output.endswith('.csv')):
                 with open(args.output, 'w', newline='', encoding='utf-8') as fp:
-
                     fieldnames = []
                     for message in chat_messages:
                         fieldnames += message.keys()
@@ -503,16 +563,17 @@ if __name__ == '__main__':
                         print(chat_downloader.message_to_string(message), file=f)
                 f.close()
 
-            print('Finished writing', num_of_messages,
-                  'messages to', args.output)
+            print('Finished writing', num_of_messages, 'messages to', args.output)
 
-    except InvalidURL:
-        print('Invalid URL.')
-    except ParsingError:
-        print('Unable to parse video data.')
-    except NoChatReplay:
-        print('Video does not have a chat replay.')
-    except VideoUnavailable:
-        print('Video is unavailable (may be private).')
+    except InvalidURL as e:
+        print('[Invalid URL]', e)
+    except ParsingError as e:
+        print('[Parsing Error]', e)
+    except NoChatReplay as e:
+        print('[No Chat Replay]', e)
+    except VideoUnavailable as e:
+        print('[Video Unavailable]', e)
+    except TwitchError as e:
+        print('[Twitch Error]', e)
     except KeyboardInterrupt:
         print('Interrupted.')
