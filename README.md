@@ -14,7 +14,7 @@ usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
                                  [-chat_type {live,top}] [-output OUTPUT]
                                  url
 
-Retrieve YouTube/Twitch chat from past broadcasts/VODs.
+A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!
 
 positional arguments:
   url                   YouTube/Twitch video URL
@@ -78,6 +78,8 @@ python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -st
 ```
 python chat_replay_downloader.py https://www.youtube.com/watch?v=pMsvr55cTZ0 -start_time 14400 -end_time 15000 -output example.txt
 ```
+
+For more examples, check out the [examples](examples) folder:
 
 ### Python module
 
