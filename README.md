@@ -12,6 +12,7 @@ usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
                                  [-end_time END_TIME]
                                  [-message_type {messages,superchat,all}]
                                  [-chat_type {live,top}] [-output OUTPUT]
+                                 [-cookies COOKIES]
                                  url
 
 A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!
@@ -36,6 +37,9 @@ optional arguments:
   -output OUTPUT, -o OUTPUT
                         name of output file
                         (default: None = print to standard output)
+  -cookies COOKIES, -c COOKIES
+                        name of cookies file
+                        (default: None)
 ```
 
 #### Examples
@@ -91,7 +95,7 @@ import chat_replay_downloader
 or
 
 ```python
-from chat_replay_downloader import get_chat_replay, get_youtube_messages, get_twitch_messages
+from chat_replay_downloader import *
 ```
 The following examples will use the second form of importing.
 
@@ -126,4 +130,20 @@ messages = get_chat_replay('video_url', end_time = 60) # Start at 0 seconds (beg
 ##### 5. Return list of chat messages, starting and ending at certain times (in seconds or hh:mm:ss)
 ```python
 messages = get_chat_replay('video_url', start_time = 60, end_time = 120) # Start at 60 seconds and end at 120 seconds
+```
+
+##### 6. Create a single chat_replay_downloader session and retrieve multiple chat replays.
+```python
+session = ChatReplayDownloader()
+
+messages = session.get_chat_replay('video_url')
+youtube_messages = session.get_youtube_messages('youtube_video_id')
+twitch_messages = session.get_twitch_messages('twitch_vod_id')
+```
+
+This technique is also used for more advanced features such as passing cookies to the session:
+```python
+session = ChatReplayDownloader(cookies='path/to/cookies.txt')
+
+messages = session.get_chat_replay('video_url')
 ```

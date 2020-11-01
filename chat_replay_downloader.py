@@ -8,6 +8,8 @@ import bs4
 import csv
 import emoji
 import time
+import os
+from http.cookiejar import MozillaCookieJar, LoadError
 
 
 class VideoNotFound(Exception):
@@ -42,6 +44,11 @@ class TwitchError(Exception):
 
 class NoContinuation(Exception):
     """Raised when there are no more messages to retrieve (in a live stream)."""
+    pass
+
+
+class CookieError(Exception):
+    """Raised when an error occurs while loading a cookie file."""
     pass
 
 
@@ -106,13 +113,24 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    def __init__(self):
+    def __init__(self, cookies=None):
         """Initialise a new session for making requests."""
         self.session = requests.Session()
+        self.session.headers = self.__HEADERS
+
+        cj = MozillaCookieJar(cookies)
+        if cookies is not None:
+            # Only attempt to load if the cookie file exists.
+            if os.path.exists(cookies):
+                cj.load(ignore_discard=True, ignore_expires=True)
+            else:
+                raise CookieError(
+                    "The file '{}' could not be found.".format(cookies))
+        self.session.cookies = cj
 
     def __session_get(self, url):
         """Make a request using the current session."""
-        return self.session.get(url, headers=self.__HEADERS)
+        return self.session.get(url)
 
     def __session_get_json(self, url):
         """Make a request using the current session and get json data."""
@@ -496,21 +514,6 @@ class ChatReplayDownloader:
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
-chat_downloader = ChatReplayDownloader()
-
-
-def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
-    return chat_downloader.get_chat_replay(url, start_time, end_time, message_type, chat_type)
-
-
-def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
-    return chat_downloader.get_youtube_messages(url, start_time, end_time, message_type, chat_type)
-
-
-def get_twitch_messages(url, start_time=0, end_time=None):
-    return chat_downloader.get_twitch_messages(url, start_time, end_time)
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
@@ -532,9 +535,14 @@ if __name__ == '__main__':
     parser.add_argument('-output', '-o', default=None,
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
+    parser.add_argument('-cookies', '-c', default=None,
+                        help='name of cookies file\n(default: %(default)s)')
+
     args = parser.parse_args()
 
     try:
+        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+
         chat_messages = chat_downloader.get_chat_replay(
             args.url, start_time=args.start_time, end_time=args.end_time, message_type=args.message_type, chat_type=args.chat_type)
 
@@ -542,7 +550,7 @@ if __name__ == '__main__':
             num_of_messages = len(chat_messages)
             if(args.output.endswith('.json')):
                 with open(args.output, 'w') as fp:
-                    json.dump(chat_messages, fp, sort_keys=True) #, indent=4
+                    json.dump(chat_messages, fp, sort_keys=True)  # , indent=4
             elif(args.output.endswith('.csv')):
                 with open(args.output, 'w', newline='', encoding='utf-8') as fp:
                     fieldnames = []
@@ -563,7 +571,8 @@ if __name__ == '__main__':
                         print(chat_downloader.message_to_string(message), file=f)
                 f.close()
 
-            print('Finished writing', num_of_messages, 'messages to', args.output)
+            print('Finished writing', num_of_messages,
+                  'messages to', args.output)
 
     except InvalidURL as e:
         print('[Invalid URL]', e)
@@ -575,5 +584,18 @@ if __name__ == '__main__':
         print('[Video Unavailable]', e)
     except TwitchError as e:
         print('[Twitch Error]', e)
+    except (LoadError, CookieError) as e:
+        print('[Cookies Error]', e)
     except KeyboardInterrupt:
         print('Interrupted.')
+
+else:
+    # used as a module
+    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type)
+
+    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type)
+
+    def get_twitch_messages(url, start_time=0, end_time=None):
+        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time)
