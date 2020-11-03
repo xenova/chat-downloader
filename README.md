@@ -12,7 +12,7 @@ usage: chat_replay_downloader.py [-h] [-start_time START_TIME]
                                  [-end_time END_TIME]
                                  [-message_type {messages,superchat,all}]
                                  [-chat_type {live,top}] [-output OUTPUT]
-                                 [-cookies COOKIES]
+                                 [-cookies COOKIES] [--hide_output]
                                  url
 
 A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!
@@ -40,6 +40,8 @@ optional arguments:
   -cookies COOKIES, -c COOKIES
                         name of cookies file
                         (default: None)
+  --hide_output, --h    whether to hide output or not
+                        (default: False)
 ```
 
 #### Examples

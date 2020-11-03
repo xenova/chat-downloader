@@ -12,6 +12,11 @@ import os
 from http.cookiejar import MozillaCookieJar, LoadError
 
 
+class CallbackFunction(Exception):
+    """Raised when the callback function does not have (only) one required positional argument"""
+    pass
+
+
 class VideoNotFound(Exception):
     """Raised when video cannot be found."""
     pass
@@ -187,7 +192,7 @@ class ChatReplayDownloader:
             item['message'] or ''
         )
 
-    def __print_item(self, item):
+    def print_item(self, item):
         """
         Ensure printing to standard output can be done safely (especially on Windows).
         There are usually issues with printing emojis and non utf-8 characters.
@@ -333,7 +338,7 @@ class ChatReplayDownloader:
 
         return data
 
-    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
         """ Get chat messages for a YouTube video. """
 
         start_time = self.__ensure_seconds(start_time, 0)
@@ -441,9 +446,17 @@ class ChatReplayDownloader:
                     if(is_live or time_in_seconds >= start_time):
                         messages.append(data)
 
-                        # print if it is not a ticker message (prevents duplicates)
-                        if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
-                            self.__print_item(data)
+                        if(callback is None):
+                            # print if it is not a ticker message (prevents duplicates)
+                            if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                                self.print_item(data)
+
+                        elif(callable(callback)):
+                            try:
+                                callback(data)
+                            except TypeError:
+                                raise CallbackFunction(
+                                    'Incorrect number of parameters for function '+callback.__name__)
 
                 continuation_info = info['continuations'][0]
                 for key in ('invalidationContinuationData', 'timedContinuationData', 'liveChatReplayContinuationData'):
@@ -455,7 +468,7 @@ class ChatReplayDownloader:
         except KeyboardInterrupt:
             return messages
 
-    def get_twitch_messages(self, video_id, start_time=0, end_time=None):
+    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
 
@@ -493,7 +506,15 @@ class ChatReplayDownloader:
 
                     messages.append(data)
 
-                    self.__print_item(data)
+                    if(callback is None):
+                        self.print_item(data)
+
+                    elif(callable(callback)):
+                        try:
+                            callback(data)
+                        except TypeError:
+                            raise CallbackFunction(
+                                'Incorrect number of parameters for function '+callback.__name__)
 
                 if '_next' in info:
                     cursor = info['_next']
@@ -502,14 +523,14 @@ class ChatReplayDownloader:
         except KeyboardInterrupt:
             return messages
 
-    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
+    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
         match = re.search(self.__YT_REGEX, url)
         if(match):
-            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type)
+            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback)
 
         match = re.search(self.__TWITCH_REGEX, url)
         if(match):
-            return self.get_twitch_messages(match.group(1), start_time, end_time)
+            return self.get_twitch_messages(match.group(1), start_time, end_time, callback)
 
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
@@ -538,38 +559,70 @@ if __name__ == '__main__':
     parser.add_argument('-cookies', '-c', default=None,
                         help='name of cookies file\n(default: %(default)s)')
 
+    parser.add_argument('--hide_output', '--h', action='store_true',
+                        help='whether to hide output or not\n(default: %(default)s)')
+
     args = parser.parse_args()
 
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
 
-        chat_messages = chat_downloader.get_chat_replay(
-            args.url, start_time=args.start_time, end_time=args.end_time, message_type=args.message_type, chat_type=args.chat_type)
+        num_of_messages = 0
 
-        if(args.output != None):
-            num_of_messages = len(chat_messages)
+        def do_nothing(item):
+            pass
+
+        def print_item(item):
+            chat_downloader.print_item(item)
+
+        def write_to_file(item):
+            global num_of_messages
+
+            # only file format capable of appending properly
+            with open(args.output, 'a', encoding='utf-8') as f:
+                if('ticker_duration' not in item):  # needed for duplicates
+                    num_of_messages += 1
+                    if(not args.hide_output):
+                        print_item(item)
+                    text = chat_downloader.message_to_string(item)
+                    print(text, file=f)
+
+        callback = do_nothing if args.hide_output else (
+            None if args.output is None else print_item)
+        if(args.output is not None):
             if(args.output.endswith('.json')):
-                with open(args.output, 'w') as fp:
-                    json.dump(chat_messages, fp, sort_keys=True)  # , indent=4
+                pass
             elif(args.output.endswith('.csv')):
-                with open(args.output, 'w', newline='', encoding='utf-8') as fp:
-                    fieldnames = []
-                    for message in chat_messages:
-                        fieldnames += message.keys()
-
-                    if(num_of_messages > 0):
-                        fc = csv.DictWriter(
-                            fp, fieldnames=list(set(fieldnames)))
-                        fc.writeheader()
-                        fc.writerows(chat_messages)
+                fieldnames = []
             else:
-                f = open(args.output, 'w', encoding='utf-8')
-                num_of_messages = 0  # reset count
+                open(args.output, 'w').close()  # empty the file
+                callback = write_to_file
+
+        chat_messages = chat_downloader.get_chat_replay(
+            args.url,
+            start_time=args.start_time,
+            end_time=args.end_time,
+            message_type=args.message_type,
+            chat_type=args.chat_type,
+            callback=callback
+        )
+
+        if(args.output is not None):
+            if(args.output.endswith('.json')):
+                num_of_messages = len(chat_messages)
+                with open(args.output, 'w') as f:
+                    json.dump(chat_messages, f, sort_keys=True)
+
+            elif(args.output.endswith('.csv')):
+                num_of_messages = len(chat_messages)
+                fieldnames = []
                 for message in chat_messages:
-                    if('ticker_duration' not in message):  # needed for duplicates
-                        num_of_messages += 1
-                        print(chat_downloader.message_to_string(message), file=f)
-                f.close()
+                    fieldnames = list(set(fieldnames + list(message.keys())))
+
+                with open(args.output, 'w', newline='', encoding='utf-8') as f:
+                    fc = csv.DictWriter(f, fieldnames=fieldnames)
+                    fc.writeheader()
+                    fc.writerows(chat_messages)
 
             print('Finished writing', num_of_messages,
                   'messages to', args.output)
@@ -590,12 +643,12 @@ if __name__ == '__main__':
         print('Interrupted.')
 
 else:
-    # used as a module
-    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
-        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type)
+    # when used as a module
+    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
+        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback)
 
-    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live'):
-        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type)
+    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
+        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback)
 
-    def get_twitch_messages(url, start_time=0, end_time=None):
-        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time)
+    def get_twitch_messages(url, start_time=0, end_time=None, callback=None):
+        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback)
