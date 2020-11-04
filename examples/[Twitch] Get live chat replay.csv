@@ -1,20 +1,20 @@
-author,time_in_seconds,time_text,timestamp,message
-jump3N,307.0,5:07,1562541137129857,guthenGG
-jump3N,964.0,16:04,1562541137250458,Ey Guthen :)
-jump3N,1045.0,17:25,1562541137331900,Hälsa mr guthen från mig
-jump3N,1175.0,19:35,1562541137372033,:O
-MARTiNSEVN,1279.0,21:19,1562541137409881,vpswedOmega
-klinteman,1765.0,29:25,1562541137444542,du måste ladda ner css
-klinteman,1768.0,29:28,1562541137500995,eller?
-klinteman,1820.0,30:20,1562541137529729,yes
-Clallae566,2046.0,34:06,1562541137557354,Kör ni prophunt?
-klinteman,2092.0,34:52,1562541137601435,vp börjar bli drunk eller?
-klinteman,2102.0,35:02,1562541137636496,börjar prata drunk nu
-klinteman,2115.0,35:15,1562541137670061,haha
-Clallae566,2333.0,38:53,1562541137696045,"Kan ni köra ""Guess Who""?"
-Clallae566,2371.0,39:31,1562541137725930,Ja
-Clallae566,2455.0,40:55,1562541137755744,"Det är många MPC'er och dina kompiar, Det är två av dina kompisar som letar, När dom slår på en mpc så förlorar dom hp, När dom slår på dig så tar som inte dammage"
-Clallae566,2509.0,41:49,1562541137866261,Men man behöver inte installera väll? Det finns ju garrys mdo
-Clallae566,2512.0,41:52,1562541137924458,mod
-Clallae566,2535.0,42:15,1562541137956290,Aa
-Clallae566,3169.0,52:49,1562541137984842,ni kommer förlora
+author,message,time_in_seconds,time_text,timestamp
+jump3N,guthenGG,307.0,5:07,1562541137129857
+jump3N,Ey Guthen :),964.0,16:04,1562541137250458
+jump3N,Hälsa mr guthen från mig,1045.0,17:25,1562541137331900
+jump3N,:O,1175.0,19:35,1562541137372033
+MARTiNSEVN,vpswedOmega,1279.0,21:19,1562541137409881
+klinteman,du måste ladda ner css,1765.0,29:25,1562541137444542
+klinteman,eller?,1768.0,29:28,1562541137500995
+klinteman,yes,1820.0,30:20,1562541137529729
+Clallae566,Kör ni prophunt?,2046.0,34:06,1562541137557354
+klinteman,vp börjar bli drunk eller?,2092.0,34:52,1562541137601435
+klinteman,börjar prata drunk nu,2102.0,35:02,1562541137636496
+klinteman,haha,2115.0,35:15,1562541137670061
+Clallae566,"Kan ni köra ""Guess Who""?",2333.0,38:53,1562541137696045
+Clallae566,Ja,2371.0,39:31,1562541137725930
+Clallae566,"Det är många MPC'er och dina kompiar, Det är två av dina kompisar som letar, När dom slår på en mpc så förlorar dom hp, När dom slår på dig så tar som inte dammage",2455.0,40:55,1562541137755744
+Clallae566,Men man behöver inte installera väll? Det finns ju garrys mdo,2509.0,41:49,1562541137866261
+Clallae566,mod,2512.0,41:52,1562541137924458
+Clallae566,Aa,2535.0,42:15,1562541137956290
+Clallae566,ni kommer förlora,3169.0,52:49,1562541137984842

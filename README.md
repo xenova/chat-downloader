@@ -40,7 +40,7 @@ optional arguments:
   -cookies COOKIES, -c COOKIES
                         name of cookies file
                         (default: None)
-  --hide_output, --h    whether to hide output or not
+  --hide_output         whether to hide output or not
                         (default: False)
 ```
 

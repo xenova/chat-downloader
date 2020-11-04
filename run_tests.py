@@ -42,10 +42,16 @@ def create_test(
     final = {key: value for (key, value) in data.items() if (
         key in defaults and key in command_line_arguments and data[key] != defaults[key])}
 
-    data['args_info'] = final
     params = ["'{}'".format(data['url'])] + ['{}={}'.format(key, (value if (isinstance(value, int)
                                                                             or isinstance(value, float)) else "'{}'".format(value))) for (key, value) in final.items()]
-    data['function_call'] = "get_chat_replay({})".format(', '.join(params))
+    data['function_call'] = "messages = get_chat_replay({})".format(
+        ', '.join(params))
+
+    args = ['-{} {}'.format(key, ('"{}"'.format(value) if (' ' in str(value)) else value))
+            for (key, value) in final.items()]
+
+    data['command'] = 'python chat_replay_downloader.py "{}"{}{}'.format(
+        url, '' if len(args) == 0 else ' ', ' '.join(args))
     return data
 
 
@@ -76,7 +82,6 @@ youtube = [
     )
 ]
 
-
 youtube_errors = [
     create_test(
         '[YouTube] Video does not exist',
@@ -101,6 +106,10 @@ youtube_errors = [
     create_test(
         '[YouTube] Ending has strange times',
         'https://www.youtube.com/watch?v=DzEbfQI4TPQ', start_time='3:30:46', callback=do_nothing
+    ),
+    create_test(
+        '[YouTube] Messages that cause OSErrors',
+        'https://www.youtube.com/watch?v=Aymrnzianf0', start_time='24:00', end_time='25:00', callback=do_nothing
     )
 ]
 
@@ -130,56 +139,41 @@ twitch_errors = [
     ),
 ]
 
+### CONTROLS ###
+run = True
+document = True
 
-""" modes
-True - Run all tests without documentation (run standard and errors)
-False - Generate documentation only (do not run and do not include errors)
-"""
-
-modes = [True, False]
 
 standard_tests = (youtube + twitch)
 error_tests = (youtube_errors + twitch_errors)
-for mode in modes:
-    tests = standard_tests
-    if (mode):
-        tests += error_tests
 
-    out_file = os.devnull if mode else 'EXAMPLES.md'
-    example_file = open(out_file, 'w+', encoding='utf-8')
+all_tests = standard_tests + error_tests
 
-    print('## Examples', file=example_file)
-    print('This file was automatically generated using `python run_tests.py`',
-          file=example_file)
+extensions = ['txt', 'csv', 'json']
 
+
+def print_test(test):
+    global counter
+    print('({}) {:=^120}'.format(counter, ' '+test['name']+' '))
+
+
+if run:
     counter = 1
-    for test in tests:
-        buffer = '='*40
-        print(buffer, '#{}'.format(counter), buffer)
-        print('Running test {} on "{}" with params: start_time={}, end_time={}, message_type={}, chat_type={}.'.format(
-            test['name'], test['url'], test['start_time'], test['end_time'], test['message_type'], test['chat_type']
-        ))
 
-        print('### {}. {}'.format(counter, test['name']), file=example_file)
+    print('Begin running tests.')
 
-        print('#### Python:', file=example_file)
-        print('```python\n{}\n```\n'.format(
-            test['function_call']), file=example_file)
-
+    for test in all_tests:
+        print_test(test)
         try:
-            messages = []
-            if (mode):
-                messages = get_chat_replay(
-                    test['url'],
-                    start_time=test['start_time'],
-                    end_time=test['end_time'],
-                    message_type=test['message_type'],
-                    chat_type=test['chat_type'],
-                    callback=test['callback']
-                )
-
-            print('Successfully retrieved {} messages.'.format(len(messages)))
-
+            print('Running', '"{}"'.format(test['function_call']))
+            messages = get_chat_replay(
+                test['url'],
+                start_time=test['start_time'],
+                end_time=test['end_time'],
+                message_type=test['message_type'],
+                chat_type=test['chat_type'],
+                callback=test['callback']
+            )
         except InvalidURL as e:
             print('[Invalid URL]', e)
         except ParsingError as e:
@@ -194,30 +188,48 @@ for mode in modes:
             print('[Cookies Error]', e)
         except KeyboardInterrupt:
             print('Interrupted.')
+
+        name_template = 'examples/'+test['name']+'.{}'
+        for extension in extensions:
+            name = name_template.format(extension)
+            new_command = '{} -output "{}"'.format(test['command'], name)
+            print('Running "{}"'.format(new_command))
+            if(test not in error_tests):
+                subprocess.Popen(
+                    '{} --hide_output'.format(new_command)).communicate()
+        counter += 1
         print()
 
-        args = ['-{} {}'.format(key, ('"{}"'.format(value) if (' ' in str(value)) else value))
-                for (key, value) in test['args_info'].items()]
-        command = 'python chat_replay_downloader.py "{}" {}'.format(
-            test['url'], ' '.join(args))
+if document:
+    counter = 1
+
+    print('Begin documenting standard tests.')
+
+    example_file = open('EXAMPLES.md', 'w+', encoding='utf-8')
+
+    print('## Examples', file=example_file)
+    print('This file was automatically generated using `python run_tests.py`',
+          file=example_file)
+
+    for test in standard_tests:
+        print_test(test)
+        print('### {}. {}'.format(counter, test['name']), file=example_file)
+        print('#### Python:', file=example_file)
+        print('```python\n{}\n```\n'.format(
+            test['function_call']), file=example_file)
+
         print('#### Command line:', file=example_file)
-
         print('Print to standard output:', file=example_file)
-        print('```\n{}\n```\n'.format(command), file=example_file)
-        extensions = ['txt', 'csv', 'json']
+        print('```\n{}\n```\n'.format(test['command']), file=example_file)
+
         name_template = 'examples/'+test['name']+'.{}'
-
         for extension in extensions:
-
             name = name_template.format(extension)
             print('['+extension.upper()+' output](<'+name+'>)', file=example_file)
 
-            new_command = '{} -output "{}"'.format(command, name)
-            print('Running "{}"'.format(new_command))
+            new_command = '{} -output "{}"'.format(test['command'], name)
             print('```\n{}\n```\n'.format(new_command), file=example_file)
-            if (mode and test not in error_tests):
-                subprocess.Popen('{} --hide_output'.format(new_command)).communicate()
-
-        print('\n')
         counter += 1
+        print()
+
     example_file.close()

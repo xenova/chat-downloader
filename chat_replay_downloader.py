@@ -10,6 +10,8 @@ import emoji
 import time
 import os
 from http.cookiejar import MozillaCookieJar, LoadError
+import sys
+import codecs
 
 
 class CallbackFunction(Exception):
@@ -197,10 +199,17 @@ class ChatReplayDownloader:
         Ensure printing to standard output can be done safely (especially on Windows).
         There are usually issues with printing emojis and non utf-8 characters.
         """
-        message = self.message_to_string(item)
-        safe_string = emoji.demojize(message).encode(
-            'utf-8').decode('utf-8', 'ignore')
-        print(safe_string)
+        message = emoji.demojize(self.message_to_string(item))
+
+        try:
+            safe_string = message.encode(
+                'utf-8', 'ignore').decode('utf-8', 'ignore')
+            print(safe_string, flush=True)
+        except UnicodeEncodeError:
+            # in the rare case that standard output does not support utf-8
+            safe_string = message.encode(
+                'ascii', 'ignore').decode('ascii', 'ignore')
+            print(safe_string, flush=True)
 
     def __parse_message_runs(self, runs):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
@@ -373,21 +382,7 @@ class ChatReplayDownloader:
                 try:
                     if(is_live):
                         info = self.__get_live_info(continuation)
-
-                        if('actions' not in info):
-                            continuation_info = info['continuations'][0]
-                            continuation_info = continuation_info[next(
-                                iter(continuation_info))]
-
-                            if 'timeoutMs' in continuation_info:
-                                # must wait before calling again
-                                # prevents 429 errors (too many requests)
-                                time.sleep(continuation_info['timeoutMs']/1000)
-
-                            continue  # may have more messages for live chat
-
                     else:
-
                         # must run to get first few messages, otherwise might miss some
                         if(first_time):
                             info = self.__get_replay_info(continuation, 0)
@@ -396,72 +391,86 @@ class ChatReplayDownloader:
                             info = self.__get_replay_info(
                                 continuation, offset_milliseconds)
 
-                        if('actions' not in info):
-                            break  # no more messages for chat replay
-
                 except NoContinuation:
                     print('No continuation found, stream may have ended.')
                     break
 
-                for action in info['actions']:
-                    data = {}
+                if('actions' in info):
+                    for action in info['actions']:
+                        data = {}
 
-                    if('replayChatItemAction' in action):
-                        replay_chat_item_action = action['replayChatItemAction']
-                        if('videoOffsetTimeMsec' in replay_chat_item_action):
-                            data['video_offset_time_msec'] = int(
-                                replay_chat_item_action['videoOffsetTimeMsec'])
-                        action = replay_chat_item_action['actions'][0]
+                        if('replayChatItemAction' in action):
+                            replay_chat_item_action = action['replayChatItemAction']
+                            if('videoOffsetTimeMsec' in replay_chat_item_action):
+                                data['video_offset_time_msec'] = int(
+                                    replay_chat_item_action['videoOffsetTimeMsec'])
+                            action = replay_chat_item_action['actions'][0]
 
-                    action_name = list(action.keys())[0]
-                    if('item' not in action[action_name]):
-                        # not a valid item to display (usually message deleted)
-                        continue
+                        action_name = list(action.keys())[0]
+                        if('item' not in action[action_name]):
+                            # not a valid item to display (usually message deleted)
+                            continue
 
-                    item = action[action_name]['item']
-                    index = list(item.keys())[0]
+                        item = action[action_name]['item']
+                        index = list(item.keys())[0]
 
-                    if(index in self.__TYPES_OF_MESSAGES['ignore']):
-                        # can ignore message (not a chat message)
-                        continue
+                        if(index in self.__TYPES_OF_MESSAGES['ignore']):
+                            # can ignore message (not a chat message)
+                            continue
 
-                    # user wants everything, keep going
-                    if(message_type == 'all'):
-                        pass
+                        # user wants everything, keep going
+                        if(message_type == 'all'):
+                            pass
 
-                    # user does not want superchat + message is superchat
-                    elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']):
-                        continue
+                        # user does not want superchat + message is superchat
+                        elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                            continue
 
-                    # user does not want normal messages + message is normal
-                    elif(message_type != 'messages' and index in self.__TYPES_OF_MESSAGES['message']):
-                        continue
+                        # user does not want normal messages + message is normal
+                        elif(message_type != 'messages' and index in self.__TYPES_OF_MESSAGES['message']):
+                            continue
 
-                    data = dict(self.__parse_item(item), **data)
+                        data = dict(self.__parse_item(item), **data)
 
-                    time_in_seconds = data['time_in_seconds']
-                    if(end_time is not None and time_in_seconds > end_time):
-                        return messages
+                        time_in_seconds = data['time_in_seconds']
+                        if(end_time is not None and time_in_seconds > end_time):
+                            return messages
 
-                    if(is_live or time_in_seconds >= start_time):
-                        messages.append(data)
+                        if(is_live or time_in_seconds >= start_time):
+                            messages.append(data)
 
-                        if(callback is None):
-                            # print if it is not a ticker message (prevents duplicates)
-                            if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
-                                self.print_item(data)
+                            if(callback is None):
+                                # print if it is not a ticker message (prevents duplicates)
+                                if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                                    self.print_item(data)
 
-                        elif(callable(callback)):
-                            try:
-                                callback(data)
-                            except TypeError:
-                                raise CallbackFunction(
-                                    'Incorrect number of parameters for function '+callback.__name__)
+                            elif(callable(callback)):
+                                try:
+                                    callback(data)
+                                except TypeError:
+                                    raise CallbackFunction(
+                                        'Incorrect number of parameters for function '+callback.__name__)
+                else:
+                    # no more actions to process in a chat replay
+                    if(not is_live):
+                        break
 
-                continuation_info = info['continuations'][0]
-                for key in ('invalidationContinuationData', 'timedContinuationData', 'liveChatReplayContinuationData'):
-                    if key in continuation_info:
-                        continuation = continuation_info[key]['continuation']
+                if('continuations' in info):
+                    continuation_info = info['continuations'][0]
+                    # possible continuations:
+                    # invalidationContinuationData, timedContinuationData,
+                    # liveChatReplayContinuationData, reloadContinuationData
+                    continuation_info = continuation_info[next(
+                        iter(continuation_info))]
+
+                    if 'continuation' in continuation_info:
+                        continuation = continuation_info['continuation']
+                    if 'timeoutMs' in continuation_info:
+                        # must wait before calling again
+                        # prevents 429 errors (too many requests)
+                        time.sleep(continuation_info['timeoutMs']/1000)
+                else:
+                    break
 
             return messages
 
@@ -559,18 +568,24 @@ if __name__ == '__main__':
     parser.add_argument('-cookies', '-c', default=None,
                         help='name of cookies file\n(default: %(default)s)')
 
-    parser.add_argument('--hide_output', '--h', action='store_true',
+    parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
 
     args = parser.parse_args()
+
+    if(args.hide_output):
+        f = open(os.devnull, 'w')
+        sys.stdout = f
+        sys.stderr = f
+    else:
+        # set encoding of standard output and standard error
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
 
         num_of_messages = 0
-
-        def do_nothing(item):
-            pass
 
         def print_item(item):
             chat_downloader.print_item(item)
@@ -582,13 +597,11 @@ if __name__ == '__main__':
             with open(args.output, 'a', encoding='utf-8') as f:
                 if('ticker_duration' not in item):  # needed for duplicates
                     num_of_messages += 1
-                    if(not args.hide_output):
-                        print_item(item)
+                    print_item(item)
                     text = chat_downloader.message_to_string(item)
                     print(text, file=f)
 
-        callback = do_nothing if args.hide_output else (
-            None if args.output is None else print_item)
+        callback = None if args.output is None else print_item
         if(args.output is not None):
             if(args.output.endswith('.json')):
                 pass
@@ -618,6 +631,7 @@ if __name__ == '__main__':
                 fieldnames = []
                 for message in chat_messages:
                     fieldnames = list(set(fieldnames + list(message.keys())))
+                fieldnames.sort()
 
                 with open(args.output, 'w', newline='', encoding='utf-8') as f:
                     fc = csv.DictWriter(f, fieldnames=fieldnames)
@@ -625,7 +639,7 @@ if __name__ == '__main__':
                     fc.writerows(chat_messages)
 
             print('Finished writing', num_of_messages,
-                  'messages to', args.output)
+                  'messages to', args.output, flush=True)
 
     except InvalidURL as e:
         print('[Invalid URL]', e)
