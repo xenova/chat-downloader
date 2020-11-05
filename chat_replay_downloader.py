@@ -12,7 +12,6 @@ import os
 from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import codecs
-
 from urllib import parse
 
 
@@ -188,10 +187,15 @@ class ChatReplayDownloader:
         }
 
     def message_to_string(self, item):
-        """Format item for printing to standard output."""
-        return '[{}] {}{}: {}'.format(
+        """
+        Format item for printing to standard output.
+        [time] (badges) *money* author: message,
+        where (badges) and *money* are optional.
+        """
+        return '[{}] {}{}{}: {}'.format(
             item['time_text'] if 'time_text' in item else (
                 self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
+            '({}) '.format(item['badges']) if 'badges' in item else '',
             '*{}* '.format(item['amount']) if 'amount' in item else '',
             item['author'],
             item['message'] or ''
@@ -359,8 +363,10 @@ class ChatReplayDownloader:
 
         data['timestamp'] = int(
             data['timestamp']) if 'timestamp' in data else None
-        data['time_in_seconds'] = int(
-            self.__time_to_seconds(data['time_text'])) if 'time_text' in data else None
+
+        if('time_text' in data):
+            data['time_in_seconds'] = int(
+                self.__time_to_seconds(data['time_text']))
 
         for colour_key in ('header_color', 'body_color'):
             if(colour_key in data):
@@ -453,11 +459,13 @@ class ChatReplayDownloader:
 
                         data = dict(self.__parse_item(item), **data)
 
-                        time_in_seconds = data['time_in_seconds']
-                        if(end_time is not None and time_in_seconds > end_time):
+                        time_in_seconds = data['time_in_seconds'] if 'time_in_seconds' in data else None
+
+                        valid_seconds = time_in_seconds is not None
+                        if(end_time is not None and valid_seconds and time_in_seconds > end_time):
                             return messages
 
-                        if(is_live or time_in_seconds >= start_time):
+                        if(is_live or (valid_seconds and time_in_seconds >= start_time)):
                             messages.append(data)
 
                             if(callback is None):
