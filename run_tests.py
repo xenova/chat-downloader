@@ -233,3 +233,11 @@ if document:
         print()
 
     example_file.close()
+
+"""
+Other tests:
+
+Long YouTube videos with chat replay:
+ - https://www.youtube.com/watch?v=V2Afni3S-ok
+
+"""

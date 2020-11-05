@@ -13,6 +13,8 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import codecs
 
+from urllib import parse
+
 
 class CallbackFunction(Exception):
     """Raised when the callback function does not have (only) one required positional argument"""
@@ -67,8 +69,9 @@ class ChatReplayDownloader:
         'Accept-Language': 'en-US, en'
     }
 
+    __YT_HOME = 'https://www.youtube.com'
     __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
-    __YOUTUBE_API_BASE_TEMPLATE = 'https://www.youtube.com/{}/{}?continuation={}&pbj=1&hidden=false'
+    __YOUTUBE_API_BASE_TEMPLATE = '{}/{}/{}?continuation={}&pbj=1&hidden=false'
     __YOUTUBE_API_PARAMETERS_TEMPLATE = '&playerOffsetMs={}'
 
     __TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
@@ -211,12 +214,30 @@ class ChatReplayDownloader:
                 'ascii', 'ignore').decode('ascii', 'ignore')
             print(safe_string, flush=True)
 
+    def __parse_youtube_link(self, text):
+        if(text.startswith('/redirect')):  # is a redirect link
+            info = dict(parse.parse_qsl(parse.urlsplit(text).query))
+            return info['q'] if 'q' in info else ''
+        elif(text.startswith('/watch')):  # is a youtube video link
+            return self.__YT_HOME + text
+        else:  # is a normal link
+            return text
+
     def __parse_message_runs(self, runs):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
         message_text = ''
         for run in runs:
             if 'text' in run:
-                message_text += run['text']
+                if 'navigationEndpoint' in run:  # is a link
+                    try:
+                        url = run['navigationEndpoint']['commandMetadata']['webCommandMetadata']['url']
+                        message_text += self.__parse_youtube_link(url)
+                    except:
+                        # if something fails, use default text
+                        message_text += run['text']
+
+                else:  # is a normal message
+                    message_text += run['text']
             elif 'emoji' in run:
                 message_text += run['emoji']['shortcuts'][0]
             else:
@@ -226,7 +247,7 @@ class ChatReplayDownloader:
 
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
-        original_url = 'https://www.youtube.com/watch?v={}'.format(video_id)
+        original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
         html = self.__session_get(original_url)
         soup = bs4.BeautifulSoup(html.text, 'html.parser')
         ytInitialData_script = next(script.string for script in soup.find_all(
@@ -270,14 +291,14 @@ class ChatReplayDownloader:
 
     def __get_replay_info(self, continuation, offset_microseconds):
         """Get YouTube replay info, given a continuation or a certain offset."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(
-            'live_chat_replay', 'get_live_chat_replay', continuation) + self.__YOUTUBE_API_PARAMETERS_TEMPLATE.format(offset_microseconds)
+        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME,
+                                                      'live_chat_replay', 'get_live_chat_replay', continuation) + self.__YOUTUBE_API_PARAMETERS_TEMPLATE.format(offset_microseconds)
         return self.__get_continuation_info(url)
 
     def __get_live_info(self, continuation):
         """Get YouTube live info, given a continuation."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(
-            'live_chat', 'get_live_chat', continuation)
+        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME,
+                                                      'live_chat', 'get_live_chat', continuation)
         return(self.__get_continuation_info(url))
 
     def __get_continuation_info(self, url):
