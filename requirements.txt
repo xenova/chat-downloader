@@ -1,6 +1,0 @@
-bs4
-requests
-datetime
-regex
-argparse
-emoji
