@@ -69,3 +69,9 @@ def int_or_none(v, default=None):
         return int(v)
     except (ValueError, TypeError):
         return default
+
+def try_get_first_key(dictionary, default=None):
+    try:
+        return next(iter(dictionary))
+    except:
+        return default

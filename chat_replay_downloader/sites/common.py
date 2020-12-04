@@ -4,7 +4,8 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import os
 from ..errors import (
     CookieError,
-    ParsingError
+    ParsingError,
+    JSONParseError
     )
 
 from ..utils import (
@@ -32,7 +33,16 @@ class ChatDownloader: #(object):
     }
     _INIT_PARAMS = _DEFAULT_INIT_PARAMS
 
+# options = {
+#         'url': args.url,
+#         'start_time' : args.start_time,
+#         'end_time': args.end_time,
+#         : args.message_type,
+#
+#         'output': args.output,
 
+#
+#     }
     _DEFAULT_PARAMS = {
         'url': None, # should be overridden
         'messages': [], # list of messages to append to
@@ -40,6 +50,12 @@ class ChatDownloader: #(object):
         'end_time':None, # get until end
         'callback':None, # do something for every message
 
+        'output': None,
+        'logging': 'normal',
+
+        # YouTube only
+        'message_type': 'all',
+        'chat_type': 'live'
     }
     #_PARAMS = _DEFAULT_PARAMS
 #_DEFAULT_PARAMS.extend({})
@@ -83,7 +99,7 @@ class ChatDownloader: #(object):
         except JSONDecodeError:
             print(s.text)
             webpage_title = get_title_of_webpage(s.text)
-            raise ParsingError(webpage_title)
+            raise JSONParseError(webpage_title)
 
             #return
 

@@ -4,8 +4,8 @@ import re
 
 from .errors import *
 
-from .sites import *
-from .sites.common import ChatDownloader
+from .sites import GET_ALL_SITES
+#
 #from .sites.common import
 
 
@@ -24,12 +24,7 @@ class ChatReplayDownloader:
     #     'Accept-Language': 'en-US, en'
     # }
 
-    _ALL_SITES = [
-        value
-        for value in globals().values()
-        if isinstance(value, type) and issubclass(value,ChatDownloader)
-        and value != ChatDownloader # not the base class
-    ]
+
 
     def __init__(self, init_params = {}):
         self._INIT_PARAMS = init_params
@@ -63,7 +58,7 @@ class ChatReplayDownloader:
         # loop through all websites and
         # get corresponding website parser,
         # based on matching url with predefined regex
-        for site in self._ALL_SITES:
+        for site in GET_ALL_SITES():
             regex = getattr(site,'_VALID_URL')
             if(isinstance(regex, str)): # regex has been set (not None)
                 match = re.search(regex, url)

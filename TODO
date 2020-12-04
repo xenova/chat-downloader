@@ -1,0 +1,8 @@
+1. Unit tests for sites:
+    - message_types ['viewer_engagement_message', 'text_message', 'placeholder_item', 'paid_message', 'ticker_paid_message_item', 'membership_item', 'ticker_sponsor_item']
+    - action_types ['add_chat_item', 'add_live_chat_ticker_item']
+    - num messages (ballpark, >0)
+    - errors
+2. Custom formatting for printing
+
+3. max num retries for getting json/ continuation(30 default?)

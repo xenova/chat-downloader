@@ -9,64 +9,97 @@ import traceback
 
 from .chat_replay_downloader import *
 
+from .sites.common import ChatDownloader
+
+#from .chat_replay_downloader import char
+
 def main():
     """Console script for chat_replay_downloader."""
+
+    default_init_params = ChatDownloader._DEFAULT_INIT_PARAMS
+    default_params = ChatDownloader._DEFAULT_PARAMS
+
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
 
+    # PROGRAM PARAMS
     parser.add_argument('url', help='YouTube/Twitch video URL')
 
-    parser.add_argument('--start_time', '-s', default=None,
+    parser.add_argument('--start_time', '-s', default=default_params['start_time'],
                         help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
-    parser.add_argument('--end_time', '-e', default=None,
+    parser.add_argument('--end_time', '-e', default=default_params['end_time'],
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default='messages',
+    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
 
-    parser.add_argument('--chat_type', choices=['live', 'top'], default='live',
+    parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
 
-    parser.add_argument('--output', '-o', default=None,
+    parser.add_argument('--output', '-o', default=default_params['output'],
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--cookies', '-c', default=None,
+    parser.add_argument('--logging', '-l', choices=['normal', 'none', 'debug'], default=default_params['logging'],
+                        help='level of logging to show\n(default: %(default)s)')
+
+
+    # INIT PARAMS
+    parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
                         help='name of cookies file\n(default: %(default)s)')
 
-    parser.add_argument('--hide_output', action='store_true',
-                        help='whether to hide output or not\n(default: %(default)s)')
 
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help='Print debugging information\n(default: %(default)s)')
+    # normal = just print the messages
+    # none = completely hide output
+    # debug = show a lot more information
+
+
 
     args = parser.parse_args()
 
     # TODO temp:
-    args.verbose = True
+    args.logging = 'debug'
 
     def print_error(message):
         print(message)
-        if(args.verbose):
+        if(args.logging == 'debug'):
             traceback.print_exc()
 
-    # set initialisation parameters
-    init_params = {
-        'cookies' : args.cookies,
-        'hide_output': args.hide_output # TODO init or not?
-    }
+    options = {}
+    init_params = {}
+
+    args_dict = args.__dict__
+    for key in args_dict:
+        if(key in default_init_params): # is an init param
+            init_params[key] = args_dict[key] # set initialisation parameters
+        elif(key in default_params): # is a program param
+            options[key] = args_dict[key] # set program/get_chat_messages parameters
+        else: # neither
+            pass
+
+
+    #     default_init_params = ChatDownloader._DEFAULT_INIT_PARAMS
+    # default_params = ChatDownloader._DEFAULT_PARAMS
 
 
 
-    # set program/get_chat_messages parameters
-    options = {
-        'url': args.url,
-        'start_time' : args.start_time,
-        'end_time': args.end_time,
-        'message_type': args.message_type,
-        'chat_type': args.chat_type,
-        'output': args.output
-    }
+    #     'cookies' : args.cookies,
+    # }
+
+
+
+    #
+    #  = args.__dict__.copy()
+    # {
+    #     'url': args.url,
+    #     'start_time' : args.start_time,
+    #     'end_time': args.end_time,
+    #     'message_type': args.message_type,
+    #     'chat_type': args.chat_type,
+    #     'output': args.output,
+
+    #     'logging': args.logging
+    # }
 
 
     downloader = ChatReplayDownloader(init_params)
@@ -87,18 +120,38 @@ def main():
 
 
 
-
+    except ConnectionError:
+        print_error('ConnectionError - unable to connect')
+        pass
 
     except KeyboardInterrupt:
-        print_error('KeyboardInterrupt')
+        print('keyboard interrupt')
+        #print_error('KeyboardInterrupt')
         pass
     #finally:
 
 
     print('got',len(options.get('messages')),'messages')
 
-    with open('test.json', 'w') as outfile:
-        json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
+    message_types = []
+    action_types = []
+
+    for message in options.get('messages'):
+        message_type = message.get('message_type')
+        if(message_type not in message_types):
+            message_types.append(message_type)
+
+        action_type = message.get('action_type')
+        if(action_type not in action_types):
+            action_types.append(action_type)
+
+
+    print('message_types',message_types)
+    print('action_types',action_types)
+
+
+    # with open('test.json', 'w') as outfile:
+    #     json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
     #print(options.get('messages'))
     #print(json.dumps(options.get('messages'), indent=4))
 

@@ -1,8 +1,8 @@
 """File for defining errors"""
 
-# class JSONParseError(Exception):
-#     """Raised when unable to parse JSON."""
-#     pass
+class JSONParseError(Exception):
+    """Raised when unable to parse JSON."""
+    pass
 
 
 class CallbackFunction(Exception):
