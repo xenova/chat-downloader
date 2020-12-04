@@ -97,6 +97,10 @@ def main():
 
     print('got',len(options.get('messages')),'messages')
 
+    with open('test.json', 'w') as outfile:
+        json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
+    #print(options.get('messages'))
+    #print(json.dumps(options.get('messages'), indent=4))
 
     #z = a.get('messages')
 

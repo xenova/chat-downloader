@@ -38,6 +38,7 @@ def get_colours(argb_int):
 	rgba_colour = arbg_int_to_rgba(argb_int)
 	hex_colour = rgba_to_hex(rgba_colour)
 	return {
+        'argb_int': argb_int,
 		'rgba': rgba_colour,
 		'hex': hex_colour
 	}
