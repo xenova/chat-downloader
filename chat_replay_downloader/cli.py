@@ -11,6 +11,10 @@ from .chat_replay_downloader import *
 
 from .sites.common import ChatDownloader
 
+# from .errors import (
+#     LoadError
+# )
+
 #from .chat_replay_downloader import char
 
 def main():
@@ -42,6 +46,10 @@ def main():
 
     parser.add_argument('--logging', '-l', choices=['normal', 'none', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
+
+    parser.add_argument('--max_attempts', '-m', default=default_params['max_attempts'],
+                        help='maximum number of attempts to make for an http request\n(default: %(default)s)')
+
 
 
     # INIT PARAMS
@@ -111,14 +119,11 @@ def main():
 
 
 
-
+    except NoChatReplay as e:
+        print(e)
 
     except ParsingError as e:
         print_error('ParsingError occurred')
-
-
-
-
 
     except ConnectionError:
         print_error('ConnectionError - unable to connect')
@@ -150,9 +155,11 @@ def main():
     print('action_types',action_types)
 
 
-    # with open('test.json', 'w') as outfile:
-    #     json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
+    with open('test.json', 'w') as outfile:
+        json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
     #print(options.get('messages'))
+
+
     #print(json.dumps(options.get('messages'), indent=4))
 
     #z = a.get('messages')

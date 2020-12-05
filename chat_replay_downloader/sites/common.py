@@ -16,12 +16,11 @@ from ..utils import (
 from json import JSONDecodeError
 
 
-class ChatDownloader: #(object):
+class ChatDownloader:
     """
     Subclasses of this one should re-define the get_chat_messages()
     method and define a _VALID_URL regexp.
     """
-
 
     _DEFAULT_INIT_PARAMS = {
         'headers': {
@@ -33,22 +32,14 @@ class ChatDownloader: #(object):
     }
     _INIT_PARAMS = _DEFAULT_INIT_PARAMS
 
-# options = {
-#         'url': args.url,
-#         'start_time' : args.start_time,
-#         'end_time': args.end_time,
-#         : args.message_type,
-#
-#         'output': args.output,
-
-#
-#     }
     _DEFAULT_PARAMS = {
         'url': None, # should be overridden
         'messages': [], # list of messages to append to
         'start_time': None, # get from beginning (even before stream starts)
         'end_time':None, # get until end
         'callback':None, # do something for every message
+
+        'max_attempts': 5,
 
         'output': None,
         'logging': 'normal',
@@ -57,22 +48,13 @@ class ChatDownloader: #(object):
         'message_type': 'all',
         'chat_type': 'live'
     }
-    #_PARAMS = _DEFAULT_PARAMS
-#_DEFAULT_PARAMS.extend({})
 
     def __init__(self, updated_init_params = {}):
+        """Initialise a new session for making requests."""
         self._INIT_PARAMS.update(updated_init_params)
 
-
-        # = {**self._PARAMS, **updated_init_params}
-
-
-        """Initialise a new session for making requests."""
-
-        # cookies=None
         self.session = requests.Session()
         self.session.headers = self._INIT_PARAMS.get('headers')
-        #self._HEADERS # TODO put this in init_params
 
         cookies = self._INIT_PARAMS.get('cookies')
         cj = MozillaCookieJar(cookies)
@@ -83,7 +65,7 @@ class ChatDownloader: #(object):
                 cj.load(ignore_discard=True, ignore_expires=True)
             else:
                 raise CookieError(
-                    "The file '{}' could not be found.".format(cookies))
+                    'The file "{}" could not be found.'.format(cookies))
         self.session.cookies = cj
 
     def _session_get(self, url):
@@ -97,11 +79,9 @@ class ChatDownloader: #(object):
         try:
             return s.json()
         except JSONDecodeError:
-            print(s.text)
+            #print(s.text)
             webpage_title = get_title_of_webpage(s.text)
             raise JSONParseError(webpage_title)
-
-            #return
 
     _VALID_URL = None
     _CALLBACK = None

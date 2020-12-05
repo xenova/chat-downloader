@@ -8,7 +8,6 @@ from ..errors import *  # only import used TODO
 from urllib import parse
 
 import json
-#import bs4
 import time
 import re
 import emoji
@@ -48,6 +47,14 @@ class YouTubeChatDownloader(ChatDownloader):
                      )?                                                       # all until now is optional -> you can pass the naked ID
                      (?P<id>[0-9A-Za-z_-]{11})                                      # here is it! the YouTube video ID
                      $"""
+
+    _TESTS = [
+        {
+        'title': '$250,000 Influencer Rock, Paper, Scissors Tournament',
+        'channel': 'MrBeast',
+        'url': 'https://www.youtube.com/watch?v=Ih2WTyY62J4',
+        }
+    ]
 
     _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
 
@@ -92,31 +99,19 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatModeChangeMessageRenderer' # e.g. slow mode enabled
         ],
 
+        'deleted':[
+            'deletedStateMessage'
+        ],
+
         'other': [
             'liveChatPlaceholderItemRenderer' # placeholder
         ],
+
     }
 
     _KNOWN_MESSAGE_TYPES = []
     for message_type in _TYPES_OF_MESSAGES:
         _KNOWN_MESSAGE_TYPES += _TYPES_OF_MESSAGES[message_type]
-
-    # _IMPORTANT_KEYS_AND_REMAPPINGS = {
-    #     'timestampUsec': 'timestamp',
-    #     'authorExternalChannelId': 'author_id',
-    #     'authorName': 'author',
-    #     'purchaseAmountText': 'amount',
-    #     'message': 'message',
-    #     'headerBackgroundColor': 'header_color',
-    #     'bodyBackgroundColor': 'body_color',
-    #     'timestampText': 'time_text',
-    #     'amount': 'amount',
-    #     'startBackgroundColor': 'body_color',
-    #     'durationSec': 'ticker_duration',
-    #     'detailText': 'message',
-    #     'headerSubtext': 'message',  # equivalent to message - get runs
-    #     'backgroundColor': 'body_color'
-    # }
 
     _MESSAGE_FORMATTING_GROUPS_REGEX = r'\{(.*?)\{(.*?)?\}(.*?)\}'
     _MESSAGE_FORMATTING_INDEXES_REGEX = r'\|(?![^\[]*\])'
@@ -198,52 +193,6 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return text
 
-
-# "addChatItemAction":{
-#     "item":{
-#         "liveChatViewerEngagementMessageRenderer":{
-
-    # _IMPORTANT_KEYS_AND_REMAPPINGS = {
-    #     'timestampUsec': 'timestamp',
-    #     'authorExternalChannelId': 'author_id',
-    #     'authorName': 'author',
-    #     'purchaseAmountText': 'amount',
-    #     'message': 'message',
-    #     'headerBackgroundColor': 'header_color',
-    #     'bodyBackgroundColor': 'body_color',
-    #     'timestampText': 'time_text',
-    #     'amount': 'amount',
-    #     'startBackgroundColor': 'body_color',
-    #     'durationSec': 'ticker_duration',
-    #     'detailText': 'message',
-    #     'headerSubtext': 'message',  # equivalent to message - get runs
-    #     'backgroundColor': 'body_color'
-    # }
-
-
-# _GET_AUTHOR_PHOTOS
-    # _SIMPLE_TEXT_REMAPPER =
-    # _DO_NOTHING =
-    # _CONVERT_TO_INT =
-    #  =
-    # _PARSE_MESSAGE_RUNS =
-
-    # def _SIMPLE_TEXT_REMAPPER(x): return x.get('simpleText')
-    # def _DO_NOTHING(x): return x
-    # def _CONVERT_TO_INT(x): return int_or_none(x)
-    # def _GET_AUTHOR_PHOTOS(x): return x.get('thumbnails')
-
-    # def _PARSE_MESSAGE_RUNS(
-    #     x): return YouTubeChatDownloader.parse_message_runs(x['runs'])
-
-    # continuation_by_title_map = {
-    #     x['title']: x['continuation']['reloadContinuationData']['continuation']
-    #     for x in viewselector_submenuitems
-    # }
-    #_TEST = _parse_message_runs
-    # .__func__
-
-
     @staticmethod
     def _parse_item(item):
         info = {}
@@ -254,7 +203,6 @@ class YouTubeChatDownloader(ChatDownloader):
             print('ERROR 1')
             print(item)
             return info  # invalid # TODO log this
-
 
         item_info = item.get(item_index)
 
@@ -267,41 +215,17 @@ class YouTubeChatDownloader(ChatDownloader):
 
         for key in YouTubeChatDownloader._REMAPPING:
             index, mapping_function = YouTubeChatDownloader._REMAPPING[key]
-            # print(mapping_function)
-            # try:
+
 
             original_info = item_info.get(key)
-            # if(key == 'actionButton'):
-            #     print(item_info.keys())
-            #     #print(key)
-            #     print(original_info)
+
             if(original_info):
                 info[index] = YouTubeChatDownloader._REMAP_FUNCTIONS[mapping_function](
                     original_info)
 
-                # if(key == 'actionButton'):
-                #     print('yuppppppp')
-                #     print(original_info)
-                #     print(index, info[index])
             else:  # this item does not contain a certain key. ignore it
                 pass
-            # except:
-            #     print('ERROR 3')
-            #     print(key, index, original_info)
 
-                #print('key not in info')
-                #print(key,': not in ->', item_info.keys())
-                # item_info
-
-            #index, mapping_function,item,
-            # print(key, item_info)#.get(key)
-#             #
-
-    # _PARSE_COLOURS = lambda x : {
-    #     strip_color_text(key) : x.get(key)
-    #     for key in x
-
-    # }
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
             if(colour_key in item_info):  # if item has colour information
@@ -310,18 +234,6 @@ class YouTubeChatDownloader(ChatDownloader):
 
                 info['colours'][YouTubeChatDownloader.camel_case_split(
                     YouTubeChatDownloader.strip_color_text(colour_key))] = get_colours(item_info.get(colour_key)).get('hex')
-            pass
-
-        # check for sticker information
-
-        # sticker = item_info.get('sticker')
-        # if (sticker):
-        #     info['sticker_info'] = {
-        #         'images': sticker.get('thumbnails'),
-
-        #     }
-
-        # 'sticker', 'stickerDisplayWidth', 'stickerDisplayHeight'
 
         # TODO debugging for missing keys
         missing_keys = item_info.keys()-YouTubeChatDownloader._REMAPPING.keys() - \
@@ -337,14 +249,11 @@ class YouTubeChatDownloader(ChatDownloader):
 
         # all messages should have the following
 
-        #
-        # info['id'] = item_info.get('id')
-
         item_endpoint = item_info.get('showItemEndpoint')
         if(item_endpoint):  # has additional information
             renderer = try_get(
                 item_endpoint, (lambda x: x['showLiveChatItemEndpoint']['renderer']))
-            # next(iter(item))
+
             if(renderer):
                 info.update(YouTubeChatDownloader._parse_item(renderer))
 
@@ -535,19 +444,7 @@ class YouTubeChatDownloader(ChatDownloader):
     ]
 
     _KNOWN_CONTINUATIONS = _KNOWN_SEEK_CONTINUATIONS + _KNOWN_CHAT_CONTINUATIONS
-    # _KNOWN_LIVE_CHAT_RENDERERS = [
-    #     'liveChatViewerEngagementMessageRenderer',
-    #     'liveChatPurchasedProductMessageRenderer',  # product purchased
-    #     'liveChatPlaceholderItemRenderer',  # placeholder
-    #     'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
-    #     'liveChatTextMessageRenderer'  # normal message
-    #     'liveChatMembershipItemRenderer',
-    #     'liveChatPaidMessageRenderer',
-    #     'liveChatPaidStickerRenderer',
-    #     'liveChatTickerPaidStickerItemRenderer',
-    #     'liveChatTickerPaidMessageItemRenderer',
-    #     'liveChatTickerSponsorItemRenderer',
-    # ]
+
 
     def _get_initial_info(self, video_id):
         """ Get initial YouTube video information. """
@@ -561,30 +458,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 'Unable to parse video data. Please try again.')
 
         ytInitialData = json.loads(info.group(1))
-
-        # print()
-        #soup = bs4.BeautifulSoup(html, 'html.parser')
-
-        # ytInitialData_script = next(script.string for script in soup.find_all(
-        #     'script') if script.string and 'ytInitialData' in script.string)
-
-        # print(ytInitialData_script)
-
-        # json_data = next(line.strip()[len('window["ytInitialData"] = '):-1]
-        #                  for line in ytInitialData_script.splitlines() if 'ytInitialData' in line)
-        # return
-        # try:
-
-        # except Exception as e:
-        #     print("ERROR")
-        #     #print(json_data)
-        #     try:
-        #         # for some reason, it sometimes cuts out and this fixes it
-        #         ytInitialData = json.loads('{"resp'+json_data)
-        #         # TODO print out and see why this happens...
-        #         # regex bad?
-        #     except Exception:
-
+        # print(ytInitialData)
         contents = ytInitialData.get('contents')
         if(not contents):
             raise VideoUnavailable('Video is unavailable (may be private).')
@@ -608,7 +482,10 @@ class YouTubeChatDownloader(ChatDownloader):
             for x in viewselector_submenuitems
         }
 
-        return continuation_by_title_map
+        return {
+            'title': try_get(columns, lambda x: self.parse_runs(x['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])),
+            'continuation_info' : continuation_by_title_map
+        }
 
     def _get_replay_info(self, continuation, offset_microseconds=None):
         """Get YouTube replay info, given a continuation or a certain offset."""
@@ -647,6 +524,7 @@ class YouTubeChatDownloader(ChatDownloader):
             return default
 
     def _format_item(self, result, item):
+        # TODO fix this method
 
         # split by | not enclosed in []
         split = re.split(
@@ -710,24 +588,18 @@ class YouTubeChatDownloader(ChatDownloader):
                 'ascii', 'ignore').decode('ascii', 'ignore')
             print(safe_string, flush=True)
 
-        # 'message_type':'messages'
-
-       # =0, , , chat_type='live',
-    # _DEFAULT_PARAMS
-
-    # def parse_action(self, params, action):
-
     def get_chat_by_video_id(self, video_id, params):
         """ Get chat messages for a YouTube video. """
 
         initial_info = self._get_initial_info(video_id)
 
-        # print(initial_info)
+        initial_continuation_info = initial_info.get('continuation_info')
+        initial_title_info = initial_info.get('title')
+
+
 
         start_time = self._ensure_seconds(params.get('start_time'), None)
         end_time = self._ensure_seconds(params.get('end_time'), None)
-
-        #messages = []
 
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
@@ -738,25 +610,29 @@ class YouTubeChatDownloader(ChatDownloader):
         chat_replay_field = '{} chat replay'.format(chat_type_field)
         chat_live_field = '{} chat'.format(chat_type_field)
 
-        if(chat_replay_field in initial_info):
+        if(chat_replay_field in initial_continuation_info):
             is_live = False
             continuation_title = chat_replay_field
-        elif(chat_live_field in initial_info):
+        elif(chat_live_field in initial_continuation_info):
             is_live = True
             continuation_title = chat_live_field
         else:
             raise NoChatReplay('Video does not have a chat replay.')
 
-        continuation = initial_info[continuation_title]
+        continuation = initial_continuation_info[continuation_title]
         offset_milliseconds = start_time * \
             1000 if isinstance(start_time, int) else None
+
+
+        print('Getting chat for',initial_title_info)
+
+        max_attempts = params.get('max_attempts', 1)
 
         first_time = True
         while True:
             info = None
-            # try:
             # the following can raise NoContinuation error or JSONParseError
-
+            attempt_number = 1
             while(info is None):
                 try:
                     if(is_live):
@@ -764,18 +640,24 @@ class YouTubeChatDownloader(ChatDownloader):
                     else:
                         # must run to get first few messages, otherwise might miss some
                         if(first_time):
-                            info = self._get_replay_info(continuation)  # , 0
+                            info = self._get_replay_info(continuation)
                         else:
                             info = self._get_replay_info(
                                 continuation, offset_milliseconds)
                 except JSONParseError as e:
+                    print('retry',attempt_number)
+
                     print('error',e)
+
+
+                    if(attempt_number >= max_attempts):
+                        return
+                    attempt_number += 1
                     print('retrying')
 
-            # except NoContinuation:
-                # print('No continuation found, stream may have ended.')
-                # break
+
             actions = info.get('actions')
+            #print(info)
             if(actions):
                 for action in actions:
                     data = {}
@@ -793,7 +675,6 @@ class YouTubeChatDownloader(ChatDownloader):
 
                     original_action_type = try_get_first_key(action)
 
-                    # print('original_action_type',original_action_type)
 
 
 
@@ -812,15 +693,18 @@ class YouTubeChatDownloader(ChatDownloader):
                     original_message_type = None
 
                     #print(original_action_type,action)
-                    if(original_action_type in self._KNOWN_ITEM_ACTION_TYPES + self._KNOWN_REMOVE_ACTION_TYPES):
+                    if(original_action_type in (self._KNOWN_ITEM_ACTION_TYPES + self._KNOWN_REMOVE_ACTION_TYPES)):
                         if(original_action_type in self._KNOWN_ITEM_ACTION_TYPES):
                             item = try_get(
                                 action, lambda x: x[original_action_type]['item'])
+                            original_message_type = try_get_first_key(item)
                         else:  # (original_action_type in self._KNOWN_REMOVE_ACTION_TYPES)
+                            original_message_type = 'deletedStateMessage'
+                            #print('k',action, original_action_type)
                             # try_get(action, lambda x: x[original_action_type])
                             item = action
 
-                        original_message_type = try_get_first_key(item)
+
                         parsed_item = self._parse_item(item)
                         # print(parsed_item)
 
@@ -837,7 +721,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             action, lambda x: x[original_action_type]['bannerRenderer'])
 
                         original_message_type = try_get_first_key(item) #next(iter(item))
-                        #item = item
+
                         if(item):
                             header = item[original_message_type].get('header')
                             parsed_header = self._parse_item(header)
@@ -890,8 +774,6 @@ class YouTubeChatDownloader(ChatDownloader):
                     if(True or types_of_messages_to_add == 'all'):
                         pass
 
-
-                    #
                     else:
                         # check whether to skip this message or not, based on its type
                         for key in self._TYPES_OF_MESSAGES :
@@ -922,15 +804,15 @@ class YouTubeChatDownloader(ChatDownloader):
                     if(not callback):
                         # print if it is not a ticker message (prevents duplicates)
                         # print(json.dumps(data))
-                        #print('=', end='', flush=True)
+                        # print('=', end='', flush=True)
                         # if(original_action_type not in self._KNOWN_ADD_TICKER_TYPES):
                         #     pass
-
+                        # print(data)
                         if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
                             pass # is a chat message, print it
                             # TODO decide whether to add delted or not
 
-                            # self.print_item(data)
+                            #self.print_item(data)
 
                     elif(callable(callback)):
                         try:
@@ -945,15 +827,12 @@ class YouTubeChatDownloader(ChatDownloader):
                     break
                 # otherwise, is live, so keep trying
 
-            # if(len(info['continuations'])>1):
-            #     print('more than 1 continuation, missing info?')
-            #     print(info)
 
             cont = info.get('continuations')
             no_continuation = True # assume there are no more chat continuations
-            #print('There are',len(cont),'continuations')
+
             for c in cont or []:
-                #print(c)
+
                 continuation_key = try_get_first_key(c)
                 continuation_info = c[continuation_key]
 
