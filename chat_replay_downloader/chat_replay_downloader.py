@@ -5,14 +5,7 @@ import re
 from .errors import *
 
 from .sites import GET_ALL_SITES
-#
-#from .sites.common import
 
-
-# params_dict = {
-#     'messages': [],
-#     'url': '<url>'
-# }
 
 
 
@@ -41,7 +34,8 @@ class ChatReplayDownloader:
 
 # python -m chat_replay_downloader
 
-
+    # def close(self):
+    #     self.session.close()
 
     # , start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None
     # TODO add dictionary params ->
@@ -63,7 +57,10 @@ class ChatReplayDownloader:
             if(isinstance(regex, str)): # regex has been set (not None)
                 match = re.search(regex, url)
                 if(match): #  and match.group('id')
-                    return site(self._INIT_PARAMS).get_chat_messages(params)
+                    s = site(self._INIT_PARAMS)
+                    messages = s.get_chat_messages(params)
+                    s.close()
+                    return messages
 
         # TODO raise invalid url error
         #raise InvalidURL('The url provided ({}) is invalid.'.format(url))

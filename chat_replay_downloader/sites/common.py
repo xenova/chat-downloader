@@ -15,11 +15,33 @@ from ..utils import (
 
 from json import JSONDecodeError
 
-
 class ChatDownloader:
     """
     Subclasses of this one should re-define the get_chat_messages()
     method and define a _VALID_URL regexp.
+
+    Each chat item is a dictionary and must contain the following fields:
+
+    message:                Actual content/text of the chat item
+    timestamp:              UNIX time (in microseconds) of when the message was sent
+    id:                     Identifier for the chat item
+    author_id:              Idenfifier for the person who sent the message
+    author_name:            Name of the user which sent the message
+
+
+    If the stream is not live (e.g. is a replay/vod/clip), it must contain the following fields:
+
+    time_in_seconds:        The number of seconds after the video began, that the message was sent
+    time_text:              Human-readable format for `time_in_seconds`
+
+
+
+    The following fields are optional:
+
+    author_display_name:    The name of the author which is displayed to the viewer.
+                            This value may be different to `author_name`
+
+    TODO
     """
 
     _DEFAULT_INIT_PARAMS = {
@@ -40,6 +62,7 @@ class ChatDownloader:
         'callback':None, # do something for every message
 
         'max_attempts': 5,
+        'max_messages': None,
 
         'output': None,
         'logging': 'normal',
@@ -67,6 +90,9 @@ class ChatDownloader:
                 raise CookieError(
                     'The file "{}" could not be found.'.format(cookies))
         self.session.cookies = cj
+
+    def close(self):
+        self.session.close()
 
     def _session_get(self, url):
         """Make a request using the current session."""
@@ -96,4 +122,14 @@ class ChatDownloader:
         #self._PARAMS.update()
         #params.update(self._PARAMS)
 
-
+    def get_tests(self):
+        t = getattr(self, '_TEST', None)
+        if t:
+            assert not hasattr(self, '_TESTS'), \
+                '%s has _TEST and _TESTS' % type(self).__name__
+            tests = [t]
+        else:
+            tests = getattr(self, '_TESTS', [])
+        for t in tests:
+            t['name'] = type(self).__name__[:-len('IE')]
+            yield t

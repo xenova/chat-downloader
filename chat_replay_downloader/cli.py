@@ -35,10 +35,10 @@ def main():
     parser.add_argument('--end_time', '-e', default=default_params['end_time'],
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
+    parser.add_argument('--message_type', '-mt', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
 
-    parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
+    parser.add_argument('--chat_type', '-ct', choices=['live', 'top'], default=default_params['chat_type'],
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
 
     parser.add_argument('--output', '-o', default=default_params['output'],
@@ -47,9 +47,11 @@ def main():
     parser.add_argument('--logging', '-l', choices=['normal', 'none', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
 
-    parser.add_argument('--max_attempts', '-m', default=default_params['max_attempts'],
+    parser.add_argument('--max_attempts', '-a', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to make for an http request\n(default: %(default)s)')
 
+    parser.add_argument('--max_messages', '-m', type=int, default=default_params['max_messages'],
+                        help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
 
 
     # INIT PARAMS
@@ -73,7 +75,7 @@ def main():
         if(args.logging == 'debug'):
             traceback.print_exc()
 
-    options = {}
+    program_params = {}
     init_params = {}
 
     args_dict = args.__dict__
@@ -81,7 +83,7 @@ def main():
         if(key in default_init_params): # is an init param
             init_params[key] = args_dict[key] # set initialisation parameters
         elif(key in default_params): # is a program param
-            options[key] = args_dict[key] # set program/get_chat_messages parameters
+            program_params[key] = args_dict[key] # set program/get_chat_messages parameters
         else: # neither
             pass
 
@@ -114,8 +116,8 @@ def main():
 
 
     try:
-        q = downloader.get_chat_messages(options) # TODO  returns None?
-
+        q = downloader.get_chat_messages(program_params) # TODO  returns None?
+        #q.close()
 
 
 
@@ -136,27 +138,12 @@ def main():
     #finally:
 
 
-    print('got',len(options.get('messages')),'messages')
+    print('got',len(program_params.get('messages')),'messages')
 
-    message_types = []
-    action_types = []
-
-    for message in options.get('messages'):
-        message_type = message.get('message_type')
-        if(message_type not in message_types):
-            message_types.append(message_type)
-
-        action_type = message.get('action_type')
-        if(action_type not in action_types):
-            action_types.append(action_type)
-
-
-    print('message_types',message_types)
-    print('action_types',action_types)
 
 
     with open('test.json', 'w') as outfile:
-        json.dump(options.get('messages'), outfile, indent=4, sort_keys=True)
+        json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
     #print(options.get('messages'))
 
 
