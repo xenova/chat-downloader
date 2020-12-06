@@ -114,9 +114,8 @@ def main():
 
     downloader = ChatReplayDownloader(init_params)
 
-
     try:
-        q = downloader.get_chat_messages(program_params) # TODO  returns None?
+        messages = downloader.get_chat_messages(program_params) # TODO  returns None?
         #q.close()
 
 

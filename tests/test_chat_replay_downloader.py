@@ -12,61 +12,76 @@ from chat_replay_downloader import ChatReplayDownloader
 # python tests/test_chat_replay_downloader.py
 class TestChatReplayDownloader(unittest.TestCase):
 
-    # @staticmethod
-    # def _test_site(site,init_params, program_params):
-    #     pass
+    def perform_test(self, site_object, test):
+        test['params']['messages'] = []
+        params = test['params']
+
+        if(not params.get('logging')): # if it is not set, make it 'none'
+            params['logging'] = 'none'
+
+
+        expected_result = test.pop('expected_result', None)
+
+        if(not (params and expected_result)):
+            assert False
+
+        try:
+            messages = site_object.get_chat_messages(params)
+        except Exception as e:
+            error = expected_result.get('error')
+            self.assertTrue(error is not None and isinstance(e, error))
+        finally:
+            site_object.close()
+
+        messages_condition = expected_result.get('messages_condition')
+
+        if(messages_condition and callable(messages_condition)):
+            self.assertTrue(messages_condition(params.get('messages')))
+
+
+        actual_result = {
+            'message_types': [],
+            'action_types': []
+        }
+        types_to_check = [key for key in actual_result if key in expected_result]
+
+        for message in test['params']['messages']:
+            message_type = message.get('message_type')
+            if(message_type not in actual_result['message_types']):
+                actual_result['message_types'].append(message_type)
+
+            action_type = message.get('action_type')
+            if(action_type not in actual_result['action_types']):
+                actual_result['action_types'].append(action_type)
+
+        for check in types_to_check:
+            self.assertCountEqual(expected_result.get(check),actual_result.get(check))
+
+
 
     def test_all_sites(self):  # test method names begin with 'test'
 
-        downloader = ChatReplayDownloader() # init_params
+        #downloader = ChatReplayDownloader() # init_params
 
         #cha
         all_sites = GET_ALL_SITES()
 
         for site in all_sites:
-            tests = list(ChatDownloader.get_tests(site))
+            site_object = site()
+            print('Running tests for site "{}":'.format(site_object))
+            # print(getattr(site, 'name'))
+            #print(site.__repr__(site))
+
+            tests = ChatDownloader.get_tests(site)
             #print(tests)
+
+            test_number = 1
             for test in tests:
+                print('\tTest #{}: {}'.format(test_number,test.get('name')))
+                self.perform_test(site_object, test)
 
-                test['params']['messages'] = []
-                params = test['params']
-                #print(params)
-                expected_result = test.pop('expected_result', None)
-
-                #print(params) #, expected_result
-                if(not (params and expected_result)):
-                    assert False
-
-
-                q = downloader.get_chat_messages(params)
-                # try:
-                #     q = downloader.get_chat_messages(params) # TODO  returns None?
-                # except Exception as e:
-                #     print(e)
-                #     #print('error')
-                #     pass
-
-
-
-
-                actual_result = {
-                    'message_types': [],
-                    'action_types': []
-                }
-                types_to_check = actual_result.keys()
-
-                for message in test['params']['messages']:
-                    message_type = message.get('message_type')
-                    if(message_type not in actual_result['message_types']):
-                        actual_result['message_types'].append(message_type)
-
-                    action_type = message.get('action_type')
-                    if(action_type not in actual_result['action_types']):
-                        actual_result['action_types'].append(action_type)
-
-                for check in types_to_check:
-                    # print(expected_result.get(check),actual_result.get(check))
-                    self.assertCountEqual(expected_result.get(check),actual_result.get(check))
+                test_number+=1
+            print()
 
     # def test_ultiply(self):
     #     self.assertEqual((0 * 10), 0)

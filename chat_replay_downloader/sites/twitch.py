@@ -3,8 +3,14 @@ from .common import ChatDownloader
 from ..errors import TwitchError, CallbackFunction
 
 class TwitchChatDownloader(ChatDownloader):
-    # def __init__(self, updated_init_params = {}):
-    #     super().__init__(updated_init_params)
+    def __init__(self, updated_init_params = {}):
+        super().__init__(updated_init_params)
+        # self._name = None
+        # self.name = 'Twitch.tv'
+
+    def __str__(self):
+        return 'Twitch.tv'
+
     # clips
     # vod
     # name -> live

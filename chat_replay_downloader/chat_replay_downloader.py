@@ -52,15 +52,22 @@ class ChatReplayDownloader:
         # loop through all websites and
         # get corresponding website parser,
         # based on matching url with predefined regex
+        correct_site = None
         for site in GET_ALL_SITES():
             regex = getattr(site,'_VALID_URL')
             if(isinstance(regex, str)): # regex has been set (not None)
                 match = re.search(regex, url)
                 if(match): #  and match.group('id')
-                    s = site(self._INIT_PARAMS)
-                    messages = s.get_chat_messages(params)
-                    s.close()
+                    correct_site = site(self._INIT_PARAMS)
+                    try:
+                        messages = correct_site.get_chat_messages(params)
+                    except Exception as e:
+                        raise e
+                    finally:
+                        correct_site.close()
                     return messages
+
+
 
         # TODO raise invalid url error
         #raise InvalidURL('The url provided ({}) is invalid.'.format(url))

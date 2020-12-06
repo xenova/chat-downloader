@@ -9,7 +9,8 @@ from ..errors import (
     )
 
 from ..utils import (
-    get_title_of_webpage
+    get_title_of_webpage,
+    update_dict_without_overwrite
     )
 
 
@@ -72,8 +73,12 @@ class ChatDownloader:
         'chat_type': 'live'
     }
 
+    def __str__(self):
+        return None
+
     def __init__(self, updated_init_params = {}):
         """Initialise a new session for making requests."""
+        # self._name = None
         self._INIT_PARAMS.update(updated_init_params)
 
         self.session = requests.Session()
@@ -115,10 +120,17 @@ class ChatDownloader:
     #_LIST_OF_MESSAGES = []
     def get_chat_messages(self, params = {}):
     #def get_chat_messages(self, url, list_of_messages = []):
-        """Get chat. Redefine in subclasses."""
-        temp = params.copy()
-        params.update(self._DEFAULT_PARAMS)
-        params.update(temp)
+        """
+        Returns a list of chat messages. To be redefined in subclasses.
+
+        `params` should update its `messages` atttribute to allow for messages to still be
+        returned after an exception is raised.
+        """
+
+        update_dict_without_overwrite(params, self._DEFAULT_PARAMS)
+        # temp = params.copy()
+        # params.update()
+        # params.update(temp)
         #self._PARAMS.update()
         #params.update(self._PARAMS)
 
@@ -131,5 +143,4 @@ class ChatDownloader:
         else:
             tests = getattr(self, '_TESTS', [])
         for t in tests:
-            t['name'] = type(self).__name__[:-len('IE')]
             yield t
