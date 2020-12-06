@@ -145,27 +145,32 @@ class ChatReplayDownloader:
         """Make a request using the current session and get json data."""
         return self.__session_get(url).json()
 
-    def __timestamp_to_microseconds(self, timestamp):
+    @staticmethod
+    def __timestamp_to_microseconds(timestamp):
         """
         Convert RFC3339 timestamp to microseconds.
         This is needed as datetime.datetime.strptime() does not support nanosecond precision.
         """
-        info = list(filter(None, re.split('[\.|Z]{1}', timestamp))) + [0]
+        info = list(filter(None, re.split('[.|Z]', timestamp))) + [0]
         return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
 
-    def __time_to_seconds(self, time):
+    @staticmethod
+    def __time_to_seconds(time):
         """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
         return sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1)
 
-    def __seconds_to_time(self, seconds):
+    @staticmethod
+    def __seconds_to_time(seconds):
         """Convert seconds to timestamp."""
         return re.sub(r'^0:0?', '', str(datetime.timedelta(0, seconds)))
 
-    def __microseconds_to_timestamp(self, microseconds):
+    @staticmethod
+    def __microseconds_to_timestamp(microseconds):
         """Convert unix time to human-readable timestamp."""
         return datetime.datetime.fromtimestamp(microseconds//1000000).strftime('%Y-%m-%d %H:%M:%S')
 
-    def __arbg_int_to_rgba(self, argb_int):
+    @staticmethod
+    def __arbg_int_to_rgba(argb_int):
         """Convert ARGB integer to RGBA array."""
         red = (argb_int >> 16) & 255
         green = (argb_int >> 8) & 255
@@ -173,7 +178,8 @@ class ChatReplayDownloader:
         alpha = (argb_int >> 24) & 255
         return [red, green, blue, alpha]
 
-    def __rgba_to_hex(self, colours):
+    @staticmethod
+    def __rgba_to_hex(colours):
         """Convert RGBA array to hex colour."""
         return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
@@ -219,10 +225,10 @@ class ChatReplayDownloader:
             print(safe_string, flush=True)
 
     def __parse_youtube_link(self, text):
-        if(text.startswith('/redirect')):  # is a redirect link
+        if text.startswith('/redirect'):  # is a redirect link
             info = dict(parse.parse_qsl(parse.urlsplit(text).query))
             return info['q'] if 'q' in info else ''
-        elif(text.startswith('/watch')):  # is a youtube video link
+        elif text.startswith('/watch'):  # is a youtube video link
             return self.__YT_HOME + text
         else:  # is a normal link
             return text
@@ -261,7 +267,7 @@ class ChatReplayDownloader:
 
         try:
             ytInitialData = json.loads(json_data)
-        except Exception as e:
+        except Exception:
             try:
                 # for some reason, it sometimes cuts out and this fixes it
                 ytInitialData = json.loads('{"resp'+json_data)
@@ -269,12 +275,12 @@ class ChatReplayDownloader:
                 raise ParsingError(
                     'Unable to parse video data. Please try again.')
 
-        if('contents' not in ytInitialData):
+        if 'contents' not in ytInitialData:
             raise VideoUnavailable('Video is unavailable (may be private).')
 
         columns = ytInitialData['contents']['twoColumnWatchNextResults']
 
-        if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
+        if 'conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']:
             error_message = 'Video does not have a chat replay.'
             try:
                 error_message = self.__parse_message_runs(
@@ -303,12 +309,12 @@ class ChatReplayDownloader:
         """Get YouTube live info, given a continuation."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME,
                                                       'live_chat', 'get_live_chat', continuation)
-        return(self.__get_continuation_info(url))
+        return self.__get_continuation_info(url)
 
     def __get_continuation_info(self, url):
         """Get continuation info for a YouTube video."""
         info = self.__session_get_json(url)
-        if('continuationContents' in info['response']):
+        if 'continuationContents' in info['response']:
             return info['response']['continuationContents']['liveChatContinuation']
         else:
             raise NoContinuation
@@ -329,7 +335,7 @@ class ChatReplayDownloader:
         item_info = item[index]
 
         # Never before seen index, may cause error (used for debugging)
-        if(index not in self.__TYPES_OF_KNOWN_MESSAGES):
+        if index not in self.__TYPES_OF_KNOWN_MESSAGES:
             pass
 
         important_item_info = {key: value for key, value in item_info.items(
@@ -342,18 +348,18 @@ class ChatReplayDownloader:
             data[new_key] = data.pop(key)
 
             # get simpleText if it exists
-            if(type(data[new_key]) is dict and 'simpleText' in data[new_key]):
+            if type(data[new_key]) is dict and 'simpleText' in data[new_key]:
                 data[new_key] = data[new_key]['simpleText']
 
-        if('authorBadges' in item_info):
+        if 'authorBadges' in item_info:
             badges = []
             for badge in item_info['authorBadges']:
-                if('liveChatAuthorBadgeRenderer' in badge and 'tooltip' in badge['liveChatAuthorBadgeRenderer']):
+                if 'liveChatAuthorBadgeRenderer' in badge and 'tooltip' in badge['liveChatAuthorBadgeRenderer']:
                     badges.append(
                         badge['liveChatAuthorBadgeRenderer']['tooltip'])
             data['badges'] = ', '.join(badges)
 
-        if('showItemEndpoint' in item_info):  # has additional information
+        if 'showItemEndpoint' in item_info:  # has additional information
             data.update(self.__parse_item(
                 item_info['showItemEndpoint']['showLiveChatItemEndpoint']['renderer']))
             return data
@@ -364,12 +370,12 @@ class ChatReplayDownloader:
         data['timestamp'] = int(
             data['timestamp']) if 'timestamp' in data else None
 
-        if('time_text' in data):
+        if 'time_text' in data:
             data['time_in_seconds'] = int(
                 self.__time_to_seconds(data['time_text']))
 
         for colour_key in ('header_color', 'body_color'):
-            if(colour_key in data):
+            if colour_key in data:
                 data[colour_key] = self.__get_colours(data[colour_key])
 
         return data
@@ -392,10 +398,10 @@ class ChatReplayDownloader:
         chat_replay_field = '{} chat replay'.format(chat_type_field)
         chat_live_field = '{} chat'.format(chat_type_field)
 
-        if(chat_replay_field in continuation_by_title_map):
+        if chat_replay_field in continuation_by_title_map:
             is_live = False
             continuation_title = chat_replay_field
-        elif(chat_live_field in continuation_by_title_map):
+        elif chat_live_field in continuation_by_title_map:
             is_live = True
             continuation_title = chat_live_field
         else:
@@ -407,11 +413,11 @@ class ChatReplayDownloader:
         try:
             while True:
                 try:
-                    if(is_live):
+                    if is_live:
                         info = self.__get_live_info(continuation)
                     else:
                         # must run to get first few messages, otherwise might miss some
-                        if(first_time):
+                        if first_time:
                             info = self.__get_replay_info(continuation, 0)
                             first_time = False
                         else:
@@ -422,39 +428,39 @@ class ChatReplayDownloader:
                     print('No continuation found, stream may have ended.')
                     break
 
-                if('actions' in info):
+                if 'actions' in info:
                     for action in info['actions']:
                         data = {}
 
-                        if('replayChatItemAction' in action):
+                        if 'replayChatItemAction' in action:
                             replay_chat_item_action = action['replayChatItemAction']
-                            if('videoOffsetTimeMsec' in replay_chat_item_action):
+                            if 'videoOffsetTimeMsec' in replay_chat_item_action:
                                 data['video_offset_time_msec'] = int(
                                     replay_chat_item_action['videoOffsetTimeMsec'])
                             action = replay_chat_item_action['actions'][0]
 
                         action_name = list(action.keys())[0]
-                        if('item' not in action[action_name]):
+                        if 'item' not in action[action_name]:
                             # not a valid item to display (usually message deleted)
                             continue
 
                         item = action[action_name]['item']
                         index = list(item.keys())[0]
 
-                        if(index in self.__TYPES_OF_MESSAGES['ignore']):
+                        if index in self.__TYPES_OF_MESSAGES['ignore']:
                             # can ignore message (not a chat message)
                             continue
 
                         # user wants everything, keep going
-                        if(message_type == 'all'):
+                        if message_type == 'all':
                             pass
 
                         # user does not want superchat + message is superchat
-                        elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                        elif message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']:
                             continue
 
                         # user does not want normal messages + message is normal
-                        elif(message_type != 'messages' and index in self.__TYPES_OF_MESSAGES['message']):
+                        elif message_type != 'messages' and index in self.__TYPES_OF_MESSAGES['message']:
                             continue
 
                         data = dict(self.__parse_item(item), **data)
@@ -462,18 +468,18 @@ class ChatReplayDownloader:
                         time_in_seconds = data['time_in_seconds'] if 'time_in_seconds' in data else None
 
                         valid_seconds = time_in_seconds is not None
-                        if(end_time is not None and valid_seconds and time_in_seconds > end_time):
+                        if end_time is not None and valid_seconds and time_in_seconds > end_time:
                             return messages
 
-                        if(is_live or (valid_seconds and time_in_seconds >= start_time)):
+                        if is_live or (valid_seconds and time_in_seconds >= start_time):
                             messages.append(data)
 
-                            if(callback is None):
+                            if callback is None:
                                 # print if it is not a ticker message (prevents duplicates)
-                                if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                                if index not in self.__TYPES_OF_MESSAGES['superchat_ticker']:
                                     self.print_item(data)
 
-                            elif(callable(callback)):
+                            elif callable(callback):
                                 try:
                                     callback(data)
                                 except TypeError:
@@ -481,10 +487,10 @@ class ChatReplayDownloader:
                                         'Incorrect number of parameters for function '+callback.__name__)
                 else:
                     # no more actions to process in a chat replay
-                    if(not is_live):
+                    if not is_live:
                         break
 
-                if('continuations' in info):
+                if 'continuations' in info:
                     continuation_info = info['continuations'][0]
                     # possible continuations:
                     # invalidationContinuationData, timedContinuationData,
@@ -521,15 +527,15 @@ class ChatReplayDownloader:
                     api_url, cursor, start_time)
                 info = self.__session_get_json(url)
 
-                if('error' in info):
+                if 'error' in info:
                     raise TwitchError(info['message'])
 
                 for comment in info['comments']:
                     time_in_seconds = float(comment['content_offset_seconds'])
-                    if(time_in_seconds < start_time):
+                    if time_in_seconds < start_time:
                         continue
 
-                    if(end_time is not None and time_in_seconds > end_time):
+                    if end_time is not None and time_in_seconds > end_time:
                         return messages
 
                     created_at = comment['created_at']
@@ -544,10 +550,10 @@ class ChatReplayDownloader:
 
                     messages.append(data)
 
-                    if(callback is None):
+                    if callback is None:
                         self.print_item(data)
 
-                    elif(callable(callback)):
+                    elif callable(callback):
                         try:
                             callback(data)
                         except TypeError:
@@ -563,11 +569,11 @@ class ChatReplayDownloader:
 
     def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
         match = re.search(self.__YT_REGEX, url)
-        if(match):
+        if match:
             return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback)
 
         match = re.search(self.__TWITCH_REGEX, url)
-        if(match):
+        if match:
             return self.get_twitch_messages(match.group(1), start_time, end_time, callback)
 
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
@@ -602,7 +608,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if(args.hide_output):
+    if args.hide_output:
         f = open(os.devnull, 'w')
         sys.stdout = f
         sys.stderr = f
@@ -624,17 +630,17 @@ if __name__ == '__main__':
 
             # only file format capable of appending properly
             with open(args.output, 'a', encoding='utf-8') as f:
-                if('ticker_duration' not in item):  # needed for duplicates
+                if 'ticker_duration' not in item:  # needed for duplicates
                     num_of_messages += 1
                     print_item(item)
                     text = chat_downloader.message_to_string(item)
                     print(text, file=f)
 
         callback = None if args.output is None else print_item
-        if(args.output is not None):
-            if(args.output.endswith('.json')):
+        if args.output is not None:
+            if args.output.endswith('.json'):
                 pass
-            elif(args.output.endswith('.csv')):
+            elif args.output.endswith('.csv'):
                 fieldnames = []
             else:
                 open(args.output, 'w').close()  # empty the file
@@ -649,13 +655,13 @@ if __name__ == '__main__':
             callback=callback
         )
 
-        if(args.output is not None):
-            if(args.output.endswith('.json')):
+        if args.output is not None:
+            if args.output.endswith('.json'):
                 num_of_messages = len(chat_messages)
                 with open(args.output, 'w') as f:
                     json.dump(chat_messages, f, sort_keys=True)
 
-            elif(args.output.endswith('.csv')):
+            elif args.output.endswith('.csv'):
                 num_of_messages = len(chat_messages)
                 fieldnames = []
                 for message in chat_messages:
@@ -695,3 +701,4 @@ else:
 
     def get_twitch_messages(url, start_time=0, end_time=None, callback=None):
         return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback)
+
