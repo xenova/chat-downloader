@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--output', '-o', default=default_params['output'],
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--logging', '-l', choices=['normal', 'none', 'debug'], default=default_params['logging'],
+    parser.add_argument('--logging', '-l', choices=['normal', 'none', 'errors_only', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
 
     parser.add_argument('--max_attempts', '-a', type=int, default=default_params['max_attempts'],
@@ -68,11 +68,11 @@ def main():
     args = parser.parse_args()
 
     # TODO temp:
-    args.logging = 'debug'
+    #args.logging = 'debug'
 
     def print_error(message):
         print(message)
-        if(args.logging == 'debug'):
+        if(args.logging in ('debug', 'errors_only')):
             traceback.print_exc()
 
     program_params = {}

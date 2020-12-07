@@ -144,3 +144,7 @@ class ChatDownloader:
             tests = getattr(self, '_TESTS', [])
         for t in tests:
             yield t
+
+    # _LOGGING_TYPES = {
+    #     'errors'
+    # }

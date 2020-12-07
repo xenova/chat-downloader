@@ -1,5 +1,6 @@
 import datetime
 import re
+import sys
 
 
 def timestamp_to_microseconds(timestamp):
@@ -114,3 +115,6 @@ def update_dict_without_overwrite(original, new):
 
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
+
+def debug_print(*objects, sep=' ', end='\n', file=sys.stdout, flush=False):
+    print('[DEBUG]',*objects, sep=sep, end=end, file=file, flush=flush)

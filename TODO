@@ -5,3 +5,11 @@
 3. max num retries for getting json/ continuation (30 default?)
 
 4. Logging levels
+
+5. Chat replay download progress bar
+    - calculate based on current time vs. video duration
+    YouTube:
+    http://www.youtube.com/get_video_info?video_id=xxx
+
+6. Twitch/YouTube
+    - get by channel name (for those currently live)
