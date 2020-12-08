@@ -1,5 +1,10 @@
 """File for defining errors"""
 
+class RetriesExceeded(Exception):
+    """Raised after the maximum number of retries has been reached."""
+    pass
+
+
 class JSONParseError(Exception):
     """Raised when unable to parse JSON."""
     pass

@@ -26,6 +26,18 @@ def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
     """Convert unix time to human-readable timestamp."""
     return datetime.datetime.fromtimestamp(microseconds//1000000).strftime(format)
 
+def ensure_seconds(time, default=None):
+    """Ensure time is returned in seconds."""
+    if(not time):  # if empty, return default
+        return default
+
+    try:
+        return int(time)
+    except ValueError:
+        return time_to_seconds(time)
+    except:
+        return default
+
 
 def arbg_int_to_rgba(argb_int):
     """Convert ARGB integer to RGBA array."""
@@ -110,11 +122,14 @@ def remove_suffixes(text, suffixes):
 
     return text
 
+
 def update_dict_without_overwrite(original, new):
     original.update({key: new[key] for key in new if key not in original})
+
 
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
+
 def debug_print(*objects, sep=' ', end='\n', file=sys.stdout, flush=False):
-    print('[DEBUG]',*objects, sep=sep, end=end, file=file, flush=flush)
+    print('[DEBUG]', *objects, sep=sep, end=end, file=file, flush=flush)

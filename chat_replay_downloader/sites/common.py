@@ -5,7 +5,8 @@ import os
 from ..errors import (
     CookieError,
     ParsingError,
-    JSONParseError
+    JSONParseError,
+    CallbackFunction
     )
 
 from ..utils import (
@@ -45,6 +46,28 @@ class ChatDownloader:
     TODO
     """
 
+    # id
+	# author_id
+	# author_name
+	# amount
+	# message
+	# time_text
+	# timestamp
+	# author_images
+	# tooltip
+	# icon
+	# author_badges
+	# badge_icons
+	# sticker_images
+	# ticker_duration
+	# sponsor_icons
+	# ticker_icons
+
+	# target_id
+	# action
+	# viewer_is_creator
+	# sub_message
+
     _DEFAULT_INIT_PARAMS = {
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
@@ -67,6 +90,7 @@ class ChatDownloader:
 
         'output': None,
         'logging': 'normal',
+        'safe_print': False,
 
         # YouTube only
         'message_type': 'all',
@@ -75,6 +99,10 @@ class ChatDownloader:
 
     def __str__(self):
         return None
+
+    @staticmethod
+    def get_param_value(params, key):
+        return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
     def __init__(self, updated_init_params = {}):
         """Initialise a new session for making requests."""
@@ -98,6 +126,15 @@ class ChatDownloader:
 
     def close(self):
         self.session.close()
+
+
+    def _session_post(self, url, data = {}, headers={}):
+        """Make a request using the current session."""
+        #print('_session_post', url, data, headers)
+
+        #update_dict_without_overwrite
+        new_headers = {**self.session.headers, **headers}
+        return self.session.post(url, data=data, headers=new_headers).json()
 
     def _session_get(self, url):
         """Make a request using the current session."""
@@ -145,6 +182,13 @@ class ChatDownloader:
         for t in tests:
             yield t
 
+    @staticmethod
+    def perform_callback(callback, data):
+        try:
+            callback(data)
+        except TypeError:
+            raise CallbackFunction(
+                'Incorrect number of parameters for function '+callback.__name__)
     # _LOGGING_TYPES = {
     #     'errors'
     # }

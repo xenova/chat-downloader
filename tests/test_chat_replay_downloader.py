@@ -1,9 +1,5 @@
 import unittest
 
-#sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-#from chat_replay_downloader import chat_replay_downloader
-
 from chat_replay_downloader.sites import GET_ALL_SITES
 from chat_replay_downloader.sites.common import ChatDownloader
 
@@ -45,35 +41,31 @@ class TestChatReplayDownloader(unittest.TestCase):
         }
         types_to_check = [key for key in actual_result if key in expected_result]
 
-        for message in test['params']['messages']:
-            message_type = message.get('message_type')
-            if(message_type not in actual_result['message_types']):
-                actual_result['message_types'].append(message_type)
+        if(types_to_check):
+            for message in test['params']['messages']:
+                message_type = message.get('message_type')
+                if(message_type not in actual_result['message_types']):
+                    actual_result['message_types'].append(message_type)
 
-            action_type = message.get('action_type')
-            if(action_type not in actual_result['action_types']):
-                actual_result['action_types'].append(action_type)
-
-        for check in types_to_check:
-            self.assertCountEqual(expected_result.get(check),actual_result.get(check))
+                action_type = message.get('action_type')
+                if(action_type not in actual_result['action_types']):
+                    actual_result['action_types'].append(action_type)
 
 
+            for check in types_to_check:
+                self.assertCountEqual(expected_result.get(check),actual_result.get(check))
 
-    def test_all_sites(self):  # test method names begin with 'test'
 
-        #downloader = ChatReplayDownloader() # init_params
 
-        #cha
+    def test_all_sites(self):
+
         all_sites = GET_ALL_SITES()
 
         for site in all_sites:
             site_object = site()
             print('Running tests for site "{}":'.format(site_object))
-            # print(getattr(site, 'name'))
-            #print(site.__repr__(site))
 
             tests = ChatDownloader.get_tests(site)
-            #print(tests)
 
             test_number = 1
             for test in tests:

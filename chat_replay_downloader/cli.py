@@ -47,6 +47,10 @@ def main():
     parser.add_argument('--logging', '-l', choices=['normal', 'none', 'errors_only', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
 
+    parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
+                        help='level of logging to show\n(default: %(default)s)')
+
+
     parser.add_argument('--max_attempts', '-a', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to make for an http request\n(default: %(default)s)')
 
@@ -88,30 +92,6 @@ def main():
             pass
 
 
-    #     default_init_params = ChatDownloader._DEFAULT_INIT_PARAMS
-    # default_params = ChatDownloader._DEFAULT_PARAMS
-
-
-
-    #     'cookies' : args.cookies,
-    # }
-
-
-
-    #
-    #  = args.__dict__.copy()
-    # {
-    #     'url': args.url,
-    #     'start_time' : args.start_time,
-    #     'end_time': args.end_time,
-    #     'message_type': args.message_type,
-    #     'chat_type': args.chat_type,
-    #     'output': args.output,
-
-    #     'logging': args.logging
-    # }
-
-
     downloader = ChatReplayDownloader(init_params)
 
     try:
@@ -141,9 +121,11 @@ def main():
 
 
 
+    #print(program_params.get('messages'))
     with open('test.json', 'w') as outfile:
         json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
-    #print(options.get('messages'))
+
+
 
 
     #print(json.dumps(options.get('messages'), indent=4))
