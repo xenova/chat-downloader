@@ -92,9 +92,19 @@ class ChatDownloader:
         'logging': 'normal',
         'safe_print': False,
 
+        'timeout': None, # stop getting messages after no messages have been sent for `timeout` seconds
+
+
         # YouTube only
         'message_type': 'all',
-        'chat_type': 'live'
+        'chat_type': 'live',
+
+
+        # Twitch only
+
+        # allows for keyboard interrupts to occur
+        'message_receive_timeout': 2, #0.25, # try again after receiving no data after a certain time
+        'buffer_size': 4096 # default
     }
 
     def __str__(self):

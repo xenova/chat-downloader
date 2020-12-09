@@ -35,32 +35,46 @@ def main():
     parser.add_argument('--end_time', '-e', default=default_params['end_time'],
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-    parser.add_argument('--message_type', '-mt', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
-                        help='types of messages to include [YouTube only]\n(default: %(default)s)')
-
-    parser.add_argument('--chat_type', '-ct', choices=['live', 'top'], default=default_params['chat_type'],
-                        help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
-
     parser.add_argument('--output', '-o', default=default_params['output'],
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--logging', '-l', choices=['normal', 'none', 'errors_only', 'debug'], default=default_params['logging'],
+    parser.add_argument('--logging', choices=['normal', 'none', 'errors_only', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
 
     parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
                         help='level of logging to show\n(default: %(default)s)')
 
 
-    parser.add_argument('--max_attempts', '-a', type=int, default=default_params['max_attempts'],
+    parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to make for an http request\n(default: %(default)s)')
 
-    parser.add_argument('--max_messages', '-m', type=int, default=default_params['max_messages'],
+    parser.add_argument('--max_messages', type=int, default=default_params['max_messages'],
                         help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
+
+    parser.add_argument('--timeout', type=float, default=default_params['timeout'],
+                        help='stop getting messages after not receiving anything for a certain amount of time\n(default: %(default)s)')
+
 
 
     # INIT PARAMS
     parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
                         help='name of cookies file\n(default: %(default)s)')
+
+
+    # Additional params [Site Specific]
+
+    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
+                        help='types of messages to include [YouTube only]\n(default: %(default)s)')
+
+    parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
+                        help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
+
+
+    parser.add_argument('--message_receive_timeout', type=float, default=default_params['message_receive_timeout'],
+                        help='time before requesting for new messages [Twitch only]\n(default: %(default)s)')
+
+    parser.add_argument('--buffer_size', type=int, default=default_params['buffer_size'],
+                        help='specify a buffer size for retrieving messages [Twitch only]\n(default: %(default)s)')
 
 
     # normal = just print the messages
