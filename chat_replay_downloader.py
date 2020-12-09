@@ -4,7 +4,6 @@ import json
 import datetime
 import re
 import argparse
-import bs4
 import csv
 import emoji
 import time
@@ -249,38 +248,34 @@ class ChatReplayDownloader:
 
         return message_text
 
+    _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
         original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
         html = self.__session_get(original_url)
-        soup = bs4.BeautifulSoup(html.text, 'html.parser')
-        ytInitialData_script = next(script.string for script in soup.find_all(
-            'script') if script.string and 'ytInitialData' in script.string)
-        json_data = next(line.strip()[len('window["ytInitialData"] = '):-1]
-                         for line in ytInitialData_script.splitlines() if 'ytInitialData' in line)
 
-        try:
-            ytInitialData = json.loads(json_data)
-        except Exception as e:
-            try:
-                # for some reason, it sometimes cuts out and this fixes it
-                ytInitialData = json.loads('{"resp'+json_data)
-            except Exception:
-                raise ParsingError(
-                    'Unable to parse video data. Please try again.')
+        info = re.search(self._YT_INITIAL_DATA_RE, html.text)
 
-        if('contents' not in ytInitialData):
+        if(not info):
+            raise ParsingError(
+                'Unable to parse video data. Please try again.')
+
+        ytInitialData = json.loads(info.group(1))
+        # print(ytInitialData)
+        contents = ytInitialData.get('contents')
+        if(not contents):
             raise VideoUnavailable('Video is unavailable (may be private).')
 
-        columns = ytInitialData['contents']['twoColumnWatchNextResults']
+        columns = contents.get('twoColumnWatchNextResults')
 
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
             error_message = 'Video does not have a chat replay.'
             try:
-                error_message = self.__parse_message_runs(
-                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
+                error_message = self.parse_runs(
+                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])
             finally:
                 raise NoChatReplay(error_message)
+
 
         livechat_header = columns['conversationBar']['liveChatRenderer']['header']
         viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
