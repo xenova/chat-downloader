@@ -63,8 +63,9 @@ def main():
 
     # Additional params [Site Specific]
 
-    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default=default_params['message_type'],
-                        help='types of messages to include [YouTube only]\n(default: %(default)s)')
+# choices=['messages', 'superchat', 'all']
+    parser.add_argument('--message_types', type=lambda s: [item.strip() for item in re.split('[\s,;]+',s)], default=default_params['message_types'],
+                        help='comma separated list of types of messages to include [YouTube only]\n(default: %(default)s)')
 
     parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
@@ -85,6 +86,8 @@ def main():
 
     args = parser.parse_args()
 
+    # print(args.message_type)
+    # exit()
     # TODO temp:
     #args.logging = 'debug'
 
@@ -196,7 +199,7 @@ def main():
             args.url,
             start_time=args.start_time,
             end_time=args.end_time,
-            message_type=args.message_type,
+            message_types=args.message_types,
             chat_type=args.chat_type,
             callback=callback
         )

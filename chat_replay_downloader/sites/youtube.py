@@ -83,7 +83,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'params': {
                 'url': 'https://www.youtube.com/watch?v=97w16cYskVI',
                 'end_time': 50,
-                'message_type': 'superchat'
+                'message_types': ['superchat']
             },
 
             'expected_result': {
@@ -97,7 +97,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'params': {
                 'url': 'https://www.youtube.com/watch?v=97w16cYskVI',
                 'end_time': 50,
-                'message_type': 'all'
+                'message_types': ['all']
             },
 
             'expected_result': {
@@ -215,6 +215,8 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatPaidMessageRenderer',
             'liveChatPaidStickerRenderer',
 
+        ],
+        'tickers':[
             # superchat messages which appear ticker (at the top)
             'liveChatTickerPaidStickerItemRenderer',
             'liveChatTickerPaidMessageItemRenderer',
@@ -245,7 +247,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'deletedStateMessage'
         ],
 
-        'other': [
+        'placeholder': [
             'liveChatPlaceholderItemRenderer'  # placeholder
         ],
 
@@ -264,10 +266,10 @@ class YouTubeChatDownloader(ChatDownloader):
         if(text.startswith('/redirect')):  # is a redirect link
             info = dict(parse.parse_qsl(parse.urlsplit(text).query))
             return info.get('q') or '' # ['q'] if 'q' in info else ''
-        elif(text.startswith('/watch')):  # is a youtube video link
-            return YouTubeChatDownloader.YT_HOME + text
         elif(text.startswith('//')):
             return 'https:' + text
+        elif(text.startswith('/')):  # is a youtube link e.g. '/watch','/results'
+            return YouTubeChatDownloader.YT_HOME + text
         else:  # is a normal link
             return text
 
@@ -280,7 +282,7 @@ class YouTubeChatDownloader(ChatDownloader):
         return url
 
     @ staticmethod
-    def parse_runs(run_info):
+    def parse_runs(run_info, parse_links = False):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
         message_text = ''
 
@@ -288,7 +290,7 @@ class YouTubeChatDownloader(ChatDownloader):
         if(runs):
             for run in runs:
                 if 'text' in run:
-                    if 'navigationEndpoint' in run:  # is a link
+                    if parse_links and 'navigationEndpoint' in run:  # is a link and must parse
 
                         # if something fails, use default text
                         message_text += YouTubeChatDownloader.parse_navigation_endpoint(
@@ -404,7 +406,7 @@ class YouTubeChatDownloader(ChatDownloader):
         'simple_text': lambda x: x.get('simpleText'),
         'convert_to_int': lambda x: int_or_none(x),
         'get_thumbnails': lambda x: YouTubeChatDownloader.parse_thumbnails(x),
-        'parse_runs': lambda x: YouTubeChatDownloader.parse_runs(x),
+        'parse_runs': lambda x: YouTubeChatDownloader.parse_runs(x, True),
         'parse_badges': lambda x: YouTubeChatDownloader.parse_badges(x),
 
         'parse_icon': lambda x: x.get('iconType'),
@@ -594,7 +596,7 @@ class YouTubeChatDownloader(ChatDownloader):
             x['title']: x['continuation']['reloadContinuationData']['continuation']
             for x in viewselector_submenuitems
         }
-
+        #print(columns['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])
         return {
             'title': try_get(columns, lambda x: self.parse_runs(x['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])),
             'continuation_info': continuation_by_title_map
@@ -733,6 +735,11 @@ class YouTubeChatDownloader(ChatDownloader):
         max_messages = self.get_param_value(params, 'max_messages')
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
+
+        types_of_messages_to_add = self.get_param_value(params, 'message_types')
+        print(types_of_messages_to_add)
+
+
         first_time = True
         while True:
             info = None
@@ -779,6 +786,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
                         action = replay_chat_item_action['actions'][0]
 
+                    action.pop('clickTrackingParams', None)
                     original_action_type = try_get_first_key(action)
 
                     if(original_action_type not in self._KNOWN_ACTION_TYPES):
@@ -869,7 +877,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         new_index = remove_prefixes(
                             original_message_type, 'liveChat')
                         new_index = remove_suffixes(new_index, 'Renderer')
-                        data['message_type'] = camel_case_split(new_index)
+                        data['message_types'] = camel_case_split(new_index)
 
                         if(params.get('logging') in ('debug', 'errors_only')):
                             if(original_message_type not in self._KNOWN_MESSAGE_TYPES):
@@ -893,19 +901,32 @@ class YouTubeChatDownloader(ChatDownloader):
                         continue
 
                     # TODO make this param a list for more variety
-                    types_of_messages_to_add = self.get_param_value(
-                        params, 'message_type')
 
                     # user wants everything, keep going TODO True temp
-                    if(types_of_messages_to_add == 'all'):
+                    if('all' in types_of_messages_to_add):
                         pass
 
                     else:
                         # check whether to skip this message or not, based on its type
-                        for key in self._TYPES_OF_MESSAGES:
-                            # user does not want a message type + message is that type
-                            if(types_of_messages_to_add != key and original_message_type in self._TYPES_OF_MESSAGES[key]):
-                                continue
+
+                        valid_message_types = []
+                        for message_type in types_of_messages_to_add:
+                            valid_message_types += self._TYPES_OF_MESSAGES.get(message_type, [])
+
+                        if(original_message_type not in valid_message_types):
+                            continue
+                        # for key in self._TYPES_OF_MESSAGES:
+                        #     #print(key)
+                        #     # user does not want a message type + message is that type
+                        #     #corresponding_message_types = [original_message_type for in self._TYPES_OF_MESSAGES[key]]
+
+                        #     print(1,key, types_of_messages_to_add)
+                        #     print(2,original_message_type, self._TYPES_OF_MESSAGES[key])
+                        #     if(key not in types_of_messages_to_add and original_message_type in self._TYPES_OF_MESSAGES[key]):
+                        #         print(key, 'not in', types_of_messages_to_add)
+
+                        #     # else:
+                        #     #     print(key, 'in', types_of_messages_to_add)
 
                     # if from a replay, check whether to skip this message or not, based on its time
                     if(not is_live):
@@ -929,17 +950,17 @@ class YouTubeChatDownloader(ChatDownloader):
 
                     # print('=',end='')
                     if(not callback):
-                        if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
+                        #if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
                             # TODO decide whether to add deleted or not
 
                             # TODO could do != 'none'
-                            if(params.get('logging') == 'normal'):
-                                # is a chat message, print it
-
-                                if(params.get('safe_print')):
-                                    self.safe_print_item(data)
-                                else:
-                                    self.print_item(data)
+                        if(params.get('logging') == 'normal'):
+                            # is a chat message, print it
+                            # print(data)
+                            if(params.get('safe_print')):
+                                self.safe_print_item(data)
+                            else:
+                                self.print_item(data)
 
                     elif(callable(callback)):
                         self.perform_callback(callback)

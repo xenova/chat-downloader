@@ -85,7 +85,8 @@ class ChatDownloader:
         'end_time':None, # get until end
         'callback':None, # do something for every message
 
-        'max_attempts': 5,
+        'max_attempts': 30,
+        # TODO timeout between attempts
         'max_messages': None,
 
         'output': None,
@@ -95,20 +96,22 @@ class ChatDownloader:
         'timeout': None, # stop getting messages after no messages have been sent for `timeout` seconds
 
 
+
+        'message_types': ['messages','superchat'],
+
         # YouTube only
-        'message_type': 'all',
-        'chat_type': 'live',
+        'chat_type': 'live', # live or top
 
 
         # Twitch only
 
         # allows for keyboard interrupts to occur
-        'message_receive_timeout': 2, #0.25, # try again after receiving no data after a certain time
-        'buffer_size': 4096 # default
+        'message_receive_timeout': 0.1, #0.25, # try again after receiving no data after a certain time
+        'buffer_size': 4096 # default buffer size for socket
     }
 
     def __str__(self):
-        return None
+        return ''
 
     @staticmethod
     def get_param_value(params, key):
