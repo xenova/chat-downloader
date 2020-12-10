@@ -428,6 +428,7 @@ class ChatReplayDownloader:
                                     replay_chat_item_action['videoOffsetTimeMsec'])
                             action = replay_chat_item_action['actions'][0]
 
+                        action.pop('clickTrackingParams', None)
                         action_name = list(action.keys())[0]
                         if('item' not in action[action_name]):
                             # not a valid item to display (usually message deleted)
