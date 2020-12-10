@@ -271,8 +271,8 @@ class ChatReplayDownloader:
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
             error_message = 'Video does not have a chat replay.'
             try:
-                error_message = self.parse_runs(
-                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])
+                error_message = self.__parse_message_runs(
+                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
             finally:
                 raise NoChatReplay(error_message)
 
