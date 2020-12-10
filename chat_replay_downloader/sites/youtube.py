@@ -87,7 +87,7 @@ class YouTubeChatDownloader(ChatDownloader):
             },
 
             'expected_result': {
-                'message_types': ['viewer_engagement_message', 'paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
+                'message_types': ['paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
@@ -101,7 +101,7 @@ class YouTubeChatDownloader(ChatDownloader):
             },
 
             'expected_result': {
-                'message_types': ['viewer_engagement_message', 'paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
+                'message_types': ['paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
@@ -116,7 +116,7 @@ class YouTubeChatDownloader(ChatDownloader):
             },
 
             'expected_result': {
-                'message_types': ['viewer_engagement_message', 'paid_message'],
+                'message_types': ['text_message'],
                 'action_types': ['add_chat_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
@@ -320,12 +320,14 @@ class YouTubeChatDownloader(ChatDownloader):
 
         # all messages should have the following
         for key in item_info:
-            original_info = item_info[key]
-            remap = YouTubeChatDownloader._REMAPPING.get(key)
-            if(remap):
-                index, mapping_function = remap
-                info[index] = YouTubeChatDownloader._REMAP_FUNCTIONS[mapping_function](
-                    original_info)
+            ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
+                        YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
+            # original_info = item_info[key]
+            # remap = YouTubeChatDownloader._REMAPPING.get(key)
+            # if(remap):
+            #     index, mapping_function = remap
+            #     info[index] = YouTubeChatDownloader._REMAP_FUNCTIONS[mapping_function](
+            #         original_info)
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
@@ -399,7 +401,6 @@ class YouTubeChatDownloader(ChatDownloader):
         }
 
     _REMAP_FUNCTIONS = {
-        'do_nothing': lambda x: x,
         'simple_text': lambda x: x.get('simpleText'),
         'convert_to_int': lambda x: int_or_none(x),
         'get_thumbnails': lambda x: YouTubeChatDownloader.parse_thumbnails(x),
@@ -413,8 +414,8 @@ class YouTubeChatDownloader(ChatDownloader):
 
     _REMAPPING = {
         # 'youtubeID' : ('mapped_id', 'remapping_function')
-        'id': ('id', 'do_nothing'),
-        'authorExternalChannelId': ('author_id', 'do_nothing'),
+        'id': 'message_id',
+        'authorExternalChannelId': 'author_id',
         'authorName': ('author_name', 'simple_text'),
         # TODO author_display_name
         'purchaseAmountText': ('amount', 'simple_text'),
@@ -422,7 +423,7 @@ class YouTubeChatDownloader(ChatDownloader):
         'timestampText': ('time_text', 'simple_text'),
         'timestampUsec': ('timestamp', 'convert_to_int'),
         'authorPhoto': ('author_images', 'get_thumbnails'),
-        'tooltip': ('tooltip', 'do_nothing'),
+        'tooltip': 'tooltip',
 
         'icon': ('icon', 'parse_icon'),
         'authorBadges': ('author_badges', 'parse_badges'),
@@ -450,17 +451,17 @@ class YouTubeChatDownloader(ChatDownloader):
 
         # deleted messages
         'deletedStateMessage': ('message', 'parse_runs'),
-        'targetItemId': ('target_id', 'do_nothing'),
+        'targetItemId': 'target_message_id',
 
-        'externalChannelId':  ('author_id', 'do_nothing'),
+        'externalChannelId': 'author_id',
 
         # action buttons
         'actionButton': ('action', 'parse_action_button'),
 
         # addBannerToLiveChatCommand
         'text': ('message', 'parse_runs'),
-        'viewerIsCreator': ('viewer_is_creator', 'do_nothing'),
-        'targetId': ('target_id', 'do_nothing'),
+        'viewerIsCreator': 'viewer_is_creator',
+        'targetId': 'target_message_id',
 
         # donation_announcement
         'subtext': ('sub_message', 'parse_runs'),

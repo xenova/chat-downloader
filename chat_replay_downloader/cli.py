@@ -106,6 +106,18 @@ def main():
             pass
 
 
+    if(program_params.get('logging') == 'none'):
+        f = open(os.devnull, 'w')
+        sys.stdout = f
+        sys.stderr = f
+    else:
+        # set encoding of standard output and standard error
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+
+
+
+
     downloader = ChatReplayDownloader(init_params)
 
     try:
@@ -151,14 +163,6 @@ def main():
 
     return
 
-    if(args.hide_output):
-        f = open(os.devnull, 'w')
-        sys.stdout = f
-        sys.stderr = f
-    else:
-        # set encoding of standard output and standard error
-        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies)

@@ -114,6 +114,19 @@ class ChatDownloader:
     def get_param_value(params, key):
         return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
+    @staticmethod
+    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input):
+        remap = remapping_dict.get(remap_key)
+
+        if(remap):
+            if(isinstance(remap, tuple)):
+                index, mapping_function = remap
+                info[index] = remapping_functions[mapping_function](remap_input)
+            else:
+                info[remap] = remap_input
+        # else:
+        #     pass # do nothing
+
     def __init__(self, updated_init_params = {}):
         """Initialise a new session for making requests."""
         # self._name = None

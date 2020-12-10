@@ -133,3 +133,7 @@ def camel_case_split(word):
 
 def debug_print(*objects, sep=' ', end='\n', file=sys.stdout, flush=False):
     print('[DEBUG]', *objects, sep=sep, end=end, file=file, flush=flush)
+
+
+def replace_with_underscores(text, sep='-'):
+    return text.replace(sep, '_')
