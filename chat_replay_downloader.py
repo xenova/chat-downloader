@@ -196,8 +196,8 @@ class ChatReplayDownloader:
                 self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
             '({}) '.format(item['badges']) if 'badges' in item else '',
             '*{}* '.format(item['amount']) if 'amount' in item else '',
-            item['author'],
-            item['message'] or ''
+            item.get('author', ''),
+            item.get('message', '')
         )
 
     def print_item(self, item):
