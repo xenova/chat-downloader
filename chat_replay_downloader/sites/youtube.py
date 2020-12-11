@@ -216,7 +216,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatPaidStickerRenderer',
 
         ],
-        'tickers':[
+        'tickers': [
             # superchat messages which appear ticker (at the top)
             'liveChatTickerPaidStickerItemRenderer',
             'liveChatTickerPaidMessageItemRenderer',
@@ -265,7 +265,7 @@ class YouTubeChatDownloader(ChatDownloader):
     def parse_youtube_link(text):
         if(text.startswith('/redirect')):  # is a redirect link
             info = dict(parse.parse_qsl(parse.urlsplit(text).query))
-            return info.get('q') or '' # ['q'] if 'q' in info else ''
+            return info.get('q') or ''  # ['q'] if 'q' in info else ''
         elif(text.startswith('//')):
             return 'https:' + text
         elif(text.startswith('/')):  # is a youtube link e.g. '/watch','/results'
@@ -282,7 +282,7 @@ class YouTubeChatDownloader(ChatDownloader):
         return url
 
     @ staticmethod
-    def parse_runs(run_info, parse_links = False):
+    def parse_runs(run_info, parse_links=False):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
         message_text = ''
 
@@ -323,7 +323,7 @@ class YouTubeChatDownloader(ChatDownloader):
         # all messages should have the following
         for key in item_info:
             ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
-                        YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
+                                 YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
             # original_info = item_info[key]
             # remap = YouTubeChatDownloader._REMAPPING.get(key)
             # if(remap):
@@ -334,11 +334,16 @@ class YouTubeChatDownloader(ChatDownloader):
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
             if(colour_key in item_info):  # if item has colour information
-                if('colours' not in info):  # create colour dict if not set
-                    info['colours'] = {}
+                info[camel_case_split(colour_key.replace('Color', 'Colour'))] = get_colours(
+                    item_info.get(colour_key)).get('hex')
+        # OLD: dict of colours
+        # for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
+        #     if(colour_key in item_info):  # if item has colour information
+        #         if('colours' not in info):  # create colour dict if not set
+        #             info['colours'] = {}
 
-                info['colours'][camel_case_split(
-                    remove_suffixes(colour_key, 'Color'))] = get_colours(item_info.get(colour_key)).get('hex')
+        #         info['colours'][camel_case_split(
+        #             remove_suffixes(colour_key, 'Color'))] = get_colours(item_info.get(colour_key)).get('hex')
 
         item_endpoint = item_info.get('showItemEndpoint')
         if(item_endpoint):  # has additional information
@@ -375,7 +380,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return info
 
-    @staticmethod
+    @ staticmethod
     def parse_badges(badge_items):
         badges = []
 
@@ -386,7 +391,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return badges
 
-    @staticmethod
+    @ staticmethod
     def parse_thumbnails(item):
 
         # sometimes thumbnails come as a list
@@ -395,7 +400,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return item.get('thumbnails')
 
-    @staticmethod
+    @ staticmethod
     def parse_action_button(item):
         return {
             'url': try_get(item, lambda x: YouTubeChatDownloader.parse_navigation_endpoint(x['buttonRenderer']['navigationEndpoint'])) or '',
@@ -596,7 +601,7 @@ class YouTubeChatDownloader(ChatDownloader):
             x['title']: x['continuation']['reloadContinuationData']['continuation']
             for x in viewselector_submenuitems
         }
-        #print(columns['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])
+        # print(columns['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])
         return {
             'title': try_get(columns, lambda x: self.parse_runs(x['results']['results']['contents'][0]['videoPrimaryInfoRenderer']['title'])),
             'continuation_info': continuation_by_title_map
@@ -736,9 +741,9 @@ class YouTubeChatDownloader(ChatDownloader):
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
 
-        types_of_messages_to_add = self.get_param_value(params, 'message_types')
+        types_of_messages_to_add = self.get_param_value(
+            params, 'message_types')
         print(types_of_messages_to_add)
-
 
         first_time = True
         while True:
@@ -911,7 +916,8 @@ class YouTubeChatDownloader(ChatDownloader):
 
                         valid_message_types = []
                         for message_type in types_of_messages_to_add:
-                            valid_message_types += self._TYPES_OF_MESSAGES.get(message_type, [])
+                            valid_message_types += self._TYPES_OF_MESSAGES.get(
+                                message_type, [])
 
                         if(original_message_type not in valid_message_types):
                             continue
@@ -947,13 +953,12 @@ class YouTubeChatDownloader(ChatDownloader):
                     if(max_messages is not None and len(message_list) >= max_messages):
                         return message_list  # if max_messages specified, return once limit has been reached
 
-
                     # print('=',end='')
                     if(not callback):
-                        #if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
-                            # TODO decide whether to add deleted or not
+                        # if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
+                        # TODO decide whether to add deleted or not
 
-                            # TODO could do != 'none'
+                        # TODO could do != 'none'
                         if(params.get('logging') == 'normal'):
                             # is a chat message, print it
                             # print(data)
