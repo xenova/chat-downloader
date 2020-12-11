@@ -135,6 +135,13 @@ class TwitchChatDownloader(ChatDownloader):
     _GQL_API_URL = 'https://gql.twitch.tv/gql'
     _API_TEMPLATE = 'https://api.twitch.tv/v5/videos/{}/comments?client_id={}'
 
+    _SUBSCRIPTION_TYPES = {
+        'Prime': 'Prime',
+        '1000': 'Tier 1',
+        '2000': 'Tier 2',
+        '3000': 'Tier 3'
+    }
+
     _REMAP_FUNCTIONS = {
         'parse_timestamp': timestamp_to_microseconds,
         'get_body': lambda x: x.get('body'),
@@ -143,8 +150,12 @@ class TwitchChatDownloader(ChatDownloader):
         'parse_badges': lambda x: TwitchChatDownloader.parse_badges(x),
 
         'parse_int': int_or_none,
+        'parse_bool': lambda x: x=='1',
 
-        'replace_with_underscores': replace_with_underscores
+        'replace_with_underscores': replace_with_underscores,
+
+
+        'parse_subscription_type': lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x)
 
     }
 
@@ -318,7 +329,7 @@ class TwitchChatDownloader(ChatDownloader):
     # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
 
     _MESSAGE_REGEX = re.compile(
-        r'^@(.+?(?=\s+:))(?:\s\S*?)tmi\.twitch\.tv\s(\S+)[^:\r\n]*:+([^\r\n]*)', re.MULTILINE)
+        r'^@(.+?(?=\s+:))(?:\s\S*?)tmi\.twitch\.tv\s(\S+)[^:\r\n]*[:#]+?([^\r\n]*)', re.MULTILINE)
 
     # e.g. # @emote-only=0;followers-only=10;r9k=0;rituals=0;room-id=86061418;slow=10;subs-only=0 :tmi.twitch.tv ROOMSTATE #5uppp
     # @ban-duration=1;room-id=223191589;target-user-id=596619271;tmi-sent-ts=1607456802152 :tmi.twitch.tv CLEARCHAT #tubbo :sammydg11111
@@ -326,20 +337,8 @@ class TwitchChatDownloader(ChatDownloader):
 
     # @badge-info=;badges=;color=;display-name=mindteam2003;emotes=81274:0-5;flags=;id=fcb792fd-9137-4dd0-8cc8-6c1a2cf2fa7f;login=mindteam2003;mod=0;msg-id=ritual;msg-param-ritual-name=new_chatter;room-id=116228390;subscriber=0;system-msg=@mindteam2003\sis\snew\shere.\sSay\shello!;tmi-sent-ts=1607458140070;user-id=618090603;user-type= :tmi.twitch.tv USERNOTICE #tommyinnit :VoHiYo
 
-    _EMOTE_URL_TEMPLATE = 'http://static-cdn.jtvnw.net/emoticons/v1/:<emote ID>/:<size>'
-    _MESSAGE_TYPES = {
-        'PRIVMSG': 'text_message',
-        'USERNOTICE': '?',  # used for sub messages and hellos
-        'CLEARCHAT': '?'  # used for timeouts/bans,
+    #_EMOTE_URL_TEMPLATE = 'http://static-cdn.jtvnw.net/emoticons/v1/:<emote ID>/:<size>'
 
-        #'CLEARMSG' - message_deleted
-
-
-        # Purges all chat messages in a channel, or purges chat messages from a specific user, typically after a timeout or ban.
-
-
-
-    }
 
     @staticmethod
     def parse_badges(badge_info):
@@ -382,7 +381,7 @@ class TwitchChatDownloader(ChatDownloader):
         'color': 'colour',  # TODO make same as YT?
         'display-name': 'author_display_name',
         'user-id': 'author_id',
-        'message': 'message', # The message.
+        #'message': 'message', # The message.
 
 
 
@@ -398,27 +397,58 @@ class TwitchChatDownloader(ChatDownloader):
         # 'id': 'message_id'
 
         'id': 'message_id',
-        # 'mod': ('is_moderator', 'do_nothing'), #already included in badges
+        'mod': ('is_moderator', 'parse_bool'), #(, 'do_nothing'), #already included in badges
         'room-id': 'channel_id',
 
         'tmi-sent-ts': ('timestamp', 'parse_int'),
 
 
         # ROOMSTATE
-        'emote-only': ('emote_only_mode', 'parse_int'),
+        'emote-only': ('emote_only_mode', 'parse_bool'),
         'followers-only': ('follower_only_mode', 'parse_int'),
-        'r9k': ('r9k_mode', 'parse_int'),
+
+        # TODO followers only and slow mode make separate values for duration
+
+        'r9k': ('r9k_mode', 'parse_bool'),
         'slow': ('slow_mode', 'parse_int'),
-        'subs-only': ('subscriber_only_mode', 'parse_int'),
+        'subs-only': ('subscriber_only_mode', 'parse_bool'),
 
         # USERNOTICE
-        'msg-id': 'message_type',
+        'msg-id': 'message_type',#(, 'replace_with_underscores'),
 
         'system-msg': 'system_message',
 
         # USERNOTICE - other
-        # 'msg-param-cumulative-months':
+        'msg-param-cumulative-months': 'months_subscribed_for',
+        'msg-param-months': 'months_subscribed_for',
+        'msg-param-displayName': 'raider_display_name',
+        'msg-param-login': 'raider_name',
+        'msg-param-viewerCount':'number_of_raiders',
 
+        'msg-param-promo-name': 'promo_name',
+        'msg-param-promo-gift-total': 'number_of_gifts_given_during_promo',
+
+        'msg-param-recipient-id': 'gift_recipient_id',
+        'msg-param-recipient-user-name':'gift_recipient_display_name',
+        'msg-param-recipient-display-name': 'gift_recipient_display_name',
+        'msg-param-gift-months':'number_of_months_gifted',
+
+        'msg-param-sender-login':'gifter_name',
+        'msg-param-sender-name':'gifter_display_name',
+
+        'msg-param-should-share-streak': 'user_wants_to_share_streaks',
+        'msg-param-streak-months': 'number_of_consecutive_months_subscribed',
+        'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
+
+        'msg-param-sub-plan-name':'subscription_plan_name',
+
+        'msg-param-ritual-name':'ritual_name',
+
+        'msg-param-threshold': 'bits_badge_tier',
+
+        # (Commands)
+        # HOSTTARGET
+        'number-of-viewers': 'number_of_viewers'
     }
 
     # @badge-info=<badge-info>;badges=<badges>;color=<color>;
@@ -427,6 +457,43 @@ class TwitchChatDownloader(ChatDownloader):
     # subscriber=<subscriber>;tmi-sent-ts=<timestamp>;
     # turbo=<turbo>;user-id=<user-id>;user-type=<user-type>
     # :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
+    _ACTION_TYPE_REMAPPING = {
+        # tags
+        'CLEARCHAT':'ban_user',
+        'CLEARMSG':'delete_message',
+        'GLOBALUSERSTATE':'successful_login',
+        'PRIVMSG':'text_message',
+        'ROOMSTATE':'room_state',
+        'USERNOTICE':'user_notice',
+        'USERSTATE':'user_state',
+
+        # commands
+        'HOSTTARGET':'host_target',
+        'NOTICE':'notice',
+        'RECONNECT':'reconnect',
+
+
+    }
+
+    _MESSAGE_TYPE_REMAPPING = {
+        'sub': 'subscription',
+        'resub': 'resubscription',
+        'subgift': 'subscription_gift',
+        'anonsubgift': 'anonymous_subscription_gift',
+        'submysterygift':'mystery_subscription_gift',
+        'giftpaidupgrade':'paid_upgrade_gift',
+        'rewardgift':'reward_gift',
+        'anongiftpaidupgrade':'anonymous_paid_upgrade_gift',
+        'raid':'raid',
+        'unraid':'unraid',
+        'ritual':'ritual',
+        'bitsbadgetier': 'bits_badge_tier',
+        'highlighted-message': 'highlighted_message',
+
+        # discovered
+        'host_on':'start_host',
+        'host_off':'end_host',
+    }
 
     @staticmethod
     def _parse_irc_item(match):  # self, , params
@@ -437,6 +504,9 @@ class TwitchChatDownloader(ChatDownloader):
         # print(split_info)
         for item in split_info:
             keys = item.split('=', 1)
+            if(len(keys)!=2):
+                print('ERROR',keys, item, match.groups()) # TODO debug
+                continue
             # print(keys[0],keys[1])
 
             ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
@@ -460,56 +530,69 @@ class TwitchChatDownloader(ChatDownloader):
         for i in range(len(badge_metadata)):
             if(badge_metadata[i]['badge'] == 'subscriber'):
                 badge_info = info.get('badge_info', [])
-                badge_info[i]['months'] = badge_metadata[i]['version']
+                badge_info[i]['months_subscribed_for'] = badge_metadata[i]['version']
                 break
 
         author_display_name = info.get('author_display_name')
         if(author_display_name):
             info['author_name'] = author_display_name.lower()
 
-        # for badge in :
-        #     if(badge['badge']):
-        #         info['badge_info']
-        #         break
-        # author_badges
-            # for key in item:
-        #     original_info = item[key]
-        #
-        #     if(remap):
-        #         index, mapping_function = remap
-        #         info[index] = TwitchChatDownloader._REMAP_FUNCTIONS[mapping_function](
-        #             original_info)
-        #     info[keys[0]] = info[1]
 
-        # TODO use remapping for match.group(2)
-        # PRIVMSG --> text_message sometimes
-        original_message_type = match.group(2).lower()
+        original_action_type = match.group(2)
 
         ban_duration = info.get('ban_duration')
-        if(original_message_type == 'clearchat'):  # TODO to change this
+        if(original_action_type == 'CLEARCHAT'):  # TODO to change this
             if(ban_duration):
                 info['ban_type'] = 'timeout'
             else:  # no ban duration
                 info['ban_type'] = 'permanent'
-
-            # info['ban_type']
             pass
 
-        message_type_info = [original_message_type, info.get('message_type')]
+        if(original_action_type):
+            new_action_type = TwitchChatDownloader._ACTION_TYPE_REMAPPING.get(original_action_type)
+            if(new_action_type):
+                info['action_type'] = new_action_type
+            else:
+                info['action_type'] = original_action_type # unknown action type
+        else:
+            pass
 
-        info['message_type'] = '_'.join(filter(lambda x: x, message_type_info))
-        # highlighted-message_privmsg
 
-        # if(message_type_info):
-        #     info['message_type'] += '_'
+        #message_type_info = [original_action_type, ]
 
-        # info['message_type'] +=   # .lower()
+        original_message_type = info.get('message_type')
+        if(original_message_type):
+            new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(original_message_type)
+            if(new_message_type):
+                info['message_type'] = new_message_type
+            else:
+                print('DEBUG |', 'unknown message type:', original_message_type)
+                #info['message_type'] = 'unknown'
+        else:
+            info['message_type'] = 'normal_'+info['action_type']
+
+
         info['message'] = match.group(3)
 
+
+    # _MESSAGE_TYPES = {
+    #     'PRIVMSG': 'text_message',
+    #     'USERNOTICE': '?',  # used for sub messages and hellos
+    #     'CLEARCHAT': '?'  # used for timeouts/bans,
+
+    #     #'CLEARMSG' - message_deleted
+
+
+    #     # Purges all chat messages in a channel, or purges chat messages from a specific user, typically after a timeout or ban.
+
+
+
+    # }
         # # print(match.groups())
 
         return info
 
+    temp = []
     def get_chat_by_stream_id(self, stream_id, params):
         print('get_chat_by_stream_id:', stream_id)
 
@@ -543,7 +626,7 @@ class TwitchChatDownloader(ChatDownloader):
                 # print('new_info',new_info)
                 readbuffer += new_info
                 q = readbuffer
-
+                #print(readbuffer)
                 # print('==========', )
                 # continue
 
@@ -575,11 +658,16 @@ class TwitchChatDownloader(ChatDownloader):
                     for match in matches:
 
                         data = self._parse_irc_item(match)
+                        #print(data.get(),data.get('message'), flush=True)
+                        # if(data.get('message_type') != 'privmsg'):
 
-                        if(data.get('message_type') != 'privmsg'):
-
-                            print(q)
-                            print(data)
+                        a = data.get('message_type')
+                        if(a not in TwitchChatDownloader.temp):
+                            TwitchChatDownloader.temp.append(a)
+                            print(a, flush=True)
+                            #print(q)
+                        #     print(q)
+                        #     print(data)
 
                         # print(data)
                         # if('bits' in data):
