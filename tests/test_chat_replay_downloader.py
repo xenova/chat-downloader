@@ -43,6 +43,8 @@ class TestChatReplayDownloader(unittest.TestCase):
 
         if(types_to_check):
             for message in test['params']['messages']:
+                #print(message)
+
                 message_type = message.get('message_type')
                 if(message_type not in actual_result['message_types']):
                     actual_result['message_types'].append(message_type)
@@ -53,6 +55,7 @@ class TestChatReplayDownloader(unittest.TestCase):
 
 
             for check in types_to_check:
+                #print(expected_result.get(check),actual_result.get(check))
                 self.assertCountEqual(expected_result.get(check),actual_result.get(check))
 
 

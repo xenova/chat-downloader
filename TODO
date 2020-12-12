@@ -1,18 +1,18 @@
-1. Unit tests for sites:
-    - errors
-2. Custom formatting for printing
+* Custom formatting for printing
 
-3. max num retries for getting json/ continuation (30 default?)
+* max num retries for getting json/ continuation (30 default?)
 
-4. Logging levels
+* Logging levels
 
-5. Chat replay download progress bar
+* Chat replay download progress bar
     - calculate based on current time vs. video duration
     YouTube:
     http://www.youtube.com/get_video_info?video_id=xxx
 
-6. Twitch/YouTube
+* Twitch/YouTube
     - get by channel name (for those currently live)
+
+* Twitch - add support for --message_types (mostly for live)
 
 
 

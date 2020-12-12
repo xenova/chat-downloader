@@ -882,7 +882,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         new_index = remove_prefixes(
                             original_message_type, 'liveChat')
                         new_index = remove_suffixes(new_index, 'Renderer')
-                        data['message_types'] = camel_case_split(new_index)
+                        data['message_type'] = camel_case_split(new_index)
 
                         if(params.get('logging') in ('debug', 'errors_only')):
                             if(original_message_type not in self._KNOWN_MESSAGE_TYPES):
