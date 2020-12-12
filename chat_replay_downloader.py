@@ -13,6 +13,8 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import codecs
 from urllib import parse
+import sqlite3
+from typing import List, Optional, Dict
 
 
 class CallbackFunction(Exception):
@@ -58,6 +60,159 @@ class NoContinuation(Exception):
 class CookieError(Exception):
     """Raised when an error occurs while loading a cookie file."""
     pass
+
+
+class DBInvalidState(Exception):
+    """Raised when DBChat instance is in invalid state"""
+    pass
+
+
+class DBChat(object):
+    """DBChat: wrapper for sqlite3 connection
+
+    First create instance providing path which is usually a file location.
+    Second call create_session with url to create session.
+    Then can call add_item to add a record
+    When finished can call finish_session to mark the session completed"""
+
+    def __init__(self, path: str, autoInit: bool = True) -> None:
+        """path is file location, None to make DBChat perform no op, use ':memory:' for in memory"""
+        self.path: str = path
+        self.noOp: bool = False
+        self.dbConn: sqlite3.Connection = sqlite3.connect(
+            path, isolation_level="IMMEDIATE")
+        self.session_id: Optional[int] = None
+        if(autoInit):  # auto create data table and make connections
+            self.init_db()
+
+    def init_db(self) -> List[str]:
+        """will create table session and chat_detail if thoese two table not exists"""
+        if(self.noOp):
+            return []
+        result: List[str] = []
+        cur: sqlite3.Cursor = self.dbConn.cursor()
+        try:
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?", ('session',))
+            rows: List[sqlite3.Row] = cur.fetchall()
+            if(len(rows) == 0):
+                # then init the database with session table
+                cur.execute("""CREATE TABLE session(
+                    id INTEGER PRIMARY KEY ASC, /* id, insert with no id will autoincrease */
+                    url TEXT NOT NULL, /* url for target */
+                    start_time TEXT, /* time, in ISO-8601 string */
+                    completed INTEGER DEFAULT 0 /* if complete record all chats, set to 1 */
+                )""")
+                result.append("session")
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?", ('chat_detail',))
+            rows = cur.fetchall()
+            if(len(rows) == 0):
+                # then init the database with chat_detail table
+                cur.execute("""CREATE TABLE chat_detail(
+                    id INTEGER PRIMARY KEY ASC, /* should insert with no id to autoincrease */
+                    session_id INTEGER NOT NULL, /* associate with session.id */
+                    time_text TEXT, /* time of chat in ISO format */
+                    timestamp INTEGER, /* time of chat in Unix time in microseconds */
+                    badges TEXT, /* badges for user identity, like 'New member' or 'Moderator, Member (1 year, 4 months)' */
+                    author TEXT, /* author name */
+                    author_id TEXT, /* author_id that unique identify a user */
+                    message TEXT, /* the message of chat */
+                    sc_amount TEXT, /* amount of money in sc chat, not integer because contains corrency marks */
+                    head_color TEXT, /* in format "{'rgba': [255, 202, 40, 255], 'hex': '#ffca28ff'}" */
+                    body_color TEXT, /* same format as head_color */
+                    ticker_duration INTEGER, /* duration of superchat visible, in seconds */
+                    FOREIGN KEY (session_id) REFERENCES session (id)
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE
+                )""")
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_session_id ON chat_detail(session_id)")
+                result.append("chat_detail")
+            self.dbConn.commit()
+            return result
+        finally:
+            cur.close()
+
+    def create_session(self, url: str) -> Optional[int]:
+        """will create a session and return the session id to be used in chat_detail table.
+        Also the self.session_id will be set. Must call this before insert value
+
+        url: str --- the url for the session"""
+        if(self.noOp):
+            return None  # no op will do nothing
+        if(self.session_id is not None):
+            return self.session_id  # not create second time
+        if(url == None):
+            raise TypeError("url should not be None")
+        if(self.dbConn is None):
+            raise DBInvalidState("database already closed or failed init")
+        try:
+            cur = self.dbConn.cursor()
+            now: datetime.datetime = datetime.datetime.now()
+            cur.execute(
+                "INSERT INTO session(url, start_time, completed) VALUES (?, ?, ?)",
+                (url, now, 0))
+            self.session_id = cur.lastrowid
+            self.dbConn.commit()
+        finally:
+            cur.close()
+        return self.session_id
+
+    def add_item(self, item: Dict[str, str]) -> Optional[int]:
+        """Add an item record into chat_detail.
+        Notice: must call create_session once before call this method to init session,
+        otherwise will raise an exception
+
+        item: the same as the only argument in callback, an dict with 'author' 'message' fields and so on"""
+        if(self.noOp):
+            return None
+        if(self.session_id is None):
+            raise DBInvalidState("must call create_session before add_item")
+        cur = self.dbConn.cursor()
+
+        def fi(key: str):
+            """fi fetch key in item and return None if not found or find '' string"""
+            if(key not in item):
+                return None
+            if(item[key] == ''):
+                item[key] = None
+            return item[key]
+
+        try:
+            if(fi('time_text') is None and fi('timestamp') is not None):
+                # fill in the 'time_text' from 'timestamp' if is None
+                item['time_text'] = datetime.datetime.fromtimestamp(
+                    item['timestamp'] // 1000000).isoformat()
+                # note: timestamp's unit is microseconds, need to convert to second
+            cur.execute("""INSERT INTO chat_detail(
+                session_id, time_text, timestamp, 
+                badges, author, author_id, message, 
+                sc_amount, head_color, body_color, ticker_duration)
+                VALUES (?, ?, ?,   ?, ?, ?, ?,   ?, ?, ?, ?)""",
+                        (self.session_id, fi('time_text'), fi('timestamp'),
+                         fi('badges'), fi('author'), fi(
+                             'author_id'), fi('message'),
+                         fi('amount'), fi('head_color'), fi('body_color'), fi('ticker_duration')))
+            result: int = cur.lastrowid
+            self.dbConn.commit()
+            return result
+        finally:
+            cur.close()
+
+    def finish_session(self) -> None:
+        """close current session and update session table to set completed = 1"""
+        if(self.noOp or self.session_id is None):
+            return
+        cur = self.dbConn.cursor()
+        try:
+            cur.execute(
+                "UPDATE session SET completed = 1 WHERE id = ?", (self.session_id,))
+            self.dbConn.commit()
+        finally:
+            cur.close()
+            self.session_id = None
+            self.noOp = True
 
 
 class ChatReplayDownloader:
@@ -126,6 +281,9 @@ class ChatReplayDownloader:
         """Initialise a new session for making requests."""
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
+
+        # set the place for chat_db
+        self.chat_db: Optional[DBChat] = None
 
         cj = MozillaCookieJar(cookies)
         if cookies is not None:
@@ -197,7 +355,7 @@ class ChatReplayDownloader:
                 self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
             '({}) '.format(item['badges']) if 'badges' in item else '',
             '*{}* '.format(item['amount']) if 'amount' in item else '',
-            item['author'],
+            item['author'] or '',
             item['message'] or ''
         )
 
@@ -403,6 +561,11 @@ class ChatReplayDownloader:
 
         continuation = continuation_by_title_map[continuation_title]
 
+        # start the new session for chat_db
+        if(self.chat_db is not None):
+            self.chat_db.create_session(
+                self.__YT_HOME + '/watch?v=' + video_id)
+
         first_time = True
         try:
             while True:
@@ -466,6 +629,9 @@ class ChatReplayDownloader:
                             return messages
 
                         if(is_live or (valid_seconds and time_in_seconds >= start_time)):
+                            if(self.chat_db is not None):
+                                # add date to sqlite db
+                                self.chat_db.add_item(data)
                             messages.append(data)
 
                             if(callback is None):
@@ -501,9 +667,14 @@ class ChatReplayDownloader:
                 else:
                     break
 
+            if(self.chat_db is not None):
+                # finish a session here
+                self.chat_db.finish_session()
             return messages
 
         except KeyboardInterrupt:
+            if(self.chat_db is not None):
+                self.chat_db.finish_session()
             return messages
 
     def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None):
@@ -513,6 +684,10 @@ class ChatReplayDownloader:
         messages = []
         api_url = self.__TWITCH_API_TEMPLATE.format(
             video_id, self.__TWITCH_CLIENT_ID)
+
+        if(self.chat_db is not None):
+            self.chat_db.create_session(
+                'https://www.twitch.tv/videos/' + video_id)
 
         cursor = ''
         try:
@@ -542,6 +717,9 @@ class ChatReplayDownloader:
                         'message': comment['message']['body']
                     }
 
+                    if(self.chat_db is not None):
+                        self.chat_db.add_item(data)
+
                     messages.append(data)
 
                     if(callback is None):
@@ -557,8 +735,12 @@ class ChatReplayDownloader:
                 if '_next' in info:
                     cursor = info['_next']
                 else:
+                    if(self.chat_db is not None):
+                        self.chat_db.finish_session()
                     return messages
         except KeyboardInterrupt:
+            if(self.chat_db is not None):
+                self.chat_db.finish_session()
             return messages
 
     def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
@@ -600,6 +782,9 @@ if __name__ == '__main__':
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
 
+    parser.add_argument('-database', '-db', default='chat_data.db',
+                        help='database to hold chat data\n(default: %(default)s)')
+
     args = parser.parse_args()
 
     if(args.hide_output):
@@ -613,6 +798,9 @@ if __name__ == '__main__':
 
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+
+        # setup the database
+        chat_downloader.chat_db = DBChat(args.database)
 
         num_of_messages = 0
 
@@ -648,6 +836,12 @@ if __name__ == '__main__':
             chat_type=args.chat_type,
             callback=callback
         )
+
+        # close the database and remove reference
+        if(chat_downloader.chat_db is not None and chat_downloader.chat_db.dbConn is not None):
+            chat_downloader.chat_db.dbConn.close()
+            chat_downloader.chat_db.dbConn = None
+            chat_downloader.chat_db = None
 
         if(args.output is not None):
             if(args.output.endswith('.json')):
