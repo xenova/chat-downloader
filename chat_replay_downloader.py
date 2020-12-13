@@ -13,6 +13,7 @@ import sys
 import codecs
 from urllib import parse
 import sqlite3
+import collections.abc
 from typing import List, Optional, Dict
 
 
@@ -122,11 +123,9 @@ class DBChat(object):
                     body_color TEXT, /* same format as head_color */
                     ticker_duration INTEGER, /* duration of superchat visible, in seconds */
                     FOREIGN KEY (session_id) REFERENCES session (id)
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE
                 )""")
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_session_id ON chat_detail(session_id)")
+                # cur.execute(
+                #     "CREATE INDEX IF NOT EXISTS idx_session_id ON chat_detail(session_id)")
                 result.append("chat_detail")
             self.dbConn.commit()
             return result
@@ -154,6 +153,7 @@ class DBChat(object):
                 (url, now, 0))
             self.session_id = cur.lastrowid
             self.dbConn.commit()
+            print("start new session, session_id:", self.session_id)
         finally:
             cur.close()
         return self.session_id
@@ -171,12 +171,31 @@ class DBChat(object):
         cur = self.dbConn.cursor()
 
         def fi(key: str):
-            """fi fetch key in item and return None if not found or find '' string"""
-            if(key not in item):
+            """fi fetch key in item and return None if not found or find '' string,
+            and also convert other type into sqlite3 capable basic type,
+            also will try to extract the hex color value if found"""
+            if(key not in item or item[key] is None):
                 return None
             if(item[key] == ''):
                 item[key] = None
-            return item[key]
+                return None
+            # None will convert to Null in sqlite3
+            obj = item[key]
+            # datetime and date can auto convert to string if inserted
+            if(isinstance(obj, (datetime.datetime, datetime.date))):
+                return obj
+            # other accepted type is those four
+            if(isinstance(obj, (int, float, str, bytes))):
+                return obj
+            # bool should transform into 0 / 1
+            if(obj is True):
+                return 1
+            if(obj is False):
+                return 0
+            # if the current object is dict and contains both hex and rgba, means it is color dict
+            if(isinstance(obj, collections.abc.Mapping) and 'hex' in obj and 'rgba' in obj and isinstance(obj['hex'], str)):
+                return obj['hex']
+            return json.dumps(obj)
 
         try:
             if(fi('time_text') is None and fi('timestamp') is not None):
@@ -408,6 +427,7 @@ class ChatReplayDownloader:
         return message_text
 
     _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
+
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
         original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
@@ -434,7 +454,6 @@ class ChatReplayDownloader:
                     columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
             finally:
                 raise NoChatReplay(error_message)
-
 
         livechat_header = columns['conversationBar']['liveChatRenderer']['header']
         viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
