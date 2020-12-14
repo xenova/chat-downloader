@@ -37,29 +37,31 @@ class YouTubeChatDownloader(ChatDownloader):
     # Regex provided by youtube-dl
     _VALID_URL = r"""(?x)^
                      (
-                         # http(s):// or protocol-independent URL
-                         (?:https?://|//)
+                         (?:https?://|//)                                    # http(s):// or protocol-independent URL
                          (?:(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com/|
                             youtube\.googleapis\.com/)                        # the various hostnames, with wildcard subdomains
                          (?:.*?\#/)?                                          # handle anchor (#/) redirect urls
                          (?:                                                  # the various things that can precede the ID:
-                             # v/ or embed/ or e/
-                             (?:(?:v|embed|e)/(?!videoseries))
+                             (?:(?:v|embed|e)/(?!videoseries))                # v/ or embed/ or e/
                              |(?:                                             # or the v= param in all its forms
-                                 # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
-                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?
+                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?  # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
                                  (?:\?|\#!?)                                  # the params delimiter ? or # or #!
-                                 # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
-                                 (?:.*?[&;])??
+                                 (?:.*?[&;])??                                # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
                                  v=
                              )
                          ))
                          |(?:
-                            youtu\.be|                                        # just youtu.be/xxxx
-                         ))
+                            youtu\.be                                        # just youtu.be/xxxx
+                         )/)
                      )?                                                       # all until now is optional -> you can pass the naked ID
-                     # here is it! the YouTube video ID
-                     (?P<id>[0-9A-Za-z_-]{11})
+                     (?P<id>[0-9A-Za-z_-]{11})                                      # here is it! the YouTube video ID
+                     (?!.*?\blist=
+                        (?:
+                            %(playlist_id)s|                                  # combined list/video URLs are handled by the playlist IE
+                            WL                                                # WL are handled by the watch later IE
+                        )
+                     )
+                     (?(1).+)?                                                # if we found the ID, everything can follow
                      $"""
 
     _TESTS = [
@@ -742,7 +744,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         types_of_messages_to_add = self.get_param_value(
             params, 'message_types')
-        #print(types_of_messages_to_add)
+        # print(types_of_messages_to_add)
 
         first_time = True
         while True:
