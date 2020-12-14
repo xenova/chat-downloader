@@ -97,7 +97,7 @@ class ChatDownloader:
 
 
 
-        'message_types': ['messages','superchat'],
+        'message_types': ['messages'], #,'superchat'
 
         # YouTube only
         'chat_type': 'live', # live or top
