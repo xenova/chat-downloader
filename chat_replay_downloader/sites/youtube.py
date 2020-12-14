@@ -591,6 +591,8 @@ class YouTubeChatDownloader(ChatDownloader):
             try:
                 error_message = self.parse_runs(
                     columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])
+            except KeyError:
+                pass
             finally:
                 raise NoChatReplay(error_message)
 
@@ -615,6 +617,7 @@ class YouTubeChatDownloader(ChatDownloader):
         if(offset_microseconds is not None):
             url += self._YOUTUBE_API_PARAMETERS_TEMPLATE.format(
                 offset_microseconds)
+        print(url) # TODO make printing url as debug option?
         return self._get_continuation_info(url)
 
     def _get_live_info(self, continuation):
