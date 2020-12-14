@@ -273,6 +273,8 @@ class ChatReplayDownloader:
             try:
                 error_message = self.__parse_message_runs(
                     columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
+            except KeyError:
+                pass
             finally:
                 raise NoChatReplay(error_message)
 
