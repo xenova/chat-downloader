@@ -45,6 +45,9 @@ optional arguments:
   -database DATABASE, -db DATABASE
                         database to hold chat data
                         (default: chat_data.db)
+  -proxy PROXY          the proxy to delegate request,
+                        (default: None)
+                        for socks5 user, please run "pip install requests[socks] --user" and use -proxy socks5h://127.0.0.1:1080 for default local port 1080
 ```
 
 #### Examples

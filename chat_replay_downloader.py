@@ -136,7 +136,7 @@ class DBChat(object):
         finally:
             cur.close()
 
-    def create_session(self, url: str, start_time : int, end_time: int, message_type : str = None, chat_type : str =None) -> Optional[int]:
+    def create_session(self, url: str, start_time: int, end_time: int, message_type: str = None, chat_type: str = None) -> Optional[int]:
         """will create a session and return the session id to be used in chat_detail table.
         Also the self.session_id will be set. Must call this before insert value
 
@@ -299,10 +299,21 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    def __init__(self, cookies=None):
+    def __init__(self, cookies=None, proxy=None):
         """Initialise a new session for making requests."""
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
+
+        # use proxy if present
+        if(proxy is not None and isinstance(proxy, str)):
+            if(proxy.startswith('socks5:')):
+                print('detected socks5 protocol, please use socks5h',
+                      file=sys.stderr)
+            print('use proxy', proxy)
+            self.session.proxies.update({
+                'http': proxy,
+                'https': proxy
+            })
 
         # set the place for chat_db
         self.chat_db: Optional[DBChat] = None
@@ -804,6 +815,10 @@ if __name__ == '__main__':
 
     parser.add_argument('-database', '-db', default='chat_data.db',
                         help='database to hold chat data\n(default: %(default)s)')
+    parser.add_argument('-proxy', default=None,
+                        help='the proxy to delegate request,\n(default: %(default)s)\n' +
+                        'for socks5 user, please run "pip install requests[socks] --user" and ' +
+                        'use -proxy socks5h://127.0.0.1:1080 for default local port 1080')
 
     args = parser.parse_args()
 
@@ -817,7 +832,8 @@ if __name__ == '__main__':
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
     try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+        chat_downloader = ChatReplayDownloader(
+            cookies=args.cookies, proxy=args.proxy)
 
         # setup the database
         chat_downloader.chat_db = DBChat(args.database)
