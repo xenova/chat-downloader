@@ -71,7 +71,7 @@ class DBChat(object):
     """DBChat: wrapper for sqlite3 connection
 
     First create instance providing path which is usually a file location.
-    Second call create_session with url to create session.
+    Second call create_session with url and other params to create session.
     Then can call add_item to add a record
     When finished can call finish_session to mark the session completed"""
 
@@ -100,8 +100,12 @@ class DBChat(object):
                 cur.execute("""CREATE TABLE session(
                     id INTEGER PRIMARY KEY ASC, /* id, insert with no id will autoincrease */
                     url TEXT NOT NULL, /* url for target */
-                    start_time TEXT, /* time, in ISO-8601 string */
-                    completed INTEGER DEFAULT 0 /* if complete record all chats, set to 1 */
+                    record_time TEXT, /* time, in ISO-8601 string */
+                    completed INTEGER DEFAULT 0, /* if complete record all chats, set to 1 */
+                    start_time INTEGER, /* start_time parameter, in seconds relative to video begin */
+                    end_time INTEGER, /* end_time parameter, in seconds relative to video begin */
+                    message_type TEXT, /* message_type(youtube only), one of 'superchat' / 'all' / 'messages' */
+                    chat_type TEXT /* chat_type(youtube only), one of 'top', 'live' */
                 )""")
                 result.append("session")
             cur.execute(
@@ -132,7 +136,7 @@ class DBChat(object):
         finally:
             cur.close()
 
-    def create_session(self, url: str) -> Optional[int]:
+    def create_session(self, url: str, start_time : int, end_time: int, message_type : str = None, chat_type : str =None) -> Optional[int]:
         """will create a session and return the session id to be used in chat_detail table.
         Also the self.session_id will be set. Must call this before insert value
 
@@ -149,8 +153,8 @@ class DBChat(object):
             cur = self.dbConn.cursor()
             now: datetime.datetime = datetime.datetime.now()
             cur.execute(
-                "INSERT INTO session(url, start_time, completed) VALUES (?, ?, ?)",
-                (url, now, 0))
+                "INSERT INTO session(url, record_time, completed, start_time, end_time, message_type, chat_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (url, now, 0, start_time, end_time, message_type, chat_type))
             self.session_id = cur.lastrowid
             self.dbConn.commit()
             print("start new session, session_id:", self.session_id)
@@ -579,7 +583,7 @@ class ChatReplayDownloader:
         # start the new session for chat_db
         if(self.chat_db is not None):
             self.chat_db.create_session(
-                self.__YT_HOME + '/watch?v=' + video_id)
+                self.__YT_HOME + '/watch?v=' + video_id, start_time, end_time, message_type, chat_type)
 
         first_time = True
         try:
@@ -703,7 +707,7 @@ class ChatReplayDownloader:
 
         if(self.chat_db is not None):
             self.chat_db.create_session(
-                'https://www.twitch.tv/videos/' + video_id)
+                'https://www.twitch.tv/videos/' + video_id, start_time, end_time)
 
         cursor = ''
         try:

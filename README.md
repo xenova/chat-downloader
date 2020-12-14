@@ -42,6 +42,9 @@ optional arguments:
                         (default: None)
   --hide_output         whether to hide output or not
                         (default: False)
+  -database DATABASE, -db DATABASE
+                        database to hold chat data
+                        (default: chat_data.db)
 ```
 
 #### Examples
