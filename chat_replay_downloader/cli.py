@@ -3,13 +3,17 @@ import argparse
 import sys
 import os
 import codecs
-import csv
 import json
 import traceback
 
 from .chat_replay_downloader import *
 
 from .sites.common import ChatDownloader
+from .output.continuous_write import ContinuousWriter
+
+from .utils import (
+    update_dict_without_overwrite
+)
 
 # from .errors import (
 #     LoadError
@@ -96,8 +100,8 @@ def main():
         if(args.logging in ('debug', 'errors_only')):
             traceback.print_exc()
 
-    program_params = {}
-    init_params = {}
+    program_params = {}#default_params.copy()
+    init_params = {}#default_init_params.copy()
 
     args_dict = args.__dict__
     for key in args_dict:
@@ -123,7 +127,39 @@ def main():
 
     downloader = ChatReplayDownloader(init_params)
 
+
+    def test_callback(item):
+        print(item.get('timestamp'), item.get('author_name'), item.get('message'), flush=True)
+
+    # TODO make command line args for these:
+    params = {
+        'indent':4,
+        'sort_keys':True,
+        'overwrite':True, #
+
+        # if args.format set... add to params dict
+        'formatting':'something' # TODO
+    }
+
+
+    callback = None # test_callback
+
+    if(args.output):
+        output_file = ContinuousWriter(args.output, **params)
+
+        def write_to_file(item):
+            test_callback(item)
+            output_file.write(item)
+
+        callback = write_to_file
+    else:
+        callback = None#test_callback
+
     try:
+        program_params['callback'] = callback
+
+
+        print(program_params)
         messages = downloader.get_chat_messages(program_params) # TODO  returns None?
         #q.close()
 
@@ -141,18 +177,19 @@ def main():
 
     except KeyboardInterrupt:
         print('keyboard interrupt')
-        #print_error('KeyboardInterrupt')
+    except Exception as e:
+        print('other exception')
+        print(e)
         pass
-    #finally:
+
+    #
+    #print('got',len(program_params.get('messages')),'messages')
 
 
-    print('got',len(program_params.get('messages')),'messages')
 
-
-
-    #print(program_params.get('messages'))
-    with open('test.json', 'w') as outfile:
-        json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
+    # #print(program_params.get('messages'))
+    # with open('test.json', 'w') as outfile:
+    #     json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
 
 
 
