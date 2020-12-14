@@ -291,7 +291,6 @@ class TwitchChatDownloader(ChatDownloader):
                     return message_list  # while actually searching, if time is invalid
 
                 message_list.append(data)
-                print(data.get('time_text'), data.get('message'))
 
                 if(callback is None):
                     pass
@@ -299,7 +298,7 @@ class TwitchChatDownloader(ChatDownloader):
                     # self.print_item(data)
 
                 elif(callable(callback)):
-                    self.perform_callback(callback)
+                    self.perform_callback(callback, data)
 
             cursor = info.get('_next')
 
@@ -796,11 +795,13 @@ class TwitchChatDownloader(ChatDownloader):
                         #print(data.get(),data.get('message'), flush=True)
                         # if(data.get('message_type') != 'privmsg'):
 
-                        a = data.get('message_type')
-                        if(a not in TwitchChatDownloader.temp):
-                            TwitchChatDownloader.temp.append(a)
-                            print('\t*', a, flush=True)
-                            print(q)
+                        # TODO filter message types
+
+                        # a = data.get('message_type')
+                        # if(a not in TwitchChatDownloader.temp):
+                        #     TwitchChatDownloader.temp.append(a)
+                        #     print('\t*', a, flush=True)
+                        #     print(q)
                         # print(data, flush=True)
                         # print(q)
                         #     print(q)
@@ -815,11 +816,12 @@ class TwitchChatDownloader(ChatDownloader):
 
                         message_list.append(data)
                         if(not callback):
+                            #TODO use safeprint (similar to yt)
                             pass
                             # print(data.get('timestamp'),data.get('message'))
 
                         elif(callable(callback)):
-                            self.perform_callback(callback)
+                            self.perform_callback(callback, data)
 
                         # if(callable(on_message)):
                         #     try:

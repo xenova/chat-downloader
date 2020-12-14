@@ -214,7 +214,6 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatMembershipItemRenderer',
             'liveChatPaidMessageRenderer',
             'liveChatPaidStickerRenderer',
-
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
@@ -743,7 +742,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         types_of_messages_to_add = self.get_param_value(
             params, 'message_types')
-        print(types_of_messages_to_add)
+        #print(types_of_messages_to_add)
 
         first_time = True
         while True:
@@ -968,7 +967,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 self.print_item(data)
 
                     elif(callable(callback)):
-                        self.perform_callback(callback)
+                        self.perform_callback(callback, data)
 
             elif(not is_live):
                 # no more actions to process in a chat replay
