@@ -321,10 +321,12 @@ class YouTubeChatDownloader(ChatDownloader):
         if(not item_info):
             return info  # invalid # TODO log this
 
+        #print(item_info.keys())
         # all messages should have the following
         for key in item_info:
             ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
                                  YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
+
             # original_info = item_info[key]
             # remap = YouTubeChatDownloader._REMAPPING.get(key)
             # if(remap):
@@ -381,15 +383,46 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return info
 
+    _IMAGE_SIZE_REGEX = r'=s(\d+)'
+    # TODO move regex to inline where possible?
+
     @ staticmethod
     def parse_badges(badge_items):
         badges = []
 
         for badge in badge_items:
+            to_add = {}
             parsed_badge = YouTubeChatDownloader._parse_item(badge)
-            badges.append(parsed_badge.get('tooltip'))
-            parsed_badge.pop('tooltip', None)  # remove the tooltip afterwards
 
+            title = parsed_badge.pop('tooltip', None)
+            if title:
+                to_add['title'] = title
+
+            icon = parsed_badge.pop('icon', None)
+            if icon:
+                to_add['icon_name'] = icon.lower()
+
+            badge_icons = parsed_badge.pop('badge_icons', None)
+            if badge_icons:
+                to_add['icons'] = []
+
+                url = None
+                for icon in badge_icons:
+                    url = icon.get('url')
+                    if url:
+                        matches = re.search(YouTubeChatDownloader._IMAGE_SIZE_REGEX, url)
+                        if matches:
+                            size = int(matches.group(1))
+                            to_add['icons'].append(ChatDownloader.create_image(url, size, size))
+                if url:
+                    to_add['icons'].append(ChatDownloader.create_image(url[0:url.index('=')], id='source'))
+
+            badges.append(to_add)
+
+
+            #if 'member'
+              # remove the tooltip afterwards
+            #print(badges)
         return badges
 
     @ staticmethod
@@ -447,7 +480,6 @@ class YouTubeChatDownloader(ChatDownloader):
         # ticker_sponsor_item
         'detailText': ('message', 'parse_runs'),
 
-        # author_badge
         'customThumbnail': ('badge_icons', 'get_thumbnails'),
 
         # membership_item
@@ -617,7 +649,7 @@ class YouTubeChatDownloader(ChatDownloader):
         if(offset_microseconds is not None):
             url += self._YOUTUBE_API_PARAMETERS_TEMPLATE.format(
                 offset_microseconds)
-        print(url) # TODO make printing url as debug option?
+        print(url)  # TODO make printing url as debug option?
         return self._get_continuation_info(url)
 
     def _get_live_info(self, continuation):
@@ -821,11 +853,12 @@ class YouTubeChatDownloader(ChatDownloader):
                             action, lambda x: x[original_action_type]['item'])
                         original_message_type = try_get_first_key(
                             original_item)
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data)# =  #, data
 
                     elif(original_action_type in self._KNOWN_REMOVE_ACTION_TYPES):
                         original_item = action
                         original_message_type = 'deletedStateMessage'
+                        #data.update(self._parse_item(original_item))
                         data = self._parse_item(original_item, data)
 
                     elif(original_action_type in self._KNOWN_ADD_BANNER_TYPES):
@@ -957,22 +990,11 @@ class YouTubeChatDownloader(ChatDownloader):
                     if(max_messages is not None and len(message_list) >= max_messages):
                         return message_list  # if max_messages specified, return once limit has been reached
 
-                    # print('=',end='')
-                    if(not callback):
-                        # if(original_action_type in self._KNOWN_ADD_ACTION_TYPES):
-                        # TODO decide whether to add deleted or not
 
-                        # TODO could do != 'none'
-                        if(params.get('logging') == 'normal'):
-                            # is a chat message, print it
-                            # print(data)
-                            if(params.get('safe_print')):
-                                self.safe_print_item(data)
-                            else:
-                                self.print_item(data)
+                    self.perform_callback(callback, data)
 
-                    elif(callable(callback)):
-                        self.perform_callback(callback, data)
+
+
 
             elif(not is_live):
                 # no more actions to process in a chat replay
