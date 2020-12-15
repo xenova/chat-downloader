@@ -13,7 +13,10 @@ from ..utils import (
     seconds_to_time,
     try_get,
     int_or_none,
-    replace_with_underscores
+    replace_with_underscores,
+    try_get_first_key,
+    debug_print,
+    multi_get
 )
 
 # TODO export as another module?
@@ -39,6 +42,7 @@ class TwitchChatIRC():
             'CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership')
         self.send_raw('PASS SCHMOOPIIE')
         self.send_raw('NICK justinfan67420')
+
 
     def send_raw(self, string):
         self._SOCKET.send((string+'\r\n').encode('utf-8'))
@@ -86,10 +90,20 @@ class TwitchChatIRC():
 
 
 class TwitchChatDownloader(ChatDownloader):
+    _BADGE_INFO = {}
+    _BADGE_INFO_URL = 'https://badges.twitch.tv/v1/badges/global/display'
+    # TODO add local version of badge list?
+
     def __init__(self, updated_init_params={}):
         super().__init__(updated_init_params)
         # self._name = None
         # self.name = 'Twitch.tv'
+
+        TwitchChatDownloader._BADGE_INFO = self._session_get_json(self._BADGE_INFO_URL).get('badge_sets') or {}
+        # print(TwitchChatDownloader._BADGE_INFO.keys(), flush=True)
+        # #exit()
+        # # print(TwitchChatDownloader._BADGE_INFO)
+        #
 
     def __str__(self):
         return 'Twitch.tv'
@@ -186,20 +200,13 @@ class TwitchChatDownloader(ChatDownloader):
         # TODO 'type' # author type?
     }
 
-    @staticmethod
-    def create_author_image(url, width, height):
-        return {
-            'url': url,
-            'width': width,
-            'height': height
-        }
 
     @staticmethod
     def parse_author_images(original_url):
         smaller_icon = original_url.replace('300x300', '70x70')
         return [
-            TwitchChatDownloader.create_author_image(original_url, 300, 300),
-            TwitchChatDownloader.create_author_image(smaller_icon, 70, 70),
+            ChatDownloader.create_image(original_url, 300, 300),
+            ChatDownloader.create_image(smaller_icon, 70, 70),
         ]
         # -70x70
 
@@ -292,13 +299,7 @@ class TwitchChatDownloader(ChatDownloader):
 
                 message_list.append(data)
 
-                if(callback is None):
-                    pass
-                    # print
-                    # self.print_item(data)
-
-                elif(callable(callback)):
-                    self.perform_callback(callback, data)
+                self.perform_callback(callback, data)
 
             cursor = info.get('_next')
 
@@ -342,6 +343,54 @@ class TwitchChatDownloader(ChatDownloader):
 
     #_EMOTE_URL_TEMPLATE = 'http://static-cdn.jtvnw.net/emoticons/v1/:<emote ID>/:<size>'
 
+    # TEMP
+    # TODO?
+    #
+
+    # A full list can be found here: https://twitchinsights.net/badges
+    # https://badges.twitch.tv/v1/badges/global/display
+    # _BADGE_NAME_REMAPPING = {
+    #     'bits': lambda x: 'cheer {}'.format(x.get('version')),
+
+
+    #     # 'premium': 'Prime Gaming',
+
+
+
+    #     # 'partner': 'Verified',
+
+
+    #     # 'glitchcon2020': 'GlitchCon 2020',
+
+    #     # 'glhf_pledge': 'GLHF Pledge',
+
+    #     # 'sub_gifter': lambda x: '{} Gift Subs'.format(x.get('version')),
+
+    #     # 'vip':'VIP',
+    #     # 'overwatch_league_insider_1': 'Overwatch League Insider',
+
+    #     # 'broadcaster':'Broadcaster',
+    #     # 'moderator': 'moderator',
+
+    #     # # Twitch Con
+    #     # 'twitchconEU2019':'TwitchCon EU 2019',
+    #     # 'twitchconNA2019':'TwitchCon NA 2019',
+    #     # 'twitchconAmsterdam2020': 'TwitchCon Amsterdam 2020',
+    #     # 'twitchconNA2020':'TwitchCon NA 2020',
+
+    #     # 'hype_train': 'Former Hype Train Conductor',
+
+
+    #     # # Not tested
+
+    #     # 'twitchcon2017': 'TwitchCon 2017',
+    #     # 'twitchcon2018':'TwitchCon 2018',
+
+    #     # 'admin':'Twitch Admin',
+    # }
+    _BADGE_KEYS = ('title','description','image_url_1x', 'image_url_2x', 'image_url_4x', 'click_action','click_url')
+    _BADGE_ID_REGEX = r'v1/(.+)/'
+
     @staticmethod
     def parse_badges(badge_info):
         #print('badge_info "{}"'.format (badge_info), badge_info.split(','))
@@ -351,10 +400,25 @@ class TwitchChatDownloader(ChatDownloader):
 
         for badge in badge_info.split(','):
             split = badge.split('/')
-            info.append({
-                'badge': replace_with_underscores(split[0]),
+            new_badge = {
+                'type': replace_with_underscores(split[0]),
                 'version': int_or_none(split[1], split[1])
-            })
+            }
+
+            # TODO skip for subscribers? - different per channel
+            # check for additional information
+            new_badge_info = multi_get(TwitchChatDownloader._BADGE_INFO,split[0], 'versions',split[1]) or {}
+
+            if new_badge_info:
+                for key in TwitchChatDownloader._BADGE_KEYS:
+                    new_badge[key] = new_badge_info.get(key)
+
+                badge_id = re.search(TwitchChatDownloader._BADGE_ID_REGEX, new_badge.get('image_url_1x',''))
+                if(badge_id):
+                    new_badge['badge_id'] = badge_id.group(1)
+
+
+            info.append(new_badge)
         return info
 
     _IRC_REMAPPING = {
@@ -380,7 +444,8 @@ class TwitchChatDownloader(ChatDownloader):
         # message	The message.
 
         # GENERAL
-        'color': 'colour',  # can be empty (which means it depends on dark/light theme)
+        # can be empty (which means it depends on dark/light theme)
+        'color': 'colour',
         'display-name': 'author_display_name',
         'user-id': 'author_id',
         # 'message': 'message', # The message.
@@ -388,8 +453,8 @@ class TwitchChatDownloader(ChatDownloader):
 
 
         # PRIVMSG
-        'badge-info': ('badge_metadata', 'parse_badges'),
-        'badges': ('badge_info', 'parse_badges'),
+        'badge-info': ('author_badge_metadata', 'parse_badges'),
+        'badges': ('author_badges', 'parse_badges'),
 
 
 
@@ -422,8 +487,8 @@ class TwitchChatDownloader(ChatDownloader):
         'system-msg': 'system_message',
 
         # USERNOTICE - other
-        'msg-param-cumulative-months': 'months_subscribed_for',
-        'msg-param-months': 'months_subscribed_for',
+        'msg-param-cumulative-months': ('months', 'parse_int'),
+        'msg-param-months': ('months', 'parse_int'),
         'msg-param-displayName': 'raider_display_name',
         'msg-param-login': 'raider_name',
         'msg-param-viewerCount': 'number_of_raiders',
@@ -434,13 +499,13 @@ class TwitchChatDownloader(ChatDownloader):
         'msg-param-recipient-id': 'gift_recipient_id',
         'msg-param-recipient-user-name': 'gift_recipient_display_name',
         'msg-param-recipient-display-name': 'gift_recipient_display_name',
-        'msg-param-gift-months': 'number_of_months_gifted',
+        'msg-param-gift-months': ('number_of_months_gifted', 'parse_int'),
 
         'msg-param-sender-login': 'gifter_name',
         'msg-param-sender-name': 'gifter_display_name',
 
         'msg-param-should-share-streak': ('user_wants_to_share_streaks', 'parse_bool'),
-        'msg-param-streak-months': 'number_of_consecutive_months_subscribed',
+        'msg-param-streak-months': ('number_of_consecutive_months_subscribed', 'parse_int'),
         'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
 
         'msg-param-sub-plan-name': 'subscription_plan_name',
@@ -620,7 +685,7 @@ class TwitchChatDownloader(ChatDownloader):
     }
 
     @staticmethod
-    def _parse_irc_item(match):  # self, , params
+    def _parse_irc_item(match, params = {}):  # self, , params
         info = {}
 
         split_info = match.group(1).split(';')
@@ -635,30 +700,50 @@ class TwitchChatDownloader(ChatDownloader):
 
             ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1])
-            # remap(info, remapping_dict, remapping_functions, remap_key, remap_value):
-            # remap = .get()
 
-            # if(remap):
-            #     if(isinstance(remap, tuple)):
-            #         index, mapping_function = remap
-            #         [index] = [mapping_function](
-            #             keys[1])
-            #     else:
-            #         info[remap] = keys[1]
-
-            # pass
-            # TwitchChatDownloader.
         message_match = match.group(3)
         if(message_match):
             info['message'] = message_match
 
-        badge_metadata = info.pop('badge_metadata', [])
+        badge_metadata = info.pop('author_badge_metadata', [])
+        badge_info = info.get('author_badges', [])
 
-        for i in range(len(badge_metadata)):
-            if(badge_metadata[i]['badge'] == 'subscriber'):
-                badge_info = info.get('badge_info', [])
-                badge_info[i]['months_subscribed_for'] = badge_metadata[i]['version']
-                break
+        #print(badge_metadata,badge_info)
+
+        subscriber_badge = next((x for x in badge_info if x.get('type') == 'subscriber'), None)
+        subscriber_badge_metadata = next((x for x in badge_metadata if x.get('type') == 'subscriber'), None)
+        if subscriber_badge and subscriber_badge_metadata:
+            months = subscriber_badge_metadata['version']
+            subscriber_badge['months'] = months
+            subscriber_badge['title'] = subscriber_badge['description'] ='{}-Month Subscriber'.format(months)
+
+        if(info.get('author_badges') == []): # remove if empty
+            info.pop('author_badges')
+        # for i in range(len(badge_info)):
+        #     #print(badge_info, badge_info[i])
+        #     #if(i < len(badge_metadata)):
+        #     # Only used for subscriber months currently
+        #     if(badge_info[i].get('name') == 'subscriber'):
+
+        #     else:
+        #         pass
+
+            # overwrite data if remapping specified
+            # remap = TwitchChatDownloader._BADGE_NAME_REMAPPING.get(
+            #     badge_info[i]['badge'])
+            # if(remap): # must use remapping function
+            #     if(callable(remap)):
+            #         badge_info[i]['name'] = remap(badge_info[i])
+            #     elif(remap):
+            #         badge_info[i]['name'] = remap
+            #     else:
+            #         # TODO debug
+            #         if(params.get('logging') in ('debug', 'errors_only')):
+            #             debug_print('Unknown badge: {}'.format(badge_info[i]))
+            #             debug_print(info)
+            #             print()
+
+            #print(badge_info[i], 'remap', remap)
 
         author_display_name = info.get('author_display_name')
         if(author_display_name):
@@ -699,16 +784,19 @@ class TwitchChatDownloader(ChatDownloader):
             else:  # did /clearchat
                 pass
 
-        follower_only_mode = info.get('follower_only_mode')
-        if(follower_only_mode):
-            info['follower_only_mode'] = follower_only_mode != -1
-            if(follower_only_mode > 0):
-                info['minutes_to_follow_before_chatting'] = follower_only_mode
+        follower_only = info.get('follower_only')
+        if(follower_only):
+            info['follower_only'] = follower_only != -1
+            if(follower_only > 0):
+                info['minutes_to_follow_before_chatting'] = follower_only
 
         slow_mode = info.get('slow_mode')
-        if(slow_mode):
-            info['slow_mode'] = True
-            info['seconds_to_wait'] = slow_mode
+        if(slow_mode is not None):
+            if slow_mode != 0:
+                info['slow_mode'] = True
+                info['seconds_to_wait'] = slow_mode
+            else:
+                info['slow_mode'] = False
 
         #print(info, flush=True)
     # _MESSAGE_TYPES = {
@@ -726,6 +814,7 @@ class TwitchChatDownloader(ChatDownloader):
         return info
 
     temp = []
+
 
     def get_chat_by_stream_id(self, stream_id, params):
         print('get_chat_by_stream_id:', stream_id)
@@ -791,7 +880,11 @@ class TwitchChatDownloader(ChatDownloader):
 
                     for match in matches:
 
-                        data = self._parse_irc_item(match)
+                        data = self._parse_irc_item(match, params)
+
+                        if(params.get('logging') == 'normal'):
+                            pass
+
                         #print(data.get(),data.get('message'), flush=True)
                         # if(data.get('message_type') != 'privmsg'):
 
@@ -815,13 +908,9 @@ class TwitchChatDownloader(ChatDownloader):
                         # continue
 
                         message_list.append(data)
-                        if(not callback):
-                            #TODO use safeprint (similar to yt)
-                            pass
-                            # print(data.get('timestamp'),data.get('message'))
 
-                        elif(callable(callback)):
-                            self.perform_callback(callback, data)
+                        self.perform_callback(callback, data)
+
 
                         # if(callable(on_message)):
                         #     try:
