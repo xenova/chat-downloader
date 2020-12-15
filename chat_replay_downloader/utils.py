@@ -131,9 +131,19 @@ def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
 
-def debug_print(*objects, sep=' ', end='\n', flush=False):
+def debug_print(*objects, sep=' ', end='\n', flush=True):
     print('[DEBUG]', *objects, sep=sep, end=end, flush=flush)
 
 
 def replace_with_underscores(text, sep='-'):
     return text.replace(sep, '_')
+
+def multi_get(dictionary, *keys, default = None):
+    current = dictionary
+    for key in keys:
+        if isinstance(current, dict):
+            current = current.get(key)
+        else:
+            return default
+    return current
+
