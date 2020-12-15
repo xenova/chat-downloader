@@ -157,12 +157,13 @@ class TwitchChatDownloader(ChatDownloader):
     }
 
     _REMAP_FUNCTIONS = {
-        'parse_timestamp': timestamp_to_microseconds,
+        'parse_timestamp': timestamp_to_microseconds,#lambda x :  * 1000,
         'get_body': lambda x: x.get('body'),
         'parse_author_images': lambda x: TwitchChatDownloader.parse_author_images(x),
 
         'parse_badges': lambda x: TwitchChatDownloader.parse_badges(x),
 
+        'multiply_by_1000': lambda x: int_or_none(x) * 1000,
         'parse_int': int_or_none,
         'parse_bool': lambda x: x == '1',
 
@@ -413,6 +414,8 @@ class TwitchChatDownloader(ChatDownloader):
                 for key in TwitchChatDownloader._BADGE_KEYS:
                     new_badge[key] = new_badge_info.get(key)
 
+                # TODO create image with icons (diff sizes)
+                # image_url_1x image_url_2x image_url_4x
                 badge_id = re.search(TwitchChatDownloader._BADGE_ID_REGEX, new_badge.get('image_url_1x',''))
                 if(badge_id):
                     new_badge['badge_id'] = badge_id.group(1)
@@ -468,7 +471,7 @@ class TwitchChatDownloader(ChatDownloader):
         'mod': ('is_moderator', 'parse_bool'),
         'room-id': 'channel_id',
 
-        'tmi-sent-ts': ('timestamp', 'parse_int'),
+        'tmi-sent-ts': ('timestamp', 'multiply_by_1000'),
 
 
         # ROOMSTATE
@@ -772,7 +775,7 @@ class TwitchChatDownloader(ChatDownloader):
                 print('DEBUG |', 'unknown message type:', original_message_type)
                 #info['message_type'] = 'unknown'
         else:
-            info['message_type'] = 'normal_'+info['action_type']
+            info['message_type'] = info['action_type'] # 'normal_'+
 
         if(original_action_type == 'CLEARCHAT'):
             if(message_match):  # is a ban
