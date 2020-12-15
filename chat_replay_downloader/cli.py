@@ -68,6 +68,7 @@ def main():
     # Additional params [Site Specific]
 
 # choices=['messages', 'superchat', 'all']
+# TODO message groups and message types?
     parser.add_argument('--message_types', type=lambda s: [item.strip() for item in re.split('[\s,;]+',s)], default=default_params['message_types'],
                         help='comma separated list of types of messages to include [YouTube only]\n(default: %(default)s)')
 
@@ -81,6 +82,9 @@ def main():
     parser.add_argument('--buffer_size', type=int, default=default_params['buffer_size'],
                         help='specify a buffer size for retrieving messages [Twitch only]\n(default: %(default)s)')
 
+    # TODO add fields argument
+    # only retrieve data asked for
+    # optimise so that only required calculations are made
 
     # normal = just print the messages
     # none = completely hide output
@@ -135,7 +139,7 @@ def main():
     params = {
         'indent':4,
         'sort_keys':True,
-        'overwrite':True, #
+        'overwrite':True, # default to be False
 
         # if args.format set... add to params dict
         'formatting':'something' # TODO
@@ -148,7 +152,17 @@ def main():
         output_file = ContinuousWriter(args.output, **params)
 
         def write_to_file(item):
+            #print(item)
             test_callback(item)
+            if(params.get('logging') == 'normal'):
+                pass
+                # is a chat message, print it
+                # print(data)
+                # if(params.get('safe_print')):
+                #     self.safe_print_item(data)
+                # else:
+                #     self.print_item(data)
+
             output_file.write(item)
 
         callback = write_to_file
@@ -177,10 +191,10 @@ def main():
 
     except KeyboardInterrupt:
         print('keyboard interrupt')
-    except Exception as e:
-        print('other exception')
-        print(e)
-        pass
+    # except Exception as e:
+    #     print('other exception')
+    #     print(e)
+    #     pass
 
     #
     #print('got',len(program_params.get('messages')),'messages')
