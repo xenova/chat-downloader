@@ -5,6 +5,10 @@ import csv
 
 
 class CW:
+    """
+    Can be used as a context manager (using the `with` keyword).
+    Otherwise, the stream can be explicitly closed.
+    """
     def __init__(self, file_name, overwrite=False):
         self.file_name = file_name
 
@@ -31,13 +35,11 @@ class CW:
 class JSONCW(CW):
     """
     Class used to control the continuous writing of a list of dictionaries to a JSON file.
-
-    To be used as a context manager (using the `with` keyword).
     """
 
     def __init__(self, file_name, overwrite=False, indent=None, separator=', ', indent_character=' ', sort_keys=True):
         super().__init__(file_name, overwrite)
-        # open file for appending in binary mode.
+        # open file for appending and reading in binary mode.
         self.file = open(self.file_name, 'ab+')
 
         self.file.seek(0)  # go to beginning of file
@@ -87,24 +89,22 @@ class JSONCW(CW):
 
         self.file.write(to_write.encode())  # Dump the item
         self.file.write((indent_padding+']').encode())  # Close the array
-
+        self.file.flush()
 
 class CSVCW(CW):
     """
     Class used to control the continuous writing of a list of dictionaries to a CSV file.
-
-    To be used as a context manager (using the `with` keyword).
     """
 
     def __init__(self, file_name, overwrite=False, sort_keys=True):
         super().__init__(file_name, overwrite)
 
-        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8')
+        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8', buffering=1)
 
         # save previous data
         self.file.seek(0)  # go to beginning of file
         csv_dict_reader = csv.DictReader(self.file)
-        self.columns = csv_dict_reader.fieldnames or []
+        self.columns = list(csv_dict_reader.fieldnames or [])
         self.all_items = [dict(x) for x in csv_dict_reader]
 
         self.__reset_dict_writer()
@@ -136,18 +136,16 @@ class CSVCW(CW):
 class TXTCW(CW):
     """
     Class used to control the continuous writing of a list of dictionaries to a TXT file.
-
-    To be used as a context manager (using the `with` keyword).
     """
 
     def __init__(self, file_name, overwrite=False, formatting=None):
         super().__init__(file_name, overwrite)
-        self.file = open(self.file_name, 'a', encoding='utf-8')
+        self.file = open(self.file_name, 'a', encoding='utf-8', buffering=1)
 
         self.formatting = formatting
 
     def write(self, item, format):
-        print(item, file=self.file)
+        print(item, file=self.file) # , flush=True
 
 
 class ContinuousWriter:
