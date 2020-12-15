@@ -209,12 +209,36 @@ class ChatDownloader:
             yield t
 
     @staticmethod
-    def perform_callback(callback, data):
-        try:
-            callback(data)
-        except TypeError:
+    def perform_callback(callback, data, params = {}):
+        if(callable(callback)):
+            try:
+                callback(data)
+            except TypeError:
+                raise CallbackFunction(
+                    'Incorrect number of parameters for function '+callback.__name__)
+        elif callback is None:
+            pass # do not perform callback
+        else:
             raise CallbackFunction(
-                'Incorrect number of parameters for function '+callback.__name__)
+                    'Unable to call callback function '+callback.__name__)
+
+
+    @staticmethod
+    def create_image(url, width = None, height = None, id = None):
+        image = {}
+        if url:
+            image['url'] = url
+        if width:
+            image['width'] = width
+        if height:
+            image['height'] = height
+        if width and height and not id:
+            image['id'] = '{}x{}'.format(width,height)
+        elif id:
+            image['id'] = id
+
+        return image
+
     # _LOGGING_TYPES = {
     #     'errors'
     # }
