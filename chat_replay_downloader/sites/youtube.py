@@ -10,7 +10,6 @@ from urllib import parse
 import json
 import time
 import re
-import emoji
 
 from ..utils import (
     try_get,
@@ -207,60 +206,109 @@ class YouTubeChatDownloader(ChatDownloader):
     _YOUTUBE_API_PARAMETERS_TEMPLATE = '&playerOffsetMs={}'
 
     # CLI argument allows users to specify a list of "types of messages" they want
-    _TYPES_OF_MESSAGES = {
+    # _TYPES_OF_MESSAGES = {
+    #     'messages': [
+    #         'liveChatTextMessageRenderer'  # normal message
+    #     ],
+    #     'superchat': [
+    #         # superchat messages which appear in chat
+    #         'liveChatMembershipItemRenderer',
+    #         'liveChatPaidMessageRenderer',
+    #         'liveChatPaidStickerRenderer',
+    #     ],
+    #     'tickers': [
+    #         # superchat messages which appear ticker (at the top)
+    #         'liveChatTickerPaidStickerItemRenderer',
+    #         'liveChatTickerPaidMessageItemRenderer',
+    #         'liveChatTickerSponsorItemRenderer',
+    #     ],
+    #     'banners': [
+    #         'liveChatBannerRenderer',
+    #         'liveChatBannerHeaderRenderer',
+    #         # 'liveChatTextMessageRenderer'
+    #     ],
+
+    #     'donations': [
+    #         'liveChatDonationAnnouncementRenderer'
+    #     ],
+    #     'engagement': [
+    #         # message saying Live Chat replay is on
+    #         'liveChatViewerEngagementMessageRenderer',
+    #     ],
+    #     'purchases': [
+    #         'liveChatPurchasedProductMessageRenderer'  # product purchased
+    #     ],
+
+    #     'mode_changes': [
+    #         'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
+    #     ],
+
+    #     'deleted': [
+    #         'deletedStateMessage'
+    #     ],
+
+    #     'placeholder': [
+    #         'liveChatPlaceholderItemRenderer'  # placeholder
+    #     ],
+
+    # }
+
+    # _KNOWN_MESSAGE_TYPES = []
+    # for message_type in _TYPES_OF_MESSAGES:
+    #     _KNOWN_MESSAGE_TYPES += _TYPES_OF_MESSAGES[message_type]
+
+
+
+    _MESSAGE_GROUPS = {
+        # 'group_name':[
+        #     'message_types'
+        # ]
         'messages': [
-            'liveChatTextMessageRenderer'  # normal message
+            'text_message'  # normal message
         ],
         'superchat': [
             # superchat messages which appear in chat
-            'liveChatMembershipItemRenderer',
-            'liveChatPaidMessageRenderer',
-            'liveChatPaidStickerRenderer',
+            'membership_item',
+            'paid_message',
+            'paid_sticker',
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
-            'liveChatTickerPaidStickerItemRenderer',
-            'liveChatTickerPaidMessageItemRenderer',
-            'liveChatTickerSponsorItemRenderer',
+            'ticker_paid_sticker_item',
+            'ticker_paid_message_item',
+            'ticker_sponsor_item',
         ],
         'banners': [
-            'liveChatBannerRenderer',
-            'liveChatBannerHeaderRenderer',
-            # 'liveChatTextMessageRenderer'
+            'banner',
+            'banner_header'
         ],
 
         'donations': [
-            'liveChatDonationAnnouncementRenderer'
+            'donation_announcement'
         ],
         'engagement': [
-            # message saying Live Chat replay is on
-            'liveChatViewerEngagementMessageRenderer',
+            # message saying live chat replay is on
+            'viewer_engagement_message',
         ],
         'purchases': [
-            'liveChatPurchasedProductMessageRenderer'  # product purchased
+            'purchased_product_message'  # product purchased
         ],
 
         'mode_changes': [
-            'liveChatModeChangeMessageRenderer'  # e.g. slow mode enabled
+            'mode_change_message'  # e.g. slow mode enabled
         ],
 
         'deleted': [
-            'deletedStateMessage'
+            'deleted_state_message'
         ],
 
         'placeholder': [
-            'liveChatPlaceholderItemRenderer'  # placeholder
-        ],
-
+            'placeholder_item'  # placeholder
+        ]
     }
-
     _KNOWN_MESSAGE_TYPES = []
-    for message_type in _TYPES_OF_MESSAGES:
-        _KNOWN_MESSAGE_TYPES += _TYPES_OF_MESSAGES[message_type]
-
-    _MESSAGE_FORMATTING_GROUPS_REGEX = r'\{(.*?)\{(.*?)?\}(.*?)\}'
-    _MESSAGE_FORMATTING_INDEXES_REGEX = r'\|(?![^\[]*\])'
-    _MESSAGE_FORMATTING_FORMATTING_REGEX = r'(.*)\[(.*)\]'
+    for message_group in _MESSAGE_GROUPS:
+        _KNOWN_MESSAGE_TYPES += _MESSAGE_GROUPS[message_group]
 
     @ staticmethod
     def parse_youtube_link(text):
@@ -649,7 +697,7 @@ class YouTubeChatDownloader(ChatDownloader):
         if(offset_microseconds is not None):
             url += self._YOUTUBE_API_PARAMETERS_TEMPLATE.format(
                 offset_microseconds)
-        print(url)  # TODO make printing url as debug option?
+        #print(url)  # TODO make printing url as debug option?
         return self._get_continuation_info(url)
 
     def _get_live_info(self, continuation):
@@ -665,74 +713,6 @@ class YouTubeChatDownloader(ChatDownloader):
             return json['response']['continuationContents']['liveChatContinuation']
         else:
             raise NoContinuation
-
-    def _format_item(self, result, item):
-        # TODO fix this method
-
-        # split by | not enclosed in []
-        split = re.split(
-            self._MESSAGE_FORMATTING_INDEXES_REGEX, result.group(2))
-        for s in split:
-
-            # check if optional formatting is there
-            parse = re.search(self._MESSAGE_FORMATTING_FORMATTING_REGEX, s)
-            formatting = None
-            if(parse):
-                index = parse.group(1)
-                formatting = parse.group(2)
-            else:
-                index = s
-
-            if(index in item):
-                value = item[index]
-                if(formatting):
-                    if(index == 'timestamp'):
-                        value = microseconds_to_timestamp(
-                            item[index], format=formatting)
-                    # possibility for more formatting options
-
-                    # return value if index matches, otherwise keep searching
-                return '{}{}{}'.format(result.group(1), value, result.group(3))
-
-        return ''  # no match, return empty
-
-    def message_to_string(self, item, format_string='{[{time_text|timestamp[%Y-%m-%d %H:%M:%S]}]}{ ({badges})}{ *{amount}*}{ {author_name}}:{ {message}}'):
-        """
-        Format item for printing to standard output. The default format_string will print out as:
-        [time] (badges) *amount* author: message\n
-        where (badges) and *amount* are optional.
-        """
-
-        return re.sub(self._MESSAGE_FORMATTING_GROUPS_REGEX, lambda result: self._format_item(result, item), format_string)
-        # return '[{}] {}{}{}: {}'.format(
-        # 	item['time_text'] if 'time_text' in item else (
-        # 		self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
-        # 	'({}) '.format(item['badges']) if 'badges' in item else '',
-        # 	'*{}* '.format(item['amount']) if 'amount' in item else '',
-        # 	item['author'],
-        # 	item['message'] or ''
-        # )
-
-    def print_item(self, item):
-        print(self.message_to_string(item), flush=True)
-
-    def safe_print_item(self, item):
-        """
-        Ensure printing to standard output can be done safely (especially on Windows).
-        There are usually issues with printing emojis and non utf-8 characters.
-
-        """
-        message = emoji.demojize(self.message_to_string(item))
-
-        try:
-            safe_string = message.encode(
-                'utf-8', 'ignore').decode('utf-8', 'ignore')
-            print(safe_string, flush=True)
-        except UnicodeEncodeError:
-            # in the rare case that standard output does not support utf-8
-            safe_string = message.encode(
-                'ascii', 'ignore').decode('ascii', 'ignore')
-            print(safe_string, flush=True)
 
     def get_chat_by_video_id(self, video_id, params):
         """ Get chat messages for a YouTube video. """
@@ -777,8 +757,8 @@ class YouTubeChatDownloader(ChatDownloader):
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
 
-        types_of_messages_to_add = self.get_param_value(
-            params, 'message_types')
+        messages_groups_to_add = self.get_param_value(params, 'message_groups')
+        messages_types_to_add = self.get_param_value(params, 'message_types')
         # print(types_of_messages_to_add)
 
         first_time = True
@@ -890,8 +870,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         # ignore these
                     else:
                         if(params.get('logging') in ('debug', 'errors_only')):
-                            debug_print('Unknown action:',
-                                        original_action_type)
+                            debug_print('Unknown action:', original_action_type)
                             debug_print(action)
                             debug_print(data)
                             print()
@@ -922,9 +901,9 @@ class YouTubeChatDownloader(ChatDownloader):
                         data['message_type'] = camel_case_split(new_index)
 
                         if(params.get('logging') in ('debug', 'errors_only')):
-                            if(original_message_type not in self._KNOWN_MESSAGE_TYPES):
-                                debug_print('Unknown message type:',
-                                            original_message_type)
+                            if(data['message_type'] not in self._KNOWN_MESSAGE_TYPES):
+                                debug_print('Unknown message type:', data['message_type'])
+                                debug_print('Original message type:', original_message_type)
                                 debug_print('Action type:',
                                             original_action_type)
                                 debug_print('Action:', action)
@@ -942,21 +921,26 @@ class YouTubeChatDownloader(ChatDownloader):
 
                         continue
 
+        # messages_types_to_add = self.get_param_value(params, 'message_types')
+        # messages_groups_to_add = self.get_param_value(params, 'message_groups')
                     # TODO make this param a list for more variety
 
                     # user wants everything, keep going TODO True temp
-                    if('all' in types_of_messages_to_add):
+                    if('all' in messages_groups_to_add):
                         pass
 
                     else:
                         # check whether to skip this message or not, based on its type
 
                         valid_message_types = []
-                        for message_type in types_of_messages_to_add:
-                            valid_message_types += self._TYPES_OF_MESSAGES.get(
-                                message_type, [])
+                        for message_group in messages_groups_to_add or []:
+                            valid_message_types += self._MESSAGE_GROUPS.get(message_group, [])
 
-                        if(original_message_type not in valid_message_types):
+                        for message_type in messages_types_to_add or []:
+                            valid_message_types.append(message_type)#
+
+
+                        if(data.get('message_type') not in valid_message_types):
                             continue
                         # for key in self._TYPES_OF_MESSAGES:
                         #     #print(key)

@@ -5,7 +5,11 @@ import socket
 
 from .common import ChatDownloader
 
-from ..errors import TwitchError, CallbackFunction
+from ..errors import (
+    TwitchError,
+    CallbackFunction,
+    InvalidParameter
+)
 
 from ..utils import (
     ensure_seconds,
@@ -16,7 +20,8 @@ from ..utils import (
     replace_with_underscores,
     try_get_first_key,
     debug_print,
-    multi_get
+    multi_get,
+    update_dict_without_overwrite
 )
 
 # TODO export as another module?
@@ -42,7 +47,6 @@ class TwitchChatIRC():
             'CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership')
         self.send_raw('PASS SCHMOOPIIE')
         self.send_raw('NICK justinfan67420')
-
 
     def send_raw(self, string):
         self._SOCKET.send((string+'\r\n').encode('utf-8'))
@@ -99,7 +103,8 @@ class TwitchChatDownloader(ChatDownloader):
         # self._name = None
         # self.name = 'Twitch.tv'
 
-        TwitchChatDownloader._BADGE_INFO = self._session_get_json(self._BADGE_INFO_URL).get('badge_sets') or {}
+        TwitchChatDownloader._BADGE_INFO = self._session_get_json(
+            self._BADGE_INFO_URL).get('badge_sets') or {}
         # print(TwitchChatDownloader._BADGE_INFO.keys(), flush=True)
         # #exit()
         # # print(TwitchChatDownloader._BADGE_INFO)
@@ -157,7 +162,7 @@ class TwitchChatDownloader(ChatDownloader):
     }
 
     _REMAP_FUNCTIONS = {
-        'parse_timestamp': timestamp_to_microseconds,#lambda x :  * 1000,
+        'parse_timestamp': timestamp_to_microseconds,  # lambda x :  * 1000,
         'get_body': lambda x: x.get('body'),
         'parse_author_images': lambda x: TwitchChatDownloader.parse_author_images(x),
 
@@ -201,7 +206,6 @@ class TwitchChatDownloader(ChatDownloader):
         # TODO 'type' # author type?
     }
 
-
     @staticmethod
     def parse_author_images(original_url):
         smaller_icon = original_url.replace('300x300', '70x70')
@@ -238,7 +242,8 @@ class TwitchChatDownloader(ChatDownloader):
 
         author_info = info.pop('author_info', None)
         if author_info:
-            info.update(TwitchChatDownloader._parse_item(author_info))
+            update_dict_without_overwrite(
+                info, TwitchChatDownloader._parse_item(author_info))
 
         return info
 
@@ -265,6 +270,13 @@ class TwitchChatDownloader(ChatDownloader):
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
 
+        invalid_message_groups = 'messages' not in (
+            self.get_param_value(params, 'message_groups') or [])
+        invalid_message_types = 'text_message' not in (
+            self.get_param_value(params, 'message_types') or [])
+        if invalid_message_groups and invalid_message_types:
+            raise InvalidParameter('Custom method types/groups are not supported for Twitch VODs/clips')
+
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
         # api calls start here
@@ -277,7 +289,7 @@ class TwitchChatDownloader(ChatDownloader):
 
             # TODO use max attempts
             info = self._session_get_json(url)
-
+            # print(info)
             error = info.get('error')
 
             if(error):
@@ -298,6 +310,7 @@ class TwitchChatDownloader(ChatDownloader):
                 elif(after_end):  # after end
                     return message_list  # while actually searching, if time is invalid
 
+                # TODO if correct message type
                 message_list.append(data)
 
                 self.perform_callback(callback, data)
@@ -336,65 +349,15 @@ class TwitchChatDownloader(ChatDownloader):
     # 2. Action type
     # 3. Message
 
-    # e.g. # @emote-only=0;followers-only=10;r9k=0;rituals=0;room-id=86061418;slow=10;subs-only=0 :tmi.twitch.tv ROOMSTATE #5uppp
-    # @ban-duration=1;room-id=223191589;target-user-id=596619271;tmi-sent-ts=1607456802152 :tmi.twitch.tv CLEARCHAT #tubbo :sammydg11111
-    # _ROOM_STATE_REGEX = ''
-
-    # @badge-info=;badges=;color=;display-name=mindteam2003;emotes=81274:0-5;flags=;id=fcb792fd-9137-4dd0-8cc8-6c1a2cf2fa7f;login=mindteam2003;mod=0;msg-id=ritual;msg-param-ritual-name=new_chatter;room-id=116228390;subscriber=0;system-msg=@mindteam2003\sis\snew\shere.\sSay\shello!;tmi-sent-ts=1607458140070;user-id=618090603;user-type= :tmi.twitch.tv USERNOTICE #tommyinnit :VoHiYo
-
-    #_EMOTE_URL_TEMPLATE = 'http://static-cdn.jtvnw.net/emoticons/v1/:<emote ID>/:<size>'
-
-    # TEMP
-    # TODO?
-    #
-
     # A full list can be found here: https://twitchinsights.net/badges
     # https://badges.twitch.tv/v1/badges/global/display
-    # _BADGE_NAME_REMAPPING = {
-    #     'bits': lambda x: 'cheer {}'.format(x.get('version')),
 
-
-    #     # 'premium': 'Prime Gaming',
-
-
-
-    #     # 'partner': 'Verified',
-
-
-    #     # 'glitchcon2020': 'GlitchCon 2020',
-
-    #     # 'glhf_pledge': 'GLHF Pledge',
-
-    #     # 'sub_gifter': lambda x: '{} Gift Subs'.format(x.get('version')),
-
-    #     # 'vip':'VIP',
-    #     # 'overwatch_league_insider_1': 'Overwatch League Insider',
-
-    #     # 'broadcaster':'Broadcaster',
-    #     # 'moderator': 'moderator',
-
-    #     # # Twitch Con
-    #     # 'twitchconEU2019':'TwitchCon EU 2019',
-    #     # 'twitchconNA2019':'TwitchCon NA 2019',
-    #     # 'twitchconAmsterdam2020': 'TwitchCon Amsterdam 2020',
-    #     # 'twitchconNA2020':'TwitchCon NA 2020',
-
-    #     # 'hype_train': 'Former Hype Train Conductor',
-
-
-    #     # # Not tested
-
-    #     # 'twitchcon2017': 'TwitchCon 2017',
-    #     # 'twitchcon2018':'TwitchCon 2018',
-
-    #     # 'admin':'Twitch Admin',
-    # }
-    _BADGE_KEYS = ('title','description','image_url_1x', 'image_url_2x', 'image_url_4x', 'click_action','click_url')
+    _BADGE_KEYS = ('title', 'description', 'image_url_1x',
+                   'image_url_2x', 'image_url_4x', 'click_action', 'click_url')
     _BADGE_ID_REGEX = r'v1/(.+)/'
 
     @staticmethod
     def parse_badges(badge_info):
-        #print('badge_info "{}"'.format (badge_info), badge_info.split(','))
         info = []
         if(not badge_info):
             return info
@@ -408,7 +371,8 @@ class TwitchChatDownloader(ChatDownloader):
 
             # TODO skip for subscribers? - different per channel
             # check for additional information
-            new_badge_info = multi_get(TwitchChatDownloader._BADGE_INFO,split[0], 'versions',split[1]) or {}
+            new_badge_info = multi_get(
+                TwitchChatDownloader._BADGE_INFO, split[0], 'versions', split[1]) or {}
 
             if new_badge_info:
                 for key in TwitchChatDownloader._BADGE_KEYS:
@@ -416,10 +380,22 @@ class TwitchChatDownloader(ChatDownloader):
 
                 # TODO create image with icons (diff sizes)
                 # image_url_1x image_url_2x image_url_4x
-                badge_id = re.search(TwitchChatDownloader._BADGE_ID_REGEX, new_badge.get('image_url_1x',''))
-                if(badge_id):
-                    new_badge['badge_id'] = badge_id.group(1)
+                # 18px x 18px, 36px x 36px, and 72px x 72px.
 
+                image_urls = [(new_badge.pop('image_url_{}x'.format(
+                    i[0]), ''), i[1]) for i in ((1, 18), (2, 36), (3, 72))]
+                if image_urls:
+                    new_badge['icons'] = []
+
+                for image_url, size in image_urls:
+                    new_badge['icons'].append(
+                        ChatDownloader.create_image(image_url, size, size))
+
+                if image_urls:
+                    badge_id = re.search(
+                        TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
+                    if(badge_id):
+                        new_badge['badge_id'] = badge_id.group(1)
 
             info.append(new_badge)
         return info
@@ -442,9 +418,6 @@ class TwitchChatDownloader(ChatDownloader):
         # On successful login, provides data about the current logged-in user through IRC tags. It is sent after successfully authenticating (sending a PASS/NICK command).
 
         'emote-sets': 'emote_sets',  # TODO split by,?
-
-
-        # message	The message.
 
         # GENERAL
         # can be empty (which means it depends on dark/light theme)
@@ -522,12 +495,6 @@ class TwitchChatDownloader(ChatDownloader):
         'number-of-viewers': 'number_of_viewers'
     }
 
-    # @badge-info=<badge-info>;badges=<badges>;color=<color>;
-    # display-name=<display-name>;emotes=<emotes>;
-    # id=<id-of-msg>;mod=<mod>;room-id=<room-id>;
-    # subscriber=<subscriber>;tmi-sent-ts=<timestamp>;
-    # turbo=<turbo>;user-id=<user-id>;user-type=<user-type>
-    # :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
     _ACTION_TYPE_REMAPPING = {
         # tags
         'CLEARCHAT': 'clear_chat',
@@ -541,154 +508,204 @@ class TwitchChatDownloader(ChatDownloader):
         # commands
         'HOSTTARGET': 'host_target',
         'NOTICE': 'notice',
-        'RECONNECT': 'reconnect',
-
-
+        'RECONNECT': 'reconnect'
     }
 
     # msg-id's
-    _MESSAGE_TYPE_REMAPPING = {
-        # documented
-        'sub': 'subscription',
-        'resub': 'resubscription',
-        'subgift': 'subscription_gift',
-        'anonsubgift': 'anonymous_subscription_gift',
-        'anonsubmysterygift': 'anonymous_mystery_subscription_gift',
-        'submysterygift': 'mystery_subscription_gift',
-        'primepaidupgrade': 'prime_paid_upgrade',
-        'giftpaidupgrade': 'gift_paid_upgrade',
-        'rewardgift': 'reward_gift',
-        'anongiftpaidupgrade': 'anonymous_gift_paid_upgrade',
-        'raid': 'raid',
-        'unraid': 'unraid',
-        'ritual': 'ritual',
-        'bitsbadgetier': 'bits_badge_tier',
-        'highlighted-message': 'highlighted_message',
+    _MESSAGE_GROUP_REMAPPINGS = {
+        'messages': {
+            'highlighted-message': 'highlighted_message',
+            'skip-subs-mode-message': 'send_message_in_subscriber_only_mode',
+        },
+        'bits': {
+            'bitsbadgetier': 'bits_badge_tier',
+        },
+        'subscriptions': {
+            'sub': 'subscription',
+            'resub': 'resubscription',
+            'subgift': 'subscription_gift',
+            'anonsubgift': 'anonymous_subscription_gift',
+            'anonsubmysterygift': 'anonymous_mystery_subscription_gift',
+            'submysterygift': 'mystery_subscription_gift',
+            'extendsub': 'extend_subscription',
 
-        # undocumented (discovered)
-        'host_on': 'start_host',
-        'host_off': 'end_host',
+            'standardpayforward': 'standard_pay_forward',
+            'communitypayforward': 'community_pay_forward',
+            'primecommunitygiftreceived': 'prime_community_gift_received',
+        },
+        'upgrades': {
+            'primepaidupgrade': 'prime_paid_upgrade',
+            'giftpaidupgrade': 'gift_paid_upgrade',
+            'rewardgift': 'reward_gift',
+            'anongiftpaidupgrade': 'anonymous_gift_paid_upgrade',
+        },
+        'raids': {
+            'raid': 'raid',
+            'unraid': 'unraid'
+        },
+        'hosts': {
+            'host_on': 'start_host',
+            'host_off': 'end_host',
+            'bad_host_hosting': 'bad_host_hosting',
+            'bad_host_rate_exceeded': 'bad_host_rate_exceeded',
+            'bad_host_error': 'bad_host_error',
+            'hosts_remaining': 'hosts_remaining',
+            'not_hosting': 'not_hosting',
 
+            'host_target_went_offline': 'host_target_went_offline',
+        },
+        'rituals': {
+            'ritual': 'ritual',
+        },
+        'room_states': {
+            # slow mode
+            'slow_on': 'enable_slow_mode',
+            'slow_off': 'disable_slow_mode',
+            'already_slow_on': 'slow_mode_already_on',
+            'already_slow_off': 'slow_mode_already_off',
 
-        # slow mode
-        'slow_on': 'enable_slow_mode',
-        'slow_off': 'disable_slow_mode',
-        'already_slow_on': 'slow_mode_already_on',
-        'already_slow_off': 'slow_mode_already_off',
+            # sub only mode
+            'subs_on': 'enable_subscriber_only_mode',
+            'subs_off': 'disable_subscriber_only_mode',
+            'already_subs_on': 'sub_mode_already_on',
+            'already_subs_off': 'sub_mode_already_off',
 
-        # sub only mode
-        'subs_on': 'enable_subscriber_only_mode',
-        'subs_off': 'disable_subscriber_only_mode',
-        'already_subs_on': 'sub_mode_already_on',
-        'already_subs_off': 'sub_mode_already_off',
+            # emote only mode
+            'emote_only_on': 'enable_emote_only_mode',
+            'emote_only_off': 'disable_emote_only_mode',
+            'already_emote_only_on': 'emote_only_already_on',
+            'already_emote_only_off': 'emote_only_already_off',
 
-        # emote only mode
-        'emote_only_on': 'enable_emote_only_mode',
-        'emote_only_off': 'disable_emote_only_mode',
-        'already_emote_only_on': 'emote_only_already_on',
-        'already_emote_only_off': 'emote_only_already_off',
+            # r9k mode
+            'r9k_on': 'enable_r9k_mode',
+            'r9k_off': 'disable_r9k_mode',
+            'already_r9k_on': 'r9k_mode_already_on',
+            'already_r9k_off': 'r9k_mode_already_off',
 
-        # r9k mode
-        'r9k_on': 'enable_r9k_mode',
-        'r9k_off': 'disable_r9k_mode',
-        'already_r9k_on': 'r9k_mode_already_on',
-        'already_r9k_off': 'r9k_mode_already_off',
+            # follower only mode
+            'followers_on': 'enable_follower_only_mode',
+            'followers_on_zero': 'enable_follower_only_mode',  # same thing, handled in parse
+            'followers_off': 'disable_follower_only_mode',
+            'already_followers_on': 'follower_only_mode_already_on',
+            'already_followers_on_zero': 'follower_only_mode_already_on',
+            'already_followers_off': 'follower_only_mode_already_off',
 
+        },
+        'deleted_messages': {
+            'msg_banned': 'banned_message',
 
-        'followers_on': 'enable_follower_only_mode',
-        'followers_on_zero': 'enable_follower_only_mode',  # same thing, handled in parse
-        'followers_off': 'disable_follower_only_mode',
-        'already_followers_on': 'follower_only_mode_already_on',
-        'already_followers_on_zero': 'follower_only_mode_already_on',
-        'already_followers_off': 'follower_only_mode_already_off',
+            'bad_delete_message_error': 'bad_delete_message_error',
+            'bad_delete_message_broadcaster': 'bad_delete_message_broadcaster',
+            'bad_delete_message_mod': 'bad_delete_message_mod',
+            'delete_message_success': 'delete_message_success',
+        },
+        'bans': {
 
+            # ban
+            'already_banned': 'already_banned',
+            'bad_ban_self': 'bad_ban_self',
+            'bad_ban_broadcaster': 'bad_ban_broadcaster',
+            'bad_ban_admin': 'bad_ban_admin',
+            'bad_ban_global_mod': 'bad_ban_global_mod',
+            'bad_ban_staff': 'bad_ban_staff',
+            'ban_success': 'ban_success',
 
-        'skip-subs-mode-message': 'send_message_in_subscriber_only_mode',
+            # unban
+            'bad_unban_no_ban': 'bad_unban_no_ban',
+            'unban_success': 'unban_success',
 
-        'standardpayforward': 'standard_pay_forward',
-        'communitypayforward': 'community_pay_forward',
-        'primecommunitygiftreceived': 'prime_community_gift_received',
+            'msg_channel_suspended': 'channel_suspended_message',
 
-        'extendsub': 'extend_subscription',
-
-        # discovered (but not come across yet)
-
-        # ban
-        'already_banned': 'already_banned',
-        'bad_ban_self': 'bad_ban_self',
-        'bad_ban_broadcaster': 'bad_ban_broadcaster',
-        'bad_ban_admin': 'bad_ban_admin',
-        'bad_ban_global_mod': 'bad_ban_global_mod',
-        'bad_ban_staff': 'bad_ban_staff',
-        'ban_success': 'ban_success',
-
-        # unban
-        'bad_unban_no_ban': 'bad_unban_no_ban',
-        'unban_success': 'unban_success',
-
-        # colours
-        'turbo_only_color': 'turbo_only_colour',
-        'color_changed': 'colour_changed',
-
-        # commercials
-        'bad_commercial_error': 'bad_commercial_error',
-        'commercial_success': 'commercial_success',
-
-        # delete message
-        'bad_delete_message_error': 'bad_delete_message_error',
-        'bad_delete_message_broadcaster': 'bad_delete_message_broadcaster',
-        'bad_delete_message_mod': 'bad_delete_message_mod',
-        'delete_message_success': 'delete_message_success',
-
-
-        # host/unhost
-        'bad_host_hosting': 'bad_host_hosting',
-        'bad_host_rate_exceeded': 'bad_host_rate_exceeded',
-        'bad_host_error': 'bad_host_error',
-        'hosts_remaining': 'hosts_remaining',
-        'not_hosting': 'not_hosting',
-
-        # join
-        'msg_channel_suspended': 'channel_suspended_message',
-
-        # mod/unmod
-        'bad_mod_banned': 'bad_mod_banned',
-        'bad_mod_mod': 'bad_mod_mod',
-        'mod_success': 'mod_success',
-        'bad_unmod_mod': 'bad_unmod_mod',
-        'unmod_success': 'unmod_success',
-        'no_mods': 'no_mods',
-        'room_mods': 'room_mods',
+            # timeouts
+            'timeout_success': 'timeout_success',
 
 
-        # sub mode
+            # timeout errors
+            'bad_timeout_self': 'bad_timeout_self',
+            'bad_timeout_broadcaster': 'bad_timeout_broadcaster',
+            'bad_timeout_mod': 'bad_timeout_mod',
+            'bad_timeout_admin': 'bad_timeout_admin',
+            'bad_timeout_global_mod': 'bad_timeout_global_mod',
+            'bad_timeout_staff': 'bad_timeout_staff',
+        },
+        'mods': {
+            'bad_mod_banned': 'bad_mod_banned',
+            'bad_mod_mod': 'bad_mod_mod',
+            'mod_success': 'mod_success',
+            'bad_unmod_mod': 'bad_unmod_mod',
+            'unmod_success': 'unmod_success',
+            'no_mods': 'no_mods',
+            'room_mods': 'room_mods',
+        },
+        'colours': {
+            'turbo_only_color': 'turbo_only_colour',
+            'color_changed': 'colour_changed',
+        },
+        'commercials': {
+            'bad_commercial_error': 'bad_commercial_error',
+            'commercial_success': 'commercial_success',
+        },
 
-        'bad_timeout_self': 'bad_timeout_self',
-        'bad_timeout_broadcaster': 'bad_timeout_broadcaster',
-        'bad_timeout_mod': 'bad_timeout_mod',
-        'bad_timeout_admin': 'bad_timeout_admin',
-        'bad_timeout_global_mod': 'bad_timeout_global_mod',
-        'bad_timeout_staff': 'bad_timeout_staff',
+        'vips': {
+            'bad_vip_grantee_banned': 'bad_vip_grantee_banned',
+            'bad_vip_grantee_already_vip': 'bad_vip_grantee_already_vip',
+            'vip_success': 'vip_success',
+            'bad_unvip_grantee_not_vip': 'bad_unvip_grantee_not_vip',
+            'unvip_success': 'unvip_success',
+            'no_vips': 'no_vips',
+            'vips_success': 'vips_success',
+        },
+        'other': {
+            'cmds_available': 'cmds_available',
+            'unrecognized_cmd': 'unrecognized_cmd',
+            'no_permission': 'no_permission',
+            'msg_ratelimit': 'rate_limit_reached_message',
+        }
 
-        'bad_vip_grantee_banned': 'bad_vip_grantee_banned',
-        'bad_vip_grantee_already_vip': 'bad_vip_grantee_already_vip',
-        'vip_success': 'vip_success',
-        'bad_unvip_grantee_not_vip': 'bad_unvip_grantee_not_vip',
-        'unvip_success': 'unvip_success',
-        'no_vips': 'no_vips',
-        'vips_success': 'vips_success',
-
-        'cmds_available': 'cmds_available',
-        'timeout_success': 'timeout_success',
-        'host_target_went_offline': 'host_target_went_offline',
-        'unrecognized_cmd': 'unrecognized_cmd',
-        'no_permission': 'no_permission',
-        'msg_ratelimit': 'rate_limit_reached_message',
-        'msg_banned': 'banned_message',
+    }
+    _MESSAGE_GROUPS = {
+        'messages': [
+            'text_message'
+        ],
+        'bans': [
+            'ban_user'
+        ],
+        'deleted_messages': [
+            'delete_message'
+        ],
+        'hosts': [
+            'host_target'
+        ],
+        'room_states': [
+            'room_state'
+        ],
+        'user_states': [
+            'user_state'
+        ],
+        'notices': [
+            'user_notice',
+            'notice',
+            'successful_login'
+        ],
+        'other': [
+            'clear_chat',
+            'reconnect'
+        ]
     }
 
+    _MESSAGE_TYPE_REMAPPING = {}
+    for message_group in _MESSAGE_GROUP_REMAPPINGS:
+        value = _MESSAGE_GROUP_REMAPPINGS[message_group]
+        _MESSAGE_TYPE_REMAPPING.update(value)
+
+        if message_group not in _MESSAGE_GROUPS:
+            _MESSAGE_GROUPS[message_group] = []
+        _MESSAGE_GROUPS[message_group] += list(value.values())
+
+    # print(_MESSAGE_TYPE_REMAPPING)
+
     @staticmethod
-    def _parse_irc_item(match, params = {}):  # self, , params
+    def _parse_irc_item(match, params={}):  # self, , params
         info = {}
 
         split_info = match.group(1).split(';')
@@ -711,16 +728,19 @@ class TwitchChatDownloader(ChatDownloader):
         badge_metadata = info.pop('author_badge_metadata', [])
         badge_info = info.get('author_badges', [])
 
-        #print(badge_metadata,badge_info)
+        # print(badge_metadata,badge_info)
 
-        subscriber_badge = next((x for x in badge_info if x.get('type') == 'subscriber'), None)
-        subscriber_badge_metadata = next((x for x in badge_metadata if x.get('type') == 'subscriber'), None)
+        subscriber_badge = next(
+            (x for x in badge_info if x.get('type') == 'subscriber'), None)
+        subscriber_badge_metadata = next(
+            (x for x in badge_metadata if x.get('type') == 'subscriber'), None)
         if subscriber_badge and subscriber_badge_metadata:
             months = subscriber_badge_metadata['version']
             subscriber_badge['months'] = months
-            subscriber_badge['title'] = subscriber_badge['description'] ='{}-Month Subscriber'.format(months)
+            subscriber_badge['title'] = subscriber_badge['description'] = '{}-Month Subscriber'.format(
+                months)
 
-        if(info.get('author_badges') == []): # remove if empty
+        if(info.get('author_badges') == []):  # remove if empty
             info.pop('author_badges')
         # for i in range(len(badge_info)):
         #     #print(badge_info, badge_info[i])
@@ -775,14 +795,14 @@ class TwitchChatDownloader(ChatDownloader):
                 print('DEBUG |', 'unknown message type:', original_message_type)
                 #info['message_type'] = 'unknown'
         else:
-            info['message_type'] = info['action_type'] # 'normal_'+
+            info['message_type'] = info['action_type']  # 'normal_'+
 
         if(original_action_type == 'CLEARCHAT'):
             if(message_match):  # is a ban
                 info['message_type'] = 'ban_user'
                 info['ban_type'] = 'timeout' if info.get(
                     'ban_duration') else 'permanent'
-                info['banned_user'] = message_match
+                info['banned_user'] = info.pop('message', '')
 
             else:  # did /clearchat
                 pass
@@ -818,7 +838,6 @@ class TwitchChatDownloader(ChatDownloader):
 
     temp = []
 
-
     def get_chat_by_stream_id(self, stream_id, params):
         print('get_chat_by_stream_id:', stream_id)
 
@@ -833,6 +852,20 @@ class TwitchChatDownloader(ChatDownloader):
         timeout = self.get_param_value(params, 'timeout')
 
         buffer_size = self.get_param_value(params, 'buffer_size')
+        # if(params.get('logging') != 'none'):
+        #     print('Getting chat for', initial_title_info)
+
+        # max_attempts = self.get_param_value(params, 'max_attempts')
+        # max_messages = self.get_param_value(params, 'max_messages')
+        # message_list = self.get_param_value(params, 'messages')
+        #callback = self.get_param_value(params, 'callback')
+
+        messages_groups_to_add = self.get_param_value(
+            params, 'message_groups') or []
+        messages_types_to_add = self.get_param_value(
+            params, 'message_types') or []
+
+        #print(messages_groups_to_add, messages_types_to_add, flush=True)
 
         twitch_chat_irc.set_timeout(message_receive_timeout)
         twitch_chat_irc.join_channel(stream_id)
@@ -885,42 +918,31 @@ class TwitchChatDownloader(ChatDownloader):
 
                         data = self._parse_irc_item(match, params)
 
-                        if(params.get('logging') == 'normal'):
+                        # if(params.get('logging') == 'normal'):
+                        #     pass
+
+                        if('all' in messages_groups_to_add):
                             pass
 
-                        #print(data.get(),data.get('message'), flush=True)
-                        # if(data.get('message_type') != 'privmsg'):
+                        else:
+                            # check whether to skip this message or not, based on its type
 
-                        # TODO filter message types
+                            valid_message_types = []
+                            for message_group in messages_groups_to_add or []:
+                                # print(message_group)
+                                valid_message_types += self._MESSAGE_GROUPS.get(
+                                    message_group, [])
 
-                        # a = data.get('message_type')
-                        # if(a not in TwitchChatDownloader.temp):
-                        #     TwitchChatDownloader.temp.append(a)
-                        #     print('\t*', a, flush=True)
-                        #     print(q)
-                        # print(data, flush=True)
-                        # print(q)
-                        #     print(q)
-                        #     print(data)
+                            for message_type in messages_types_to_add or []:
+                                valid_message_types.append(message_type)
 
-                        # print(data)
-                        # if('bits' in data):
-                        #     print(match.groups())
-                        #     print(data)
-
-                        # continue
+                            # print(data.get('message_type'),
+                            #       valid_message_types)
+                            if(data.get('message_type') not in valid_message_types):
+                                continue
 
                         message_list.append(data)
-
                         self.perform_callback(callback, data)
-
-
-                        # if(callable(on_message)):
-                        #     try:
-                        #         on_message(data)
-                        #     except TypeError:
-                        #         raise Exception(
-                        #             'Incorrect number of parameters for function '+on_message.__name__)
 
                         if(max_messages is not None and len(message_list) >= max_messages):
                             return message_list

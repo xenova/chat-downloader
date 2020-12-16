@@ -2,6 +2,7 @@
 import requests
 from http.cookiejar import MozillaCookieJar, LoadError
 import os
+
 from ..errors import (
     CookieError,
     ParsingError,
@@ -19,7 +20,7 @@ from json import JSONDecodeError
 
 class ChatDownloader:
     """
-    Subclasses of this one should re-define the get_chat_messages()
+    Subclasses of this should re-define the get_chat_messages()
     method and define a _VALID_URL regexp.
 
     Each chat item is a dictionary and must contain the following fields:
@@ -31,7 +32,7 @@ class ChatDownloader:
     author_name:            Name of the user which sent the message
 
 
-    If the stream is not live (e.g. is a replay/vod/clip), it must contain the following fields:
+    If the stream is a replay/vod/clip (i.e. is not live), it must contain the following fields:
 
     time_in_seconds:        The number of seconds after the video began, that the message was sent
     time_text:              Human-readable format for `time_in_seconds`
@@ -42,6 +43,11 @@ class ChatDownloader:
 
     author_display_name:    The name of the author which is displayed to the viewer.
                             This value may be different to `author_name`
+
+    author_badges:          A dictionary containing badge information for the author.
+
+                            Potential fields:
+
 
     TODO
     """
@@ -96,8 +102,10 @@ class ChatDownloader:
         'timeout': None, # stop getting messages after no messages have been sent for `timeout` seconds
 
 
+        'message_groups': ['messages'], # 'all' can be chosen here
+        'message_types': None, #['text_message'], # messages
+         #,'superchat'
 
-        'message_types': ['messages'], #,'superchat'
 
         # YouTube only
         'chat_type': 'live', # live or top
@@ -239,6 +247,53 @@ class ChatDownloader:
 
         return image
 
-    # _LOGGING_TYPES = {
-    #     'errors'
-    # }
+
+    # def _format_item(self, result, item):
+    #     # TODO fix this method
+
+    #     # split by | not enclosed in []
+    #     split = re.split(
+    #         self._MESSAGE_FORMATTING_INDEXES_REGEX, result.group(2))
+    #     for s in split:
+
+    #         # check if optional formatting is there
+    #         parse = re.search(self._MESSAGE_FORMATTING_FORMATTING_REGEX, s)
+    #         formatting = None
+    #         if(parse):
+    #             index = parse.group(1)
+    #             formatting = parse.group(2)
+    #         else:
+    #             index = s
+
+    #         if(index in item):
+    #             value = item[index]
+    #             if(formatting):
+    #                 if(index == 'timestamp'):
+    #                     value = microseconds_to_timestamp(
+    #                         item[index], format=formatting)
+    #                 # possibility for more formatting options
+
+    #                 # return value if index matches, otherwise keep searching
+    #             return '{}{}{}'.format(result.group(1), value, result.group(3))
+
+    #     return ''  # no match, return empty
+
+    # def message_to_string(self, item, format_string='{[{time_text|timestamp[%Y-%m-%d %H:%M:%S]}]}{ ({badges})}{ *{amount}*}{ {author_name}}:{ {message}}'):
+    #     """
+    #     Format item for printing to standard output. The default format_string will print out as:
+    #     [time] (badges) *amount* author: message\n
+    #     where (badges) and *amount* are optional.
+    #     """
+
+    #     return re.sub(self._MESSAGE_FORMATTING_GROUPS_REGEX, lambda result: self._format_item(result, item), format_string)
+    #     # return '[{}] {}{}{}: {}'.format(
+    #     # 	item['time_text'] if 'time_text' in item else (
+    #     # 		self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
+    #     # 	'({}) '.format(item['badges']) if 'badges' in item else '',
+    #     # 	'*{}* '.format(item['amount']) if 'amount' in item else '',
+    #     # 	item['author'],
+    #     # 	item['message'] or ''
+    #     # )
+
+    # def print_item(self, item):
+    #     print(self.message_to_string(item), flush=True)
