@@ -4,7 +4,6 @@ import json
 import datetime
 import re
 import argparse
-import bs4
 import csv
 import emoji
 import time
@@ -197,8 +196,8 @@ class ChatReplayDownloader:
                 self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
             '({}) '.format(item['badges']) if 'badges' in item else '',
             '*{}* '.format(item['amount']) if 'amount' in item else '',
-            item['author'],
-            item['message'] or ''
+            item.get('author', ''),
+            item.get('message', '')
         )
 
     def print_item(self, item):
@@ -249,38 +248,36 @@ class ChatReplayDownloader:
 
         return message_text
 
+    _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
         original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
         html = self.__session_get(original_url)
-        soup = bs4.BeautifulSoup(html.text, 'html.parser')
-        ytInitialData_script = next(script.string for script in soup.find_all(
-            'script') if script.string and 'ytInitialData' in script.string)
-        json_data = next(line.strip()[len('window["ytInitialData"] = '):-1]
-                         for line in ytInitialData_script.splitlines() if 'ytInitialData' in line)
 
-        try:
-            ytInitialData = json.loads(json_data)
-        except Exception as e:
-            try:
-                # for some reason, it sometimes cuts out and this fixes it
-                ytInitialData = json.loads('{"resp'+json_data)
-            except Exception:
-                raise ParsingError(
-                    'Unable to parse video data. Please try again.')
+        info = re.search(self._YT_INITIAL_DATA_RE, html.text)
 
-        if('contents' not in ytInitialData):
+        if(not info):
+            raise ParsingError(
+                'Unable to parse video data. Please try again.')
+
+        ytInitialData = json.loads(info.group(1))
+        # print(ytInitialData)
+        contents = ytInitialData.get('contents')
+        if(not contents):
             raise VideoUnavailable('Video is unavailable (may be private).')
 
-        columns = ytInitialData['contents']['twoColumnWatchNextResults']
+        columns = contents.get('twoColumnWatchNextResults')
 
         if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
             error_message = 'Video does not have a chat replay.'
             try:
                 error_message = self.__parse_message_runs(
                     columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
+            except KeyError:
+                pass
             finally:
                 raise NoChatReplay(error_message)
+
 
         livechat_header = columns['conversationBar']['liveChatRenderer']['header']
         viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
@@ -433,6 +430,7 @@ class ChatReplayDownloader:
                                     replay_chat_item_action['videoOffsetTimeMsec'])
                             action = replay_chat_item_action['actions'][0]
 
+                        action.pop('clickTrackingParams', None)
                         action_name = list(action.keys())[0]
                         if('item' not in action[action_name]):
                             # not a valid item to display (usually message deleted)
