@@ -1,0 +1,97 @@
+{
+    "default": {
+        "template": "{time_text|timestamp}{author_badges}{amount}{author_display_name|author_name}: {message}",
+        "keys": {
+            "time_text": {
+                "prefix": "[",
+                "suffix": "] "
+            },
+            "timestamp": {
+                "prefix": "[",
+                "format": "%Y-%m-%d %H:%M:%S",
+                "suffix": "] "
+            },
+            "author_badges": {
+                "prefix": "(",
+                "separator": ", ",
+                "suffix": ") "
+            },
+            "amount": {
+                "prefix": "*",
+                "suffix": "* "
+            }
+        }
+    },
+    "24_hour": {
+        "template": "{time_text|timestamp}{author_badges}{amount}{author_display_name|author_name}: {message}",
+        "keys": {
+            "time_text": {
+                "prefix": "[",
+                "suffix": "] "
+            },
+            "timestamp": {
+                "prefix": "[",
+                "format": "%H:%M",
+                "suffix": "] "
+            },
+            "author_badges": {
+                "prefix": "(",
+                "separator": ", ",
+                "suffix": ") "
+            },
+            "amount": {
+                "prefix": "*",
+                "suffix": "* "
+            }
+        }
+    },
+    "test": [
+        {
+            "matching": [
+                "text_message"
+            ],
+            "template": "{time_text|timestamp}{author_badges}{amount}{author_display_name|author_name}: {message}",
+            "keys": {
+                "time_text": {
+                    "prefix": "[",
+                    "suffix": "] "
+                },
+                "timestamp": {
+                    "prefix": "[",
+                    "format": "%Y-%m-%d %H:%M:%S",
+                    "suffix": "] "
+                },
+                "author_badges": {
+                    "prefix": "(",
+                    "separator": ", ",
+                    "suffix": ") "
+                },
+                "amount": {
+                    "prefix": "*",
+                    "suffix": "* "
+                }
+            }
+        },
+        {
+            "matching": [
+                "ban_user"
+            ],
+            "template": "{timestamp}{banned_user} was {ban_duration|ban_type}.",
+            "keys": {
+                "timestamp": {
+                    "prefix": "[",
+                    "format": "%Y-%m-%d %H:%M:%S",
+                    "suffix": "] "
+                },
+
+                "ban_duration": {
+                    "prefix": "timed out for ",
+                    "suffix": " seconds"
+                },
+                "ban_type":{
+                    "suffix": "ly banned"
+                }
+            }
+        }
+    ]
+}
