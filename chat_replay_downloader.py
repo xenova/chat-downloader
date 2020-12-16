@@ -12,6 +12,7 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import codecs
 from urllib import parse
+import formatting
 
 
 class CallbackFunction(Exception):
@@ -121,10 +122,11 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    def __init__(self, cookies=None):
+    def __init__(self, template, template_parts, cookies=None):
         """Initialise a new session for making requests."""
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
+        self.item_formatter = formatting.ItemFormatter(template, **template_parts)
 
         cj = MozillaCookieJar(cookies)
         if cookies is not None:
@@ -187,18 +189,9 @@ class ChatReplayDownloader:
 
     def message_to_string(self, item):
         """
-        Format item for printing to standard output.
-        [time] (badges) *money* author: message,
-        where (badges) and *money* are optional.
+        Format item according to formatter
         """
-        return '[{}] {}{}{}: {}'.format(
-            item['time_text'] if 'time_text' in item else (
-                self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
-            '({}) '.format(item['badges']) if 'badges' in item else '',
-            '*{}* '.format(item['amount']) if 'amount' in item else '',
-            item.get('author', ''),
-            item.get('message', '')
-        )
+        return self.item_formatter.format(item)
 
     def print_item(self, item):
         """
@@ -580,8 +573,38 @@ if __name__ == '__main__':
 
     parser.add_argument('-start_time', '-from', default=0,
                         help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
+
     parser.add_argument('-end_time', '-to', default=None,
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
+
+    parser.add_argument('-f', '--format', default='${time}${badges}${amount}${author}: ${message}',
+                        help='format string for output text\n'
+                        '(default: %(default)s)')
+
+    parser.add_argument('-tf', '--timestamp-format', default='[%Y-%m-%d %H:%M:%S] ',
+                        help='format string for timestamp in output text\n'
+                        r'appears in archived chat, ${time} part''\n'
+                        '(default: %(default)s)')
+
+    parser.add_argument('-bf', '--badges-format', default='({}) ',
+                        help='format string for badges in output text\n'
+                        r'appears in archived chat, ${badges} part''\n'
+                        '(default: %(default)s)')
+
+    parser.add_argument('-amf', '--amount-format', default='*{}* ',
+                        help='format string for amount in output text\n'
+                        r'appears in archived chat, ${amount} part''\n'
+                        '(default: %(default)s)')
+
+    parser.add_argument('-auf', '--author-format', default='{}',
+                        help='format string for author in output text\n'
+                        r'appears in archived chat, ${author} part''\n'
+                        '(default: %(default)s)')
+
+    parser.add_argument('-mf', '--message-format', default='{}',
+                        help='format string for message in output text\n'
+                        r'appears in archived chat, ${message} part''\n'
+                        '(default: %(default)s)')
 
     parser.add_argument('-message_type', choices=['messages', 'superchat', 'all'], default='messages',
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
@@ -609,8 +632,16 @@ if __name__ == '__main__':
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
+    format_parts = {
+        'timestamp': args.timestamp_format,
+        'badges': args.badges_format,
+        'amount': args.amount_format,
+        'author': args.author_format,
+        'message': args.message_format
+    }
+
     try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+        chat_downloader = ChatReplayDownloader(args.format, format_parts, cookies=args.cookies)
 
         num_of_messages = 0
 
