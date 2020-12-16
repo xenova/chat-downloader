@@ -1,5 +1,9 @@
 """File for defining errors"""
 
+class InvalidParameter(Exception):
+    """Raised if an invalid parameter is specified."""
+    pass
+
 class RetriesExceeded(Exception):
     """Raised after the maximum number of retries has been reached."""
     pass
