@@ -583,27 +583,27 @@ if __name__ == '__main__':
 
     parser.add_argument('-tf', '--timestamp-format', default='[%Y-%m-%d %H:%M:%S] ',
                         help='format string for timestamp in output text\n'
-                        r'appears in archived chat, ${time} part''\n'
+                        r'part ${time} of format string''\n'
                         '(default: %(default)s)')
 
     parser.add_argument('-bf', '--badges-format', default='({}) ',
                         help='format string for badges in output text\n'
-                        r'appears in archived chat, ${badges} part''\n'
+                        r'part ${badges} of format string''\n'
                         '(default: %(default)s)')
 
     parser.add_argument('-amf', '--amount-format', default='*{}* ',
-                        help='format string for amount in output text\n'
-                        r'appears in archived chat, ${amount} part''\n'
+                        help='format string for donation amount in output text\n'
+                        r'part ${amount} of format string''\n'
                         '(default: %(default)s)')
 
     parser.add_argument('-auf', '--author-format', default='{}',
-                        help='format string for author in output text\n'
-                        r'appears in archived chat, ${author} part''\n'
+                        help='format string for message author in output text\n'
+                        r'part ${author} of format string''\n'
                         '(default: %(default)s)')
 
     parser.add_argument('-mf', '--message-format', default='{}',
-                        help='format string for message in output text\n'
-                        r'appears in archived chat, ${message} part''\n'
+                        help='format string for chat message in output text\n'
+                        r'part ${message} of format string''\n'
                         '(default: %(default)s)')
 
     parser.add_argument('-message_type', choices=['messages', 'superchat', 'all'], default='messages',
