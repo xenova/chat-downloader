@@ -12,8 +12,11 @@ from .sites.common import ChatDownloader
 from .output.continuous_write import ContinuousWriter
 
 from .utils import (
-    update_dict_without_overwrite
+    update_dict_without_overwrite,
+    safe_print_text
 )
+
+from .formatting.format import ItemFormatter
 
 # from .errors import (
 #     LoadError
@@ -69,8 +72,18 @@ def main():
 
 # choices=['messages', 'superchat', 'all']
 # TODO message groups and message types?
-    parser.add_argument('--message_types', type=lambda s: [item.strip() for item in re.split('[\s,;]+',s)], default=default_params['message_types'],
-                        help='comma separated list of types of messages to include [YouTube only]\n(default: %(default)s)')
+    splitter = lambda s: [item.strip() for item in re.split('[\s,;]+',s)]
+    # joiner = lambda s: str(s)[1:-1] if isinstance(s, (list,tuple)) else s
+    #', '.join(s) if s else s
+
+    group = parser.add_mutually_exclusive_group()
+
+    group.add_argument('--message_groups', type=splitter, default=default_params['message_groups'],
+                        help='comma separated list of groups of messages to include\n(default: %(default)s)')
+
+    group.add_argument('--message_types', type=splitter, default=default_params['message_types'],
+                        help='comma separated list of types of messages to include\n(default: %(default)s)')
+
 
     parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
@@ -133,35 +146,38 @@ def main():
 
 
     def test_callback(item):
-        print(item.get('timestamp'), item.get('author_name'), item.get('message'), flush=True)
+        pass
 
     # TODO make command line args for these:
-    params = {
+    other_params = {
         'indent':4,
         'sort_keys':True,
         'overwrite':True, # default to be False
 
         # if args.format set... add to params dict
-        'formatting':'something' # TODO
+        'format':'something' # TODO
     }
+    formatter = ItemFormatter()
+
 
 
     callback = None # test_callback
 
     if(args.output):
-        output_file = ContinuousWriter(args.output, **params)
+        output_file = ContinuousWriter(args.output, **other_params)
 
         def write_to_file(item):
-            #print(item)
-            test_callback(item)
-            if(params.get('logging') == 'normal'):
-                pass
-                # is a chat message, print it
-                # print(data)
-                # if(params.get('safe_print')):
-                #     self.safe_print_item(data)
-                # else:
-                #     self.print_item(data)
+            if(program_params.get('logging') == 'normal'):
+
+                formatted = formatter.format(item, format_name='test')#
+                #print(item)
+                if formatted:
+                    if program_params.get('safe_print'):
+                        safe_print_text(formatted)
+                    else:
+                        print(formatted, flush=True)
+                else:
+                    print('unable to format', item)
 
             output_file.write(item)
 
@@ -173,7 +189,7 @@ def main():
         program_params['callback'] = callback
 
 
-        print(program_params)
+        #print(program_params)
         messages = downloader.get_chat_messages(program_params) # TODO  returns None?
         #q.close()
 
@@ -191,6 +207,10 @@ def main():
 
     except KeyboardInterrupt:
         print('keyboard interrupt')
+
+    finally:
+        if(args.output):
+            output_file.close()
     # except Exception as e:
     #     print('other exception')
     #     print(e)
@@ -215,83 +235,83 @@ def main():
     #print(q)
     #print('got',len(z),'messages')
 
-    return
+#     return
 
 
-    try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+#     try:
+#         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
 
-        num_of_messages = 0
+#         num_of_messages = 0
 
-        def print_item(item):
-            chat_downloader.print_item(item)
+#         def print_item(item):
+#             chat_downloader.print_item(item)
 
-        def write_to_file(item):
+#         def write_to_file(item):
 
-            # only file format capable of appending properly
-            with open(args.output, 'a', encoding='utf-8') as f:
-                if('ticker_duration' not in item):  # needed for duplicates
-                    num_of_messages += 1
-                    print_item(item)
-                    text = chat_downloader.message_to_string(item)
-                    print(text, file=f)
+#             # only file format capable of appending properly
+#             with open(args.output, 'a', encoding='utf-8') as f:
+#                 if('ticker_duration' not in item):  # needed for duplicates
+#                     num_of_messages += 1
+#                     print_item(item)
+#                     text = chat_downloader.message_to_string(item)
+#                     print(text, file=f)
 
-        callback = None if args.output is None else print_item
-        if(args.output is not None):
-            if(args.output.endswith('.json')):
-                pass
-            elif(args.output.endswith('.csv')):
-                fieldnames = []
-            else:
-                open(args.output, 'w').close()  # empty the file
-                callback = write_to_file
+#         callback = None if args.output is None else print_item
+#         if(args.output is not None):
+#             if(args.output.endswith('.json')):
+#                 pass
+#             elif(args.output.endswith('.csv')):
+#                 fieldnames = []
+#             else:
+#                 open(args.output, 'w').close()  # empty the file
+#                 callback = write_to_file
 
-        chat_messages = chat_downloader.get_chat_replay(
-            args.url,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            message_types=args.message_types,
-            chat_type=args.chat_type,
-            callback=callback
-        )
+#         chat_messages = chat_downloader.get_chat_replay(
+#             args.url,
+#             start_time=args.start_time,
+#             end_time=args.end_time,
+#             message_types=args.message_types,
+#             chat_type=args.chat_type,
+#             callback=callback
+#         )
 
-        if(args.output is not None):
-            if(args.output.endswith('.json')):
-                num_of_messages = len(chat_messages)
-                with open(args.output, 'w') as f:
-                    json.dump(chat_messages, f, sort_keys=True)
+#         if(args.output is not None):
+#             if(args.output.endswith('.json')):
+#                 num_of_messages = len(chat_messages)
+#                 with open(args.output, 'w') as f:
+#                     json.dump(chat_messages, f, sort_keys=True)
 
-            elif(args.output.endswith('.csv')):
-                num_of_messages = len(chat_messages)
-                fieldnames = []
-                for message in chat_messages:
-                    fieldnames = list(set(fieldnames + list(message.keys())))
-                fieldnames.sort()
+#             elif(args.output.endswith('.csv')):
+#                 num_of_messages = len(chat_messages)
+#                 fieldnames = []
+#                 for message in chat_messages:
+#                     fieldnames = list(set(fieldnames + list(message.keys())))
+#                 fieldnames.sort()
 
-                with open(args.output, 'w', newline='', encoding='utf-8') as f:
-                    fc = csv.DictWriter(f, fieldnames=fieldnames)
-                    fc.writeheader()
-                    fc.writerows(chat_messages)
+#                 with open(args.output, 'w', newline='', encoding='utf-8') as f:
+#                     fc = csv.DictWriter(f, fieldnames=fieldnames)
+#                     fc.writeheader()
+#                     fc.writerows(chat_messages)
 
-            print('Finished writing', num_of_messages,
-                  'messages to', args.output, flush=True)
+#             print('Finished writing', num_of_messages,
+#                   'messages to', args.output, flush=True)
 
-    except InvalidURL as e:
-        print('[Invalid URL]', e)
-    except ParsingError as e:
-        print('[Parsing Error]', e)
-    except NoChatReplay as e:
-        print('[No Chat Replay]', e)
-    except VideoUnavailable as e:
-        print('[Video Unavailable]', e)
-    except TwitchError as e:
-        print('[Twitch Error]', e)
-    except (LoadError, CookieError) as e:
-        print('[Cookies Error]', e)
-    except KeyboardInterrupt:
-        print('Interrupted.')
-    return 0
+#     except InvalidURL as e:
+#         print('[Invalid URL]', e)
+#     except ParsingError as e:
+#         print('[Parsing Error]', e)
+#     except NoChatReplay as e:
+#         print('[No Chat Replay]', e)
+#     except VideoUnavailable as e:
+#         print('[Video Unavailable]', e)
+#     except TwitchError as e:
+#         print('[Twitch Error]', e)
+#     except (LoadError, CookieError) as e:
+#         print('[Cookies Error]', e)
+#     except KeyboardInterrupt:
+#         print('Interrupted.')
+#     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())  # pragma: no cover
+# if __name__ == "__main__":
+#     sys.exit(main())  # pragma: no cover
