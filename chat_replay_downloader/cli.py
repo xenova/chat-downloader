@@ -67,6 +67,8 @@ def main():
     parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
                         help='name of cookies file\n(default: %(default)s)')
 
+    # TODO
+    # add --calculate_start_time as a tag?
 
     # Additional params [Site Specific]
 
@@ -146,7 +148,20 @@ def main():
 
 
     def test_callback(item):
-        pass
+
+
+        formatted = formatter.format(item, format_name='test')#
+        #print(item)
+        if formatted:
+            if program_params.get('logging') in ('debug', 'normal'):
+                if program_params.get('safe_print'):
+                    safe_print_text(formatted)
+                else:
+                    print(formatted, flush=True)
+        else:
+            if(False and program_params.get('logging') in ('debug', 'errors_only')):
+                print('No format specified for type: ', item.get('message_type'))
+                print(item)
 
     # TODO make command line args for these:
     other_params = {
@@ -167,23 +182,13 @@ def main():
         output_file = ContinuousWriter(args.output, **other_params)
 
         def write_to_file(item):
-            if(program_params.get('logging') == 'normal'):
-
-                formatted = formatter.format(item, format_name='test')#
-                #print(item)
-                if formatted:
-                    if program_params.get('safe_print'):
-                        safe_print_text(formatted)
-                    else:
-                        print(formatted, flush=True)
-                else:
-                    print('unable to format', item)
+            test_callback(item)
 
             output_file.write(item)
 
         callback = write_to_file
     else:
-        callback = None#test_callback
+        callback = test_callback#None#test_callback
 
     try:
         program_params['callback'] = callback
