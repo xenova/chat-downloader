@@ -275,7 +275,8 @@ class TwitchChatDownloader(ChatDownloader):
         invalid_message_types = 'text_message' not in (
             self.get_param_value(params, 'message_types') or [])
         if invalid_message_groups and invalid_message_types:
-            raise InvalidParameter('Custom method types/groups are not supported for Twitch VODs/clips')
+            raise InvalidParameter(
+                'Custom method types/groups are not supported for Twitch VODs/clips')
 
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
@@ -382,8 +383,8 @@ class TwitchChatDownloader(ChatDownloader):
                 # image_url_1x image_url_2x image_url_4x
                 # 18px x 18px, 36px x 36px, and 72px x 72px.
 
-                image_urls = [(new_badge.pop('image_url_{}x'.format(
-                    i[0]), ''), i[1]) for i in ((1, 18), (2, 36), (3, 72))]
+                image_urls = [
+                    (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
                 if image_urls:
                     new_badge['icons'] = []
 
