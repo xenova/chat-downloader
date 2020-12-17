@@ -83,12 +83,11 @@
                     "format": "%Y-%m-%d %H:%M:%S",
                     "suffix": "] "
                 },
-
                 "ban_duration": {
                     "prefix": "timed out for ",
                     "suffix": " seconds"
                 },
-                "ban_type":{
+                "ban_type": {
                     "suffix": "ly banned"
                 }
             }

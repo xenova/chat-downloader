@@ -70,20 +70,19 @@ class ItemFormatter:
                     return str(value)
                 # print(value)
 
-                #return ''  # value
+                # return ''  # value
 
             #
 
         return ''  # no match, return empty
 
-    def format(self, item, format_name = 'default', format_object=None):
+    def format(self, item, format_name='default', format_object=None):
         if format_object is None:
             format_object = self.format_file.get(format_name)
 
-
         if isinstance(format_object, list):
             format_object = next((x for x in format_object if item.get(
-            'message_type') in x.get('matching')), None)
+                'message_type') in x.get('matching')), None)
 
         if not format_object:
             return  # raise no format given
@@ -92,50 +91,61 @@ class ItemFormatter:
         template = format_object.get('template')
         keys = format_object.get('keys')
 
-        substitution = re.sub(self._INDEX_REGEX, lambda result: self.replace(result, item, keys), template)
+        substitution = re.sub(self._INDEX_REGEX, lambda result: self.replace(
+            result, item, keys), template)
         empty_substitution = re.sub(self._INDEX_REGEX, '', template)
         #print(substitution, empty_substitution)
         # returns (new, num_modifications)
-        if substitution != empty_substitution: # some substitution made
+        if substitution != empty_substitution:  # some substitution made
             return substitution
         else:
             return None
-
 
 
 item1 = {
     "action_type": "text_message",
     "author_badges": [
         {
-            "description": "12-Month Subscriber",
-            "months": 12,
-            "title": "12-Month Subscriber",
+            "badge_id": "5d9f2208-5dd8-11e7-8513-2ff4adfae661",
+            "click_action": "subscribe_to_channel",
+            "click_url": "",
+            "description": "1-Month Subscriber",
+            "icons": [
+                {
+                        "height": 18,
+                        "id": "18x18",
+                        "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/1",
+                        "width": 18
+                },
+                {
+                    "height": 36,
+                    "id": "36x36",
+                    "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/2",
+                    "width": 36
+                },
+                {
+                    "height": 72,
+                    "id": "72x72",
+                    "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/3",
+                    "width": 72
+                }
+            ],
+            "months": 1,
+            "title": "1-Month Subscriber",
             "type": "subscriber",
-            "version": 12
-        },
-        {
-            "badge_id": "ca980da1-3639-48a6-95a3-a03b002eb0e5",
-            "click_action": "visit_url",
-            "click_url": "https://www.twitch.tv/overwatchleague",
-            "description": "OWL All-Access Pass 2019",
-            "image_url_1x": "https://static-cdn.jtvnw.net/badges/v1/ca980da1-3639-48a6-95a3-a03b002eb0e5/1",
-            "image_url_2x": "https://static-cdn.jtvnw.net/badges/v1/ca980da1-3639-48a6-95a3-a03b002eb0e5/2",
-            "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/ca980da1-3639-48a6-95a3-a03b002eb0e5/3",
-            "title": "OWL All-Access Pass 2019",
-            "type": "overwatch_league_insider_2019A",
-            "version": 1
+            "version": 0
         }
     ],
-    "author_display_name": "OLUWAKANYINSOLAALBINO",
-    "author_id": "430600257",
-    "author_name": "oluwakanyinsolaalbino",
-    "channel_id": "71190292",
-    "colour": "#00FFFB",
+    "author_display_name": "pr0faka",
+    "author_id": "545470622",
+    "author_name": "pr0faka",
+    "channel_id": "151283108",
+    "colour": "#008000",
     "is_moderator": False,
-    "message": "VeryPog",
-    "message_id": "401ebf19-22c8-4a72-a3fe-a60d4b399aed",
+    "message": "people born in 1988 have a bad time picking user names",
+    "message_id": "ac48cdd8-af9b-4d4a-be5a-7eaaacbd212a",
     "message_type": "text_message",
-    "timestamp": 1607999278938000
+    "timestamp": 1608220470845000
 }
 item2 = {
     "action_type": "add_chat_item",
