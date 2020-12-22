@@ -181,7 +181,7 @@ class TwitchChatDownloader(ChatDownloader):
 
     _REMAPPING = {
         # 'origID' : ('mapped_id', 'remapping_function')
-        '_id': 'id',
+        '_id': 'message_id',
         'created_at': ('timestamp', 'parse_timestamp'),
         'commenter': 'author_info',
 
@@ -328,7 +328,7 @@ class TwitchChatDownloader(ChatDownloader):
         }
         clip = self._session_post(self._GQL_API_URL,
                                   data=json.dumps(query).encode(),
-                                  headers={'Client-ID': self._CLIENT_ID})['data']['clip']
+                                  headers={'Client-ID': self._CLIENT_ID})['data']['clip'].json()
 
         # TODO error checking
         # print(clip)
