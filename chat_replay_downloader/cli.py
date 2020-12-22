@@ -13,7 +13,8 @@ from .output.continuous_write import ContinuousWriter
 
 from .utils import (
     update_dict_without_overwrite,
-    safe_print_text
+    safe_print_text,
+    multi_get
 )
 
 from .formatting.format import ItemFormatter
@@ -37,9 +38,9 @@ def main():
     # PROGRAM PARAMS
     parser.add_argument('url', help='YouTube/Twitch video URL')
 
-    parser.add_argument('--start_time', '-s', default=default_params['start_time'],
+    parser.add_argument('--start_time', '-s', type=float, default=default_params['start_time'],
                         help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
-    parser.add_argument('--end_time', '-e', default=default_params['end_time'],
+    parser.add_argument('--end_time', '-e', type=float, default=default_params['end_time'],
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
     parser.add_argument('--output', '-o', default=default_params['output'],
@@ -148,9 +149,14 @@ def main():
 
 
     def test_callback(item):
+        formatted = '[{}] {}: {}'.format(
+            multi_get(item, 'time_text'),
+            multi_get(item, 'author', 'name'),
+            multi_get(item, 'message'),
 
+        )
 
-        formatted = formatter.format(item, format_name='test')#
+        #formatted = formatter.format(item, format_name='default')#
         #print(item)
         if formatted:
             if program_params.get('logging') in ('debug', 'normal'):
@@ -159,7 +165,8 @@ def main():
                 else:
                     print(formatted, flush=True)
         else:
-            if(False and program_params.get('logging') in ('debug', 'errors_only')):
+            # False and
+            if(program_params.get('logging') in ('debug', 'errors_only')):
                 print('No format specified for type: ', item.get('message_type'))
                 print(item)
 
