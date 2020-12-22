@@ -2,6 +2,7 @@
 
 from .youtube import YouTubeChatDownloader
 from .twitch import TwitchChatDownloader
+from .facebook import FacebookChatDownloader
 
 from .common import ChatDownloader
 
