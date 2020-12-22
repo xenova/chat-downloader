@@ -14,8 +14,18 @@
 
 * Twitch - add support for --message_types (mostly for live)
 
+* YouTube
+- make list of all possible actions for testing along with dummy data
 
 
 
 Possible params:
     - shorten URL or not
+
+
+# Websites to add:
+- facebook.com (in progress)
+- Vimeo.com
+- dlive.tv
+- instagib.tv
+- dailymotion.com
