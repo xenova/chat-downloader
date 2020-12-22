@@ -148,20 +148,22 @@ def multi_get(dictionary, *keys, default = None):
             return default
     return current
 
+def safe_convert_text(text):
+    message = emoji.demojize(text)
+
+    try:
+        return message.encode(
+            'utf-8', 'ignore').decode('utf-8', 'ignore')
+    except UnicodeEncodeError:
+        # in the rare case that standard output does not support utf-8
+        return message.encode(
+            'ascii', 'ignore').decode('ascii', 'ignore')
+
+
 def safe_print_text(text):
     """
     Ensure printing to standard output can be done safely (especially on Windows).
     There are usually issues with printing emojis and non utf-8 characters.
 
     """
-    message = emoji.demojize(text)
-
-    try:
-        safe_string = message.encode(
-            'utf-8', 'ignore').decode('utf-8', 'ignore')
-        print(safe_string, flush=True)
-    except UnicodeEncodeError:
-        # in the rare case that standard output does not support utf-8
-        safe_string = message.encode(
-            'ascii', 'ignore').decode('ascii', 'ignore')
-        print(safe_string, flush=True)
+    print(safe_convert_text(text), flush=True)
