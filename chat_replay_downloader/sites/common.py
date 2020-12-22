@@ -158,25 +158,38 @@ class ChatDownloader:
                     'The file "{}" could not be found.'.format(cookies))
         self.session.cookies = cj
 
+    def update_session_headers(self, new_headers):
+        self.session.headers.update(new_headers)
+
+    def get_cookies_dict(self):
+        return requests.utils.dict_from_cookiejar(self.session.cookies)
+
+    def get_cookie_value(self, name, default=None):
+        return self.get_cookies_dict().get(name, default)
+
     def close(self):
         self.session.close()
 
 
-    def _session_post(self, url, data = {}, headers={}):
+    def _session_post(self, url, **kwargs):
         """Make a request using the current session."""
         #print('_session_post', url, data, headers)
 
         #update_dict_without_overwrite
-        new_headers = {**self.session.headers, **headers}
-        return self.session.post(url, data=data, headers=new_headers).json()
+        # print('BEFORE',kwargs)
+        # #new_headers = {**self.session.headers, **kwargs.get('headers',{})}
+        # kwargs['headers'] = {**self.session.headers, **kwargs.get('headers',{})}
+        # print('AFTER',kwargs)
+        #, data=data, headers=new_headers, params=1
+        return self.session.post(url, **kwargs)
 
-    def _session_get(self, url):
+    def _session_get(self, url, **kwargs):
         """Make a request using the current session."""
-        return self.session.get(url)
+        return self.session.get(url, **kwargs)
 
-    def _session_get_json(self, url):
+    def _session_get_json(self, url, **kwargs):
         """Make a request using the current session and get json data."""
-        s = self._session_get(url)
+        s = self._session_get(url, **kwargs)
 
         try:
             return s.json()
@@ -231,15 +244,18 @@ class ChatDownloader:
                     'Unable to call callback function '+callback.__name__)
 
 
+    # TODO make this a class with a __dict__ attribute
     @staticmethod
     def create_image(url, width = None, height = None, id = None):
-        image = {}
-        if url:
-            image['url'] = url
+        image = {
+            'url': url
+        }
         if width:
             image['width'] = width
         if height:
             image['height'] = height
+
+        # TODO remove id?
         if width and height and not id:
             image['id'] = '{}x{}'.format(width,height)
         elif id:
