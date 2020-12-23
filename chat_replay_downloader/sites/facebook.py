@@ -184,20 +184,46 @@ class FacebookChatDownloader(ChatDownloader):
     @staticmethod
     def _parse_attachment_styles(item):
         parsed = {}
-        target = multi_get(item, 'style_type_renderer', 'attachment', 'target')
-        if not target:
+        item_info = None
+
+        for t in ('media', 'target'): # In order of precedence
+            item_info = multi_get(item, 'style_type_renderer', 'attachment', t)
+            if item_info:
+                print("GOT IT: ", item_info)
+                break # found something to parse
+
+        if not item_info:
+            print('UNKNOWN TARGET')
+            print(item)
             return parsed
 
-        original_target_type = target.get('__typename')
+        original_target_type = item_info.get('__typename')
         parsed['type'] = camel_case_split(original_target_type)
-        parsed['id'] = target.get('id')
+        parsed['id'] = item_info.get('id')
 
         if original_target_type == 'VideoTipJarPayment':
 
-            parsed['icon'] = item.get('stars_image_on_star_quantity')
-            parsed['quantity'] = item.get('spark_quantity')
+            parsed['icon'] = item_info.get('stars_image_on_star_quantity')
+            parsed['quantity'] = item_info.get('spark_quantity')
             parsed['text'] = 'Sent {} Star{}'.format(
                 parsed['quantity'], 's' if parsed['quantity'] != 1 else '')
+        elif original_target_type == 'Sticker':
+            parsed['label'] = item_info.get('label')
+            image = item_info.get('image')
+            if image:
+                parsed['image'] = ChatDownloader.create_image(
+                    image.get('uri'),image.get('width'),image.get('height'),
+                )
+
+        elif original_target_type == 'Photo':
+            print('IMAGE')
+            image = item_info.get('image') or item_info.get('fallback_image')
+            print(image)
+            if image:
+                parsed['image'] = ChatDownloader.create_image(
+                    image.get('uri'),image.get('width'),image.get('height'),
+                )
+
         elif original_target_type == 'Other...':
             pass
         else:
@@ -316,8 +342,11 @@ class FacebookChatDownloader(ChatDownloader):
                                  FacebookChatDownloader._REMAP_FUNCTIONS, key, node[key])
 
         author_info = info.pop('author', None)
-        info['author'] = {}
+        #info['author'] = {}
         if author_info:
+            ChatDownloader.create_author_info(info, 'is_author_banned', 'is_author_banned',
+                                              'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker', 'author_badges')
+
             for key in author_info:
                 ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
                                      FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
@@ -330,17 +359,9 @@ class FacebookChatDownloader(ChatDownloader):
                     info['author']['images'].append(
                         ChatDownloader.create_image(url, size[1], size[1]))
 
-            author_info_keys = ('is_author_banned', 'is_author_banned',
-                                'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker')
-            for key in author_info_keys:
-                author_info_item = info.pop(key, None)
-                new_key = key.replace('_author', '')
-                if author_info_item is not None:
-                    info['author'][new_key] = author_info_item
-
-        author_badges = info.pop('author_badges', None)
-        if author_badges:
-            info['author']['badges'] = author_badges
+        # author_badges = info.pop('author_badges', None)
+        # if author_badges:
+        #     info['author']['badges'] = author_badges
 
         in_reply_to = info.pop('comment_parent', None)
         if isinstance(in_reply_to, dict) and in_reply_to:
@@ -364,6 +385,8 @@ class FacebookChatDownloader(ChatDownloader):
 
         if info.get('attachments') == []:
             info.pop('attachments')
+            # print("AAAAAAAA")
+            # print(info.get('attachments'), node)
 
         return info
 

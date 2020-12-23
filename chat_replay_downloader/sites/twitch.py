@@ -163,7 +163,6 @@ class TwitchChatDownloader(ChatDownloader):
 
     _REMAP_FUNCTIONS = {
         'parse_timestamp': timestamp_to_microseconds,  # lambda x :  * 1000,
-        'get_body': lambda x: x.get('body'),
         'parse_author_images': lambda x: TwitchChatDownloader.parse_author_images(x),
 
         'parse_badges': lambda x: TwitchChatDownloader.parse_badges(x),
@@ -175,15 +174,26 @@ class TwitchChatDownloader(ChatDownloader):
         'replace_with_underscores': replace_with_underscores,
 
 
-        'parse_subscription_type': lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x)
+        'parse_subscription_type': lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x),
+        'parse_commenter': lambda x: TwitchChatDownloader.parse_commenter(x),
+        'parse_message_info': lambda x: TwitchChatDownloader.parse_message_info(x),
+    }
+    _AUTHOR_REMAPPING = {
+        '_id': ('id', 'parse_int'),
+        'name': 'name',
+        'display_name': 'display_name',
+        'logo': ('images', 'parse_author_images'),
+        'type': 'type',
+        'created_at': ('created_at', 'parse_timestamp'),
+        # 'updated_at': ('updated_at', 'parse_timestamp'),
+        'bio': 'bio'
 
     }
-
     _REMAPPING = {
         # 'origID' : ('mapped_id', 'remapping_function')
         '_id': 'message_id',
         'created_at': ('timestamp', 'parse_timestamp'),
-        'commenter': 'author_info',
+        'commenter': ('author', 'parse_commenter'),
 
         'content_offset_seconds': 'time_in_seconds',
 
@@ -193,17 +203,7 @@ class TwitchChatDownloader(ChatDownloader):
         'source': 'source',
         'state': 'state',
         # TODO make sure body vs. fragments okay
-        'message': ('message', 'get_body'),
-
-        'name': 'author_name',
-        'display_name': 'author_display_name',
-        'logo': ('author_images', 'parse_author_images'),
-
-
-        'type': 'author_type',
-
-
-        # TODO 'type' # author type?
+        'message': ('message_info', 'parse_message_info')
     }
 
     @staticmethod
@@ -240,10 +240,19 @@ class TwitchChatDownloader(ChatDownloader):
             info['time_in_seconds'] -= offset
             info['time_text'] = seconds_to_time(int(info['time_in_seconds']))
 
-        author_info = info.pop('author_info', None)
-        if author_info:
-            update_dict_without_overwrite(
-                info, TwitchChatDownloader._parse_item(author_info))
+        message_info = info.pop('message_info', None)
+        if message_info:
+            info['message'] = message_info.get('message')
+            info['author']['badges'] = message_info.get('badges')
+            info['author']['colour'] = message_info.get('colour')
+
+        # author_info = info.pop('author_info', None)
+        # if author_info:
+        #     # update_dict_without_overwrite(
+        #     #     info, TwitchChatDownloader._parse_item(author_info))
+
+        #     ChatDownloader.create_author_info(
+        #         info, 'author_type', 'author_display_name', 'author_name', 'author_images')
 
         return info
 
@@ -358,30 +367,21 @@ class TwitchChatDownloader(ChatDownloader):
     _BADGE_ID_REGEX = r'v1/(.+)/'
 
     @staticmethod
-    def parse_badges(badge_info):
-        info = []
-        if(not badge_info):
-            return info
-
-        for badge in badge_info.split(','):
-            split = badge.split('/')
-            new_badge = {
-                'type': replace_with_underscores(split[0]),
-                'version': int_or_none(split[1], split[1])
-            }
-
-            # TODO skip for subscribers? - different per channel
-            # check for additional information
+    def parse_badge_info(name, version, set_subscriber_badge_info=False):
+        new_badge = {
+            'name': replace_with_underscores(name),
+            'version': int_or_none(version, version)
+        }
+        if name == 'subscriber':
+            if set_subscriber_badge_info:
+                TwitchChatDownloader._set_subscriber_badge_info(new_badge,version)
+        else: # is global emote
             new_badge_info = multi_get(
-                TwitchChatDownloader._BADGE_INFO, split[0], 'versions', split[1]) or {}
+                TwitchChatDownloader._BADGE_INFO, name, 'versions', version) or {}
 
             if new_badge_info:
                 for key in TwitchChatDownloader._BADGE_KEYS:
                     new_badge[key] = new_badge_info.get(key)
-
-                # TODO create image with icons (diff sizes)
-                # image_url_1x image_url_2x image_url_4x
-                # 18px x 18px, 36px x 36px, and 72px x 72px.
 
                 image_urls = [
                     (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
@@ -396,10 +396,39 @@ class TwitchChatDownloader(ChatDownloader):
                     badge_id = re.search(
                         TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
                     if(badge_id):
-                        new_badge['badge_id'] = badge_id.group(1)
+                        new_badge['id'] = badge_id.group(1)
 
-            info.append(new_badge)
+        return new_badge
+
+    @staticmethod
+    def parse_badges(badges):
+        info = []
+        if(not badges):
+            return info
+
+        for badge in badges.split(','):
+            split = badge.split('/')
+            info.append(TwitchChatDownloader.parse_badge_info(
+                split[0], split[1]))
         return info
+
+    @staticmethod
+    def parse_commenter(commenter):
+        info = {}
+        for key in commenter:
+            ChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
+        return info
+
+    @staticmethod
+    def parse_message_info(message):
+        return {
+            'message': message.get('body'),
+            'colour': message.get('user_color'),
+            'badges': list(map(
+                lambda x: TwitchChatDownloader.parse_badge_info(
+                    x.get('_id'), x.get('version'), True), message.get('user_badges') or []))
+        }
 
     _IRC_REMAPPING = {
         # CLEARCHAT
@@ -424,7 +453,7 @@ class TwitchChatDownloader(ChatDownloader):
         # can be empty (which means it depends on dark/light theme)
         'color': 'colour',
         'display-name': 'author_display_name',
-        'user-id': 'author_id',
+        'user-id': ('author_id', 'parse_int'),
         # 'message': 'message', # The message.
 
 
@@ -443,7 +472,7 @@ class TwitchChatDownloader(ChatDownloader):
         'id': 'message_id',
         # (, 'do_nothing'), #already included in badges
         'mod': ('is_moderator', 'parse_bool'),
-        'room-id': 'channel_id',
+        'room-id': ('channel_id', 'parse_int'),
 
         'tmi-sent-ts': ('timestamp', 'multiply_by_1000'),
 
@@ -704,6 +733,11 @@ class TwitchChatDownloader(ChatDownloader):
         _MESSAGE_GROUPS[message_group] += list(value.values())
 
     # print(_MESSAGE_TYPE_REMAPPING)
+    @staticmethod
+    def _set_subscriber_badge_info(badge, months):
+        badge['months'] = int(months)
+        badge['title'] = badge['description'] = '{}-Month Subscriber'.format(
+            months)
 
     @staticmethod
     def _parse_irc_item(match, params={}):  # self, , params
@@ -732,17 +766,23 @@ class TwitchChatDownloader(ChatDownloader):
         # print(badge_metadata,badge_info)
 
         subscriber_badge = next(
-            (x for x in badge_info if x.get('type') == 'subscriber'), None)
+            (x for x in badge_info if x.get('name') == 'subscriber'), None)
         subscriber_badge_metadata = next(
-            (x for x in badge_metadata if x.get('type') == 'subscriber'), None)
+            (x for x in badge_metadata if x.get('name') == 'subscriber'), None)
         if subscriber_badge and subscriber_badge_metadata:
-            months = subscriber_badge_metadata['version']
-            subscriber_badge['months'] = months
-            subscriber_badge['title'] = subscriber_badge['description'] = '{}-Month Subscriber'.format(
-                months)
+            TwitchChatDownloader._set_subscriber_badge_info(subscriber_badge,
+                                                            subscriber_badge_metadata['version'])
 
-        if(info.get('author_badges') == []):  # remove if empty
-            info.pop('author_badges')
+        # if(info.get('author_badges') == []):  # remove if empty
+        #     info.pop('author_badges')
+
+        author_display_name = info.get('author_display_name')
+        if(author_display_name):
+            info['author_name'] = author_display_name.lower()
+
+        ChatDownloader.create_author_info(
+            info, 'author_id', 'author_display_name', 'author_name', 'author_badges')
+
         # for i in range(len(badge_info)):
         #     #print(badge_info, badge_info[i])
         #     #if(i < len(badge_metadata)):
@@ -752,26 +792,22 @@ class TwitchChatDownloader(ChatDownloader):
         #     else:
         #         pass
 
-            # overwrite data if remapping specified
-            # remap = TwitchChatDownloader._BADGE_NAME_REMAPPING.get(
-            #     badge_info[i]['badge'])
-            # if(remap): # must use remapping function
-            #     if(callable(remap)):
-            #         badge_info[i]['name'] = remap(badge_info[i])
-            #     elif(remap):
-            #         badge_info[i]['name'] = remap
-            #     else:
-            #         # TODO debug
-            #         if(params.get('logging') in ('debug', 'errors_only')):
-            #             debug_print('Unknown badge: {}'.format(badge_info[i]))
-            #             debug_print(info)
-            #             print()
+        # overwrite data if remapping specified
+        # remap = TwitchChatDownloader._BADGE_NAME_REMAPPING.get(
+        #     badge_info[i]['badge'])
+        # if(remap): # must use remapping function
+        #     if(callable(remap)):
+        #         badge_info[i]['name'] = remap(badge_info[i])
+        #     elif(remap):
+        #         badge_info[i]['name'] = remap
+        #     else:
+        #         # TODO debug
+        #         if(params.get('logging') in ('debug', 'errors_only')):
+        #             debug_print('Unknown badge: {}'.format(badge_info[i]))
+        #             debug_print(info)
+        #             print()
 
-            #print(badge_info[i], 'remap', remap)
-
-        author_display_name = info.get('author_display_name')
-        if(author_display_name):
-            info['author_name'] = author_display_name.lower()
+        #print(badge_info[i], 'remap', remap)
 
         original_action_type = match.group(2)
 

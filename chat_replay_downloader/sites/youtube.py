@@ -34,7 +34,7 @@ class YouTubeChatDownloader(ChatDownloader):
         return 'YouTube.com'
 
     # Regex provided by youtube-dl
-    _VALID_URL = r"""(?x)^
+    _VALID_URL = r'''(?x)^
                      (
                          (?:https?://|//)                                    # http(s):// or protocol-independent URL
                          (?:(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com/|
@@ -61,7 +61,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         )
                      )
                      (?(1).+)?                                                # if we found the ID, everything can follow
-                     $"""
+                     $'''
 
     _TESTS = [
         # OTHER:
@@ -374,9 +374,12 @@ class YouTubeChatDownloader(ChatDownloader):
         # amount is money with currency
         amount = info.get('amount')
         if amount:
-            pass # TODO split amount into:
+            pass  # TODO split amount into:
             # currency type
             # amount (float)
+
+        ChatDownloader.create_author_info(
+            info, 'author_id', 'author_name', 'author_images', 'author_badges')
 
         time_in_seconds = info.get('time_in_seconds')
         time_text = info.get('time_text')
@@ -452,6 +455,9 @@ class YouTubeChatDownloader(ChatDownloader):
         if(isinstance(item, list)):
             item = item[0]  # rebase
 
+        # TODO add source:
+        # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ=s32-c-k-c0xffffffff-no-rj-mo
+        # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ
         return item.get('thumbnails')
 
     @ staticmethod
@@ -593,10 +599,10 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatDonationAnnouncementRenderer',
 
             'liveChatPaidStickerRenderer',
-            'liveChatModeChangeMessageRenderer', # e.g. slow mode enabled
+            'liveChatModeChangeMessageRenderer',  # e.g. slow mode enabled
 
             # TODO find examples of:
-            'liveChatPurchasedProductMessageRenderer', # product purchased
+            'liveChatPurchasedProductMessageRenderer',  # product purchased
 
 
         ]
@@ -639,10 +645,10 @@ class YouTubeChatDownloader(ChatDownloader):
 
     # Not checked for
     _KNOWN_OTHER_ACTION_TYPES = {
-        'authorBadges':[
+        'authorBadges': [
             'liveChatAuthorBadgeRenderer'
         ],
-        'showLiveChatItemEndpoint':[
+        'showLiveChatItemEndpoint': [
             'liveChatPaidStickerRenderer',
             'liveChatPaidMessageRenderer',
             'liveChatMembershipItemRenderer'
@@ -983,6 +989,8 @@ class YouTubeChatDownloader(ChatDownloader):
         # messages_groups_to_add = self.get_param_value(params, 'message_groups')
                     # TODO make this param a list for more variety
 
+                    # print(data.get('message_type'))
+
                     # user wants everything, keep going TODO True temp
                     if('all' in messages_groups_to_add):
                         pass
@@ -998,7 +1006,9 @@ class YouTubeChatDownloader(ChatDownloader):
                         for message_type in messages_types_to_add or []:
                             valid_message_types.append(message_type)
 
+                        # print(valid_message_types)
                         if(data.get('message_type') not in valid_message_types):
+                            #print(data.get('message_type'),'cont.', flush=True)
                             continue
                         # for key in self._TYPES_OF_MESSAGES:
                         #     #print(key)
@@ -1091,6 +1101,7 @@ class YouTubeChatDownloader(ChatDownloader):
         super().get_chat_messages(params)
 
         url = self.get_param_value(params, 'url')
+
         # messages = YouTubeChatDownloader.get_param_value(params, 'messages')
 
         match = re.search(self._VALID_URL, url)
