@@ -151,9 +151,13 @@ class FacebookChatDownloader(ChatDownloader):
     @staticmethod
     def _parse_feedback(feedback):
         new_feedback = {}
-        edges = multi_get('top_reactions', 'edges')
+        #print('feedback',feedback)
+
+        edges = multi_get(feedback, 'top_reactions', 'edges')
+        #print('edges',edges)
         if not edges:
             return new_feedback
+
 
         new_feedback['reaction_types'] = []
 
@@ -168,8 +172,8 @@ class FacebookChatDownloader(ChatDownloader):
 
             new_feedback['reaction_types'].append(reaction_item)
 
-        new_feedback['count'] = multi_get(feedback, 'reactors', 'count')
-        new_feedback['count_reduced'] = multi_get(
+        new_feedback['total_count'] = multi_get(feedback, 'reactors', 'count')
+        new_feedback['total_count_reduced'] = multi_get(
             feedback, 'reactors', 'count_reduced')
 
         return new_feedback
@@ -181,56 +185,115 @@ class FacebookChatDownloader(ChatDownloader):
 
     # 'StoryAttachmentTipJarPaymentStyleRenderer'
 
+    _ATTACHMENT_REMAPPING = {
+        'url':'url', # facebook redirect url,
+        'source':('source', 'get_body_text'),
+        'title_with_entities':('title', 'get_body_text'),
+
+        'target':('target', 'parse_attachment_info'),
+        'media':('media', 'parse_attachment_info'),
+    }
     @staticmethod
     def _parse_attachment_styles(item):
         parsed = {}
-        item_info = None
-
-        for t in ('media', 'target'): # In order of precedence
-            item_info = multi_get(item, 'style_type_renderer', 'attachment', t)
-            if item_info:
-                print("GOT IT: ", item_info)
-                break # found something to parse
-
-        if not item_info:
-            print('UNKNOWN TARGET')
+        attachment = multi_get(item, 'style_type_renderer', 'attachment')
+        if not attachment:
+            #TODO debug log
+            print('NO ATTACHMENT')
             print(item)
             return parsed
 
-        original_target_type = item_info.get('__typename')
-        parsed['type'] = camel_case_split(original_target_type)
-        parsed['id'] = item_info.get('id')
+        # set texts:
+        for key in attachment:
+            ChatDownloader.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
+                                 FacebookChatDownloader._REMAP_FUNCTIONS, key, attachment[key])
 
-        if original_target_type == 'VideoTipJarPayment':
-
-            parsed['icon'] = item_info.get('stars_image_on_star_quantity')
-            parsed['quantity'] = item_info.get('spark_quantity')
-            parsed['text'] = 'Sent {} Star{}'.format(
-                parsed['quantity'], 's' if parsed['quantity'] != 1 else '')
-        elif original_target_type == 'Sticker':
-            parsed['label'] = item_info.get('label')
-            image = item_info.get('image')
-            if image:
-                parsed['image'] = ChatDownloader.create_image(
-                    image.get('uri'),image.get('width'),image.get('height'),
-                )
-
-        elif original_target_type == 'Photo':
-            print('IMAGE')
-            image = item_info.get('image') or item_info.get('fallback_image')
-            print(image)
-            if image:
-                parsed['image'] = ChatDownloader.create_image(
-                    image.get('uri'),image.get('width'),image.get('height'),
-                )
-
-        elif original_target_type == 'Other...':
-            pass
-        else:
-            print('UNKNOWN ATTACHMENT:', original_target_type)
-            print(item)
+        for key in ('target', 'media'):
+            if parsed.get(key)=={}:
+                parsed.pop(key)
 
         return parsed
+
+
+    _TARGET_MEDIA_REMAPPING = {
+        'id':'id',
+        '__typename':('type','camel_case_split'),
+        'fallback_image':('image', 'parse_image'),
+        'is_playable':'is_playable',
+        'url':'url',
+
+
+        # Sticker
+        'pack':'pack',
+        'label':'label',
+        'image':('image', 'parse_image'),
+
+        # VideoTipJarPayment
+
+        'stars_image_on_star_quantity':'icon',
+        'spark_quantity': 'quantity',
+
+
+
+        # Page
+        'name':'name',
+        'category_name':'category',
+        'address':'address',
+        'overall_star_rating':'overall_star_rating',
+
+        'profile_picture':('profile_picture', 'get_uri')
+
+    }
+
+    _KNOWN_ATTACHMENT_TYPES=[
+        'Sticker',
+        'VideoTipJarPayment',
+        'Page'
+
+
+        # TODO come across, but not accounted for yet
+        # GenericAttachmentMedia
+        # {'style_type_renderer': {'__typename': 'StoryAttachmentFallbackStyleRenderer', 'attachment': {'url': 'https://l.facebook.com/l.php?u=http%3A%2F%2Fnewegg.com%2F&h=AT3PxY-r1WFgskKeg77LeNNaQ88ViKkd-umohiAPfAdHCbGaMcMoPEmaperqYQGVt4IeMA4ooXNftad_3_qCc8MPLb50wWW-X5AtlJtbpjSfTpBRDFGZpJi4P86FivdKmynnM_45tHNhppPeHkpUgqn8xaG0vLg&s=1', 'source': {'text': 'newegg.com'}, 'title_with_entities': {'text': 'Newegg – Shopping Upgraded'}, 'target': {'__typename': 'ExternalUrl', 'url': 'https://l.facebook.com/l.php?u=http%3A%2F%2Fnewegg.com%2F&h=AT3PxY-r1WFgskKeg77LeNNaQ88ViKkd-umohiAPfAdHCbGaMcMoPEmaperqYQGVt4IeMA4ooXNftad_3_qCc8MPLb50wWW-X5AtlJtbpjSfTpBRDFGZpJi4P86FivdKmynnM_45tHNhppPeHkpUgqn8xaG0vLg&s=1', 'id': '226547524203272:407031280717937'}, 'action_links': [], 'media': {'__typename': 'GenericAttachmentMedia', 'fallback_image': {'height': 98, 'uri': 'https://external-cpt1-1.xx.fbcdn.net/safe_image.php?d=AQEebBtcfipi8KSs&w=98&h=98&url=https%3A%2F%2Fc1.neweggimages.com%2FWebResource%2FThemes%2Flogo_newegg_400400.png&cfs=1&_nc_cb=1&_nc_hash=AQE1ivk2Xur8RbGP', 'width': 98}, 'is_playable': False, 'id': '3307569355941096'}, 'tracking': '{}'}, '__module_operation_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentFallbackAttachmentStyle_styleTypeRenderer$normalization.graphql'}, '__module_component_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentFallbackAttachmentStyle.react'}}, 'style_list': ['share', 'fallback']}
+
+        # ExternalUrl
+        # {'style_type_renderer': {'__typename': 'StoryAttachmentFallbackStyleRenderer', 'attachment': {'url': 'https://l.facebook.com/l.php?u=http%3A%2F%2Fpcpartpicker.com%2F&h=AT0XnFZjNQRZwxcHJwTlApUX_2sbm6_oecjHIb6dNGICSMEd4G2H-N83LqwhlDs0_2qz97jhCGWDG8dJUqZxVQ4-Ji-KxFMjxhfeXwJPswke_zACf8psMF67RcU-S-FQBL0q65MoWiAutj845owLWeieZLrMwaE-&s=1', 'source': {'text': 'pcpartpicker.com'}, 'title_with_entities': {'text': 'pcpartpicker.com'}, 'target': {'__typename': 'ExternalUrl', 'url': 'https://l.facebook.com/l.php?u=http%3A%2F%2Fpcpartpicker.com%2F&h=AT0XnFZjNQRZwxcHJwTlApUX_2sbm6_oecjHIb6dNGICSMEd4G2H-N83LqwhlDs0_2qz97jhCGWDG8dJUqZxVQ4-Ji-KxFMjxhfeXwJPswke_zACf8psMF67RcU-S-FQBL0q65MoWiAutj845owLWeieZLrMwaE-&s=1', 'id': '226547524203272:10102341639882116'}, 'action_links': [], 'media': None, 'tracking': '{}'}, '__module_operation_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentFallbackAttachmentStyle_styleTypeRenderer$normalization.graphql'}, '__module_component_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentFallbackAttachmentStyle.react'}}, 'style_list': ['share', 'fallback']}
+
+        # ChatCommandResult
+        # {'style_type_renderer': {'__typename': 'StoryAttachmentChatCommandStyleRenderer', 'attachment': {'target': {'__typename': 'ChatCommandResult', 'attachment_text': {'text': "You'll be notified when StoneMountain64 goes live."}, 'id': '394270931677364'}}, '__module_operation_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentChatCommandAttachmentStyle_styleTypeRenderer$normalization.graphql'}, '__module_component_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentChatCommandAttachmentStyle.react'}}, 'style_list': ['chat_command_result', 'gaming_video_chat_attachment', 'native_templates', 'fallback']}
+
+    ]
+    @staticmethod
+    def _parse_attachment_info(original_item):
+        item = {}
+        if not original_item:
+            return item
+
+
+        for key in original_item:
+            ChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
+                                 FacebookChatDownloader._REMAP_FUNCTIONS, key, original_item[key])
+
+        quantity = item.get('quantity')
+        if quantity:
+            item['text'] = 'Sent {} Star{}'.format(quantity, 's' if quantity != 1 else '')
+
+        # DEBUGGING
+        original_type_name = original_item.get('__typename')
+        if original_type_name not in FacebookChatDownloader._KNOWN_ATTACHMENT_TYPES:
+            print('debug')
+            print('unknown attachment type:',original_type_name)
+            print(original_item)
+            print(item)
+            input()
+
+
+        return item
+
+    @staticmethod
+    def _parse_target(media):
+        item = {}
+
+        return item
 
     @staticmethod
     def _parse_author_badges(item):
@@ -258,7 +321,6 @@ class FacebookChatDownloader(ChatDownloader):
         }
 
     _REMAP_FUNCTIONS = {
-        'test': lambda x: x.get('test'),
         'parse_feedback': lambda x: FacebookChatDownloader._parse_feedback(x),
         'multiply_by_million': lambda x: x*1000000,
         'parse_edit_history': lambda x: x.get('count'),
@@ -272,7 +334,14 @@ class FacebookChatDownloader(ChatDownloader):
 
         'parse_attachment_styles': lambda x: list(map(FacebookChatDownloader._parse_attachment_styles, x)),
 
-        'to_lowercase': lambda x: x.lower()
+        'to_lowercase': lambda x: x.lower(),
+
+        'parse_attachment_info': lambda x: FacebookChatDownloader._parse_attachment_info(x),
+
+        'parse_image': lambda x : ChatDownloader.create_image(x.get('uri'), x.get('width'), x.get('height')),
+        'camel_case_split': camel_case_split,
+
+        'get_uri':lambda x:x.get('uri')
     }
 
     # _MESSAGE_TYPES = {
@@ -320,13 +389,12 @@ class FacebookChatDownloader(ChatDownloader):
 
         'attachments': ('attachments', 'parse_attachment_styles')
 
-        # 'comment_parent':('in_reply_to','parse_item')
     }
 
     _AUTHOR_REMAPPING = {
         'id': 'id',
         'name': 'name',
-        '__typename': 'type',
+        '__typename': ('type','camel_case_split'),
         'url': 'url',
 
         'is_verified': 'is_verified',
@@ -425,10 +493,17 @@ class FacebookChatDownloader(ChatDownloader):
                 response, 'data', 'video', 'feedback', 'top_level_comments')
             edges = top_level_comments.get('edges')[::-1]  # reverse order
 
+            errors = response.get('errors')
+            if errors:
+                # TODO will usually resume getting chat..
+                # maybe add timeout?
+                print('ERRORS DETECTED')
+                print(errors)
+                continue
             # TODO - get pagination working
             # page_info = top_level_comments.get('page_info')
             # after = page_info.get('end_cursor')
-
+            num_to_add = 0
             for edge in edges:
                 node = edge.get('node')
                 if not node:
@@ -440,8 +515,9 @@ class FacebookChatDownloader(ChatDownloader):
 
                 # remove items that have already been parsed
                 if comment_id in last_ids:
-                    print('=', end='', flush=True)
+                    #print('=', end='', flush=True)
                     continue
+
                 last_ids.append(comment_id)
 
                 last_ids = last_ids[-buffer_size:]  # force x items
@@ -453,15 +529,18 @@ class FacebookChatDownloader(ChatDownloader):
 
                 parsed_node = FacebookChatDownloader._parse_live_stream_node(
                     node)
+                # TODO determine whether to add or not
                 message_list.append(parsed_node)
-                print(parsed_node)
+                num_to_add += 1
+                #print(parsed_node)
                 # if(max_messages is not None and len(message_list) >= max_messages):
                 #     return message_list  # if max_messages specified, return once limit has been reached
 
                 self.perform_callback(callback, parsed_node)
                 # print(parsed_node)
 
-            print('got', len(edges), 'message', flush=True)
+            print('got', num_to_add, 'messages','({})'.format(len(edges)), flush=True)
+
 
             if not top_level_comments:
                 print('err2')
@@ -539,7 +618,7 @@ class FacebookChatDownloader(ChatDownloader):
                 profile = try_get_first_key(ufipayload.get('profiles'))
 
                 text = safe_convert_text(comments[0]['body']['text'])
-                print(time_offset, text)
+                #print(time_offset, text)
 
                 message_list.append(text)
 
