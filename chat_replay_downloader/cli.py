@@ -14,7 +14,7 @@ from .output.continuous_write import ContinuousWriter
 from .utils import (
     update_dict_without_overwrite,
     safe_print_text,
-    multi_get
+    multi_get,
 )
 
 from .formatting.format import ItemFormatter
@@ -150,12 +150,13 @@ def main():
 
     def test_callback(item):
         formatted = '[{}] {}: {}'.format(
-            multi_get(item, 'time_text'),
+            multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
             multi_get(item, 'author', 'name'),
             multi_get(item, 'message'),
 
         )
-
+        safe_print_text(formatted)
+        return
         #formatted = formatter.format(item, format_name='default')#
         #print(item)
         if formatted:
