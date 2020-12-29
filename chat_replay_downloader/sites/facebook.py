@@ -12,11 +12,16 @@ from .common import ChatDownloader
 from ..utils import (
     remove_prefixes,
     multi_get,
-    try_get_first_key,
+    try_get_first_value,
     safe_convert_text,
     try_get,
     seconds_to_time,
-    camel_case_split
+    camel_case_split,
+    ensure_seconds
+)
+
+from ..errors import (
+    RetriesExceeded
 )
 
 
@@ -113,13 +118,23 @@ class FacebookChatDownloader(ChatDownloader):
     _STRIP_TEXT = 'for (;;);'
 
     def parse_fb_json(self, response):
-        return json.loads(remove_prefixes(response.text, self._STRIP_TEXT))
+        text_to_parse = remove_prefixes(response.text, self._STRIP_TEXT)
+        return json.loads(text_to_parse)
+        # try:
+
+        # except json.decoder.JSONDecodeError:
+        # print('Unable to parse JSON:')
+        # print(text_to_parse)
+        #     raise json.decoder.JSONDecodeError
+        # print()
+        # print(response.text)
 
     _VOD_COMMENTS_API = 'https://www.facebook.com/videos/vodcomments/'
     _GRAPH_API = 'https://www.facebook.com/api/graphql/'
 
     def get_initial_info(self, video_id, params):
 
+        # TODO multi attempts
         response = self._session_post(self._VIDEO_PAGE_TAHOE_TEMPLATE.format(
             video_id), headers=self._FB_HEADERS, data=self.data)
 
@@ -177,7 +192,6 @@ class FacebookChatDownloader(ChatDownloader):
 
         return new_feedback
 
-
     _ATTACHMENT_REMAPPING = {
         'url': 'url',  # facebook redirect url,
         'source': ('source', 'get_text'),
@@ -185,16 +199,22 @@ class FacebookChatDownloader(ChatDownloader):
 
         'target': ('target', 'parse_attachment_info'),
         'media': ('media', 'parse_attachment_info'),
+        'style_infos': ('style_infos', '_parse_attachment_info'),
 
         'attachment_text': ('text', 'get_text'),
     }
 
-    _IGNORE_ATTACHMENT_KEYS= [
+    _IGNORE_ATTACHMENT_KEYS = [
         'tracking',
         'action_links'
     ]
 
-    _KNOWN_ATTACHMENT_KEYS = set(list(_ATTACHMENT_REMAPPING.keys())+_IGNORE_ATTACHMENT_KEYS)
+#     MISSING ATTACHMENT KEYS: {'style_infos'}
+# {'style_type_renderer': {'__typename': 'StoryAttachmentDonationStyleRenderer', 'attachment': {'style_infos': [{'__typename': 'FundraiserForStoryDonationAttachmentStyleInfo', 'donation_comment_text': {'delight_ranges': [], 'image_ranges': [], 'inline_style_ranges': [], 'aggregated_ranges': [], 'ranges': [{'entity': {'__typename': 'FundraiserCharity', '__isEntity': 'FundraiserCharity', 'url': 'https://www.facebook.com/theUSO/', 'mobileUrl': 'https://www.facebook.com/theUSO/', '__isNode': 'FundraiserCharity', 'id': '10157443988509407'}, 'entity_is_weak_reference': False, 'length': 3, 'offset': 20}], 'color_ranges': [], 'text': 'Josh donated $10 to USO.'}, 'use_donation_v2': False}, {'__typename': 'NativeTemplatesAttachmentStyleInfo'}]}, '__module_operation_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentDonationAttachmentStyle_styleTypeRenderer$normalization.graphql'}, '__module_component_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentDonationAttachmentStyle.react'}}, 'style_list': ['donation', 'native_templates', 'fallback']}
+# {}
+
+    _KNOWN_ATTACHMENT_KEYS = set(
+        list(_ATTACHMENT_REMAPPING.keys())+_IGNORE_ATTACHMENT_KEYS)
 
     @staticmethod
     def _parse_attachment_styles(item):
@@ -231,6 +251,8 @@ class FacebookChatDownloader(ChatDownloader):
         'is_playable': 'is_playable',
         'url': 'url',
 
+        'mobileUrl': 'mobile_url',
+
 
         # Sticker
         'pack': 'pack',
@@ -250,7 +272,21 @@ class FacebookChatDownloader(ChatDownloader):
         'address': 'address',
         'overall_star_rating': 'overall_star_rating',
 
-        'profile_picture': ('profile_picture', 'get_uri')
+        'profile_picture': ('profile_picture', 'get_uri'),
+
+
+
+
+
+        # Photo
+        'accessibility_caption': 'accessibility_caption',
+
+        'blurred_image': ('blurred_image', 'get_uri'),
+        'massive_image': 'massive_image',
+
+
+        # FundraiserForStoryDonationAttachmentStyleInfo
+        'donation_comment_text': 'donation_comment_text'
 
     }
 
@@ -262,16 +298,24 @@ class FacebookChatDownloader(ChatDownloader):
         'Group',
         'ProfilePicAttachmentMedia',
         'User',
+        'Photo',
 
         'ExternalUrl',
         'GenericAttachmentMedia',
 
-        'ChatCommandResult'
+        'ChatCommandResult',
+
+        'CommentMessageInfo',
+        'FundraiserForStoryDonationAttachmentStyleInfo'
     ]
 
     @staticmethod
     def _parse_attachment_info(original_item):
         item = {}
+
+        if isinstance(original_item, (list, tuple)) and len(original_item) > 0:
+            original_item = original_item[0]
+
         if not original_item:
             return item
 
@@ -279,10 +323,33 @@ class FacebookChatDownloader(ChatDownloader):
             ChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
                                  FacebookChatDownloader._REMAP_FUNCTIONS, key, original_item[key])
 
+        # VideoTipJarPayment
         quantity = item.get('quantity')
         if quantity:
             item['text'] = 'Sent {} Star{}'.format(
                 quantity, 's' if quantity != 1 else '')
+
+        # For photos:
+        blurred_image = item.pop('blurred_image', None)
+        massive_image = item.pop('massive_image', None)
+
+        if blurred_image and massive_image:
+            item['text'] = ChatDownloader.create_image(
+                blurred_image,
+                massive_image.get('width'),
+                massive_image.get('height')
+            )
+
+        # style_infos
+        donation_comment_text = item.pop('donation_comment_text', None)
+        if donation_comment_text:
+            entity = try_get(donation_comment_text,
+                             lambda x: x['ranges'][0]['entity']) or {}
+
+            for key in entity:
+                ChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
+                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, entity[key])
+            item['text'] = donation_comment_text.get('text')
 
         # DEBUGGING
         original_type_name = original_item.get('__typename')
@@ -469,6 +536,8 @@ class FacebookChatDownloader(ChatDownloader):
 
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
+        max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
 
         buffer_size = 25  # max num comments returned by api call
         cursor = ''
@@ -486,20 +555,34 @@ class FacebookChatDownloader(ChatDownloader):
         #p = (), params=p
         last_ids = []
         while True:
-            response = self._session_post(
-                self._GRAPH_API, headers=self._FB_HEADERS, data=data).json()
-            # print(response)
-            # return
-            feedback = multi_get(response, 'data', 'video', 'feedback') or {}
+            for attempt_number in range(max_attempts+1):  # TODO use params max attempts
+                try:
+                    response = self._session_post(
+                        self._GRAPH_API, headers=self._FB_HEADERS, data=data)
+                    json_data = response.json()
+                    break
+                except json.decoder.JSONDecodeError:
+                    # TODO make this debug only
+                    print('Unable to parse JSON:')
+                    print(response.text)
+                    print('Attempt', attempt_number)
+
+                    if attempt_number >= max_attempts:
+                        raise RetriesExceeded(
+                            'Maximum number of retries has been reached ({}).'.format(max_attempts))
+                    time.sleep(retry_timeout)
+
+            feedback = multi_get(json_data, 'data', 'video', 'feedback') or {}
             if not feedback:
                 print('no feedback')  # TODO debug
+                print(json_data, flush=True)
                 continue
 
             top_level_comments = multi_get(
-                response, 'data', 'video', 'feedback', 'top_level_comments')
+                json_data, 'data', 'video', 'feedback', 'top_level_comments')
             edges = top_level_comments.get('edges')[::-1]  # reverse order
 
-            errors = response.get('errors')
+            errors = json_data.get('errors')
             if errors:
                 # TODO will usually resume getting chat..
                 # maybe add timeout?
@@ -547,13 +630,14 @@ class FacebookChatDownloader(ChatDownloader):
 
             # got 25 items, and this isn't the first one
             if num_to_add >= buffer_size and len(message_list) > buffer_size:
-                print('debug:', 'messages may be coming in faster than requests are being made.')
+                print(
+                    'debug:', 'messages may be coming in faster than requests are being made.')
             print('got', num_to_add, 'messages',
                   '({})'.format(len(edges)), flush=True)
 
             if not top_level_comments:
                 print('err2')
-                print(response)
+                print(json_data)
 
     def get_chat_replay_by_video_id(self, video_id, initial_info, params):
         print('vod')
@@ -561,6 +645,9 @@ class FacebookChatDownloader(ChatDownloader):
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
         max_duration = initial_info.get('duration', float('inf'))
+
+        max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
 
         # useful tool (convert curl to python request)
         # https://curl.trillworks.com/
@@ -575,8 +662,10 @@ class FacebookChatDownloader(ChatDownloader):
         time_increment = 60  # Facebook gets messages by the minute
         # TODO make this modifiable
 
-        start_time = self.get_param_value(params, 'start_time') or 0
-        end_time = self.get_param_value(params, 'end_time') or float('inf')
+        start_time = ensure_seconds(
+            self.get_param_value(params, 'start_time'), 0)
+        end_time = ensure_seconds(
+            self.get_param_value(params, 'end_time'), float('inf'))
 
         next_start_time = max(start_time, 0)
         end_time = min(end_time, max_duration)
@@ -593,14 +682,29 @@ class FacebookChatDownloader(ChatDownloader):
 
             request_params = initial_request_params + times
 
-            response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
+
+
+            for attempt_number in range(max_attempts+1):  # TODO use params max attempts
+                try:
+                    response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
                                           params=request_params, data=self.data, timeout=timeout_duration)
-            json_data = self.parse_fb_json(response)
-            # print(json_data)
+                    json_data = self.parse_fb_json(response)
+                    break
+                except json.decoder.JSONDecodeError:
+                    # TODO make this debug only
+                    print('Unable to parse JSON:')
+                    print(response.text)
+                    print('Attempt', attempt_number)
+
+                    if attempt_number >= max_attempts:
+                        raise RetriesExceeded(
+                            'Maximum number of retries has been reached ({}).'.format(max_attempts))
+                    time.sleep(retry_timeout)
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads')
             if not payloads:
-                pass
+
+                continue
                 # TODO debug
                 #print('no comments between',next_start_time, next_end_time, flush=True)
                 # print('err1')
@@ -622,16 +726,31 @@ class FacebookChatDownloader(ChatDownloader):
                     continue
 
                 # ['comments'][0]['body']['text']
-                comments = ufipayload.get('comments')
-                pinned_comments = ufipayload.get('pinnedcomments')
-                profile = try_get_first_key(ufipayload.get('profiles'))
+                comment = try_get(ufipayload, lambda x: x['comments'][0])
+                if not comment:
+                    # TODO debug
+                    continue
 
-                text = safe_convert_text(comments[0]['body']['text'])
+                pinned_comments = ufipayload.get('pinnedcomments')
+                profile = try_get_first_value(ufipayload['profiles'])
+
+                #print(profile_id, comment)
+                text = comment['body']['text']  # safe_convert_text()
                 #print(time_offset, text)
 
-                message_list.append(text)
+                temp = {
+                    'author': {
+                        'name': profile.get('name')
+                    },
+                    'time_in_seconds': time_offset,
+                    'time_text': seconds_to_time(time_offset),
+                    'message': text
+                }
+                # print(temp)
 
-                ChatDownloader.perform_callback(callback, payload)
+                message_list.append(temp)
+
+                ChatDownloader.perform_callback(callback, temp)
                 #total += comments
 
             #print('got', len(payloads), 'messages.','Total:', len(message_list))
