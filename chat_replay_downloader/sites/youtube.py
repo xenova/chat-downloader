@@ -803,18 +803,17 @@ class YouTubeChatDownloader(ChatDownloader):
         while True:
             info = None
             # the following can raise NoContinuation error or JSONParseError
-            attempt_number = 1
-            while(not info):
+
+            for attempt_number in range(max_attempts+1):
                 try:
-                    if(is_live):
+                    if is_live:
                         info = self._get_live_info(continuation)
                     else:
                         # must run to get first few messages, otherwise might miss some
-                        if(first_time):
-                            info = self._get_replay_info(continuation)
-                        else:
-                            info = self._get_replay_info(
-                                continuation, offset_milliseconds)
+                        info = self._get_replay_info(
+                            continuation, None if first_time else offset_milliseconds)
+                    break
+
                 except JSONParseError as e:
                     if(params.get('logging') in ('debug', 'errors_only')):
                         debug_print('Retry #{}'.format(attempt_number))
@@ -826,7 +825,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         raise RetriesExceeded(
                             'Maximum number of retries has been reached ({}).'.format(max_attempts))
                         # return message_list
-                    attempt_number += 1
+                    continue
 
                 except NoContinuation:
                     # Live stream ended

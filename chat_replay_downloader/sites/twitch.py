@@ -18,7 +18,6 @@ from ..utils import (
     try_get,
     int_or_none,
     replace_with_underscores,
-    try_get_first_key,
     debug_print,
     multi_get,
     update_dict_without_overwrite
@@ -266,11 +265,10 @@ class TwitchChatDownloader(ChatDownloader):
     def get_chat_by_vod_id(self, vod_id, params, offset=0, max_duration=None):
         #print('get_chat_by_vod_id:', vod_id)
 
-        start_time = ensure_seconds(
-            self.get_param_value(params, 'start_time'), 0)
-
         # twitch does not provide messages before the stream starts,
         # so we default to a start time of 0
+        start_time = ensure_seconds(
+            self.get_param_value(params, 'start_time'), 0)
         end_time = ensure_seconds(
             self.get_param_value(params, 'end_time'), max_duration)
 

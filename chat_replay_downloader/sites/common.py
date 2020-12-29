@@ -93,6 +93,7 @@ class ChatDownloader:
         'callback': None,  # do something for every message
 
         'max_attempts': 30,
+        'retry_timeout':1, # 1 second
         # TODO timeout between attempts
         'max_messages': None,
 
