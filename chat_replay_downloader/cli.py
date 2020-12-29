@@ -38,9 +38,9 @@ def main():
     # PROGRAM PARAMS
     parser.add_argument('url', help='YouTube/Twitch video URL')
 
-    parser.add_argument('--start_time', '-s', type=float, default=default_params['start_time'],
+    parser.add_argument('--start_time', '-s', default=default_params['start_time'],
                         help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
-    parser.add_argument('--end_time', '-e', type=float, default=default_params['end_time'],
+    parser.add_argument('--end_time', '-e', default=default_params['end_time'],
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
     parser.add_argument('--output', '-o', default=default_params['output'],
