@@ -101,6 +101,11 @@ def try_get_first_key(dictionary, default=None):
     except:
         return default
 
+def try_get_first_value(dictionary, default=None):
+    try:
+        return next(iter(dictionary.values()))
+    except:
+        return default
 
 def remove_prefixes(text, prefixes):
     if not isinstance(prefixes, (list, tuple)):
