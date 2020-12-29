@@ -37,6 +37,7 @@ class JSONCW(CW):
     Class used to control the continuous writing of a list of dictionaries to a JSON file.
     """
 
+    _MAX_TRUNCATE_ATTEMPTS = 10
     def __init__(self, file_name, overwrite=False, indent=None, separator=', ', indent_character=' ', sort_keys=True):
         super().__init__(file_name, overwrite)
         # open file for appending and reading in binary mode.
@@ -82,9 +83,20 @@ class JSONCW(CW):
             # If empty, write the start of an array
             self.file.write('['.encode())
         else:
+            #print(self.file.closed)
             # seek to last character
             self.file.seek(-len(indent_padding)-1, os.SEEK_END)
-            self.file.truncate()  # Remove the last character (]) to open the array
+
+            for attempt_number in range(self._MAX_TRUNCATE_ATTEMPTS+1):
+                try:
+                    self.file.truncate()  # Remove the last character (]) to open the array
+                    break
+                except PermissionError:
+                    print('PermissionError occurred ({}/{})'.format(attempt_number, self._MAX_TRUNCATE_ATTEMPTS))
+                    if attempt_number == self._MAX_TRUNCATE_ATTEMPTS:
+                        raise PermissionError
+                    continue
+
             self.file.write(self.separator.encode())  # Write the separator
 
         self.file.write(to_write.encode())  # Dump the item
@@ -145,6 +157,7 @@ class TXTCW(CW):
         self.formatting = formatting
 
     def write(self, item, format):
+        # TODO make this return the actual text written
         print(item, file=self.file) # , flush=True
 
 
