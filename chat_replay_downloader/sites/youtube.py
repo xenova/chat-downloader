@@ -3,7 +3,14 @@ from .common import ChatDownloader
 
 from ..utils import microseconds_to_timestamp
 
-from ..errors import *  # only import used TODO
+from ..errors import (
+    RetriesExceeded,
+    NoChatReplay,
+    JSONParseError,
+    NoContinuation,
+    ParsingError,
+    VideoUnavailable
+)
 
 from urllib import parse
 
@@ -53,13 +60,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             youtu\.be                                        # just youtu.be/xxxx
                          )/)
                      )?                                                       # all until now is optional -> you can pass the naked ID
-                     (?P<id>[0-9A-Za-z_-]{11})                                      # here is it! the YouTube video ID
-                     (?!.*?\blist=
-                        (?:
-                            %(playlist_id)s|                                  # combined list/video URLs are handled by the playlist IE
-                            WL                                                # WL are handled by the watch later IE
-                        )
-                     )
+                     (?P<id>[0-9A-Za-z_-]{11})                                # here is it! the YouTube video ID
                      (?(1).+)?                                                # if we found the ID, everything can follow
                      $'''
 
@@ -268,7 +269,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
     @ staticmethod
     def parse_youtube_link(text):
-        if(text.startswith('/redirect')):  # is a redirect link
+        if(text.startswith(('/redirect', 'https://www.youtube.com/redirect'))):  # is a redirect link
             info = dict(parse.parse_qsl(parse.urlsplit(text).query))
             return info.get('q') or ''  # ['q'] if 'q' in info else ''
         elif(text.startswith('//')):
@@ -318,7 +319,7 @@ class YouTubeChatDownloader(ChatDownloader):
     @ staticmethod
     def _parse_item(item, info={}):
         # info is starting point
-
+        print(item)
         item_index = try_get_first_key(item)
         item_info = item.get(item_index)
 
@@ -349,7 +350,7 @@ class YouTubeChatDownloader(ChatDownloader):
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
             if(colour_key in item_info):  # if item has colour information
                 info[camel_case_split(colour_key.replace('Color', 'Colour'))] = get_colours(
-                    item_info.get(colour_key)).get('hex')
+                    item_info[colour_key]).get('hex')
         # OLD: dict of colours
         # for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
         #     if(colour_key in item_info):  # if item has colour information
@@ -439,7 +440,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 ChatDownloader.create_image(url, size, size))
                 if url:
                     to_add['icons'].append(ChatDownloader.create_image(
-                        url[0:url.index('=')], id='source'))
+                        url[0:url.index('=')], image_id='source'))
 
             badges.append(to_add)
 
@@ -458,7 +459,14 @@ class YouTubeChatDownloader(ChatDownloader):
         # TODO add source:
         # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ=s32-c-k-c0xffffffff-no-rj-mo
         # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ
-        return item.get('thumbnails')
+
+        thumbnails = item.get('thumbnails') or []
+
+        return list(map(lambda x: ChatDownloader.create_image(
+            x.get('url'),
+            x.get('width'),
+            x.get('height'),
+        ), thumbnails))
 
     @ staticmethod
     def parse_action_button(item):
@@ -791,6 +799,8 @@ class YouTubeChatDownloader(ChatDownloader):
             print('Getting chat for', initial_title_info, flush=True)
 
         max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
+
         max_messages = self.get_param_value(params, 'max_messages')
         message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
@@ -825,7 +835,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         raise RetriesExceeded(
                             'Maximum number of retries has been reached ({}).'.format(max_attempts))
                         # return message_list
-                    continue
+                    time.sleep(retry_timeout)
 
                 except NoContinuation:
                     # Live stream ended

@@ -3,8 +3,6 @@ from urllib import parse
 import xml.etree.ElementTree as ET
 import isodate
 import time
-
-#import requests
 import re
 
 from .common import ChatDownloader
@@ -36,30 +34,20 @@ class FacebookChatDownloader(ChatDownloader):
     # _INITIAL_URL_TEMPLATE = 'https://www.facebook.com/video.php?v={}'  # &fref=n
     _INITIAL_DATR_REGEX = r'_js_datr\",\"([^\"]+)'
     _INITIAL_LSD_REGEX = r'<input.*?name=\"lsd\".*?value=\"([^\"]+)[^>]*>'
+    _INITIAL_TIMEOUT_DURATION = 10
 
     def __init__(self, updated_init_params={}):
         super().__init__(updated_init_params)
 
-        # Get cookie data:
-        # TODO only update if `cookies` not in new init params
-
-        # init_url = self._INITIAL_URL_TEMPLATE.format(vod_id)
-        # init_url = 'https://www.facebook.com/disguisedtoast/videos/382024729792892'
-
-        #jar = requests.cookies.RequestsCookieJar()
-
         # update headers for all subsequent FB requests
         self.update_session_headers(self._FB_HEADERS)
 
-        #print('before', self.get_cookies_dict(), flush=True)
+        timeout = self._INIT_PARAMS.get(
+            'timeout', self._INITIAL_TIMEOUT_DURATION)
 
-        # TODO , timeout=timeout_duration (from init params)
-        timeout_duration = 10
-        # used to get cookies
         initial_data = self._session_get(
-            self._FB_HOMEPAGE, timeout=timeout_duration,
+            self._FB_HOMEPAGE, timeout=timeout,
             headers=self._FB_HEADERS, allow_redirects=False).text
-        #print('after', self.get_cookies_dict(), flush=True)
 
         datr = re.search(self._INITIAL_DATR_REGEX, initial_data)
         if datr:
@@ -77,7 +65,7 @@ class FacebookChatDownloader(ChatDownloader):
 
         lsd_info = re.search(self._INITIAL_LSD_REGEX, initial_data)
         if not lsd_info:
-            print('no lsd info', flush=True)
+            print('no lsd info')
             raise Exception  # TODO
 
         lsd = lsd_info.group(1)
@@ -133,12 +121,26 @@ class FacebookChatDownloader(ChatDownloader):
     _GRAPH_API = 'https://www.facebook.com/api/graphql/'
 
     def get_initial_info(self, video_id, params):
+        max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
 
         # TODO multi attempts
-        response = self._session_post(self._VIDEO_PAGE_TAHOE_TEMPLATE.format(
-            video_id), headers=self._FB_HEADERS, data=self.data)
+        for attempt_number in range(max_attempts + 1):
+            try:
+                response = self._session_post(self._VIDEO_PAGE_TAHOE_TEMPLATE.format(
+                    video_id), headers=self._FB_HEADERS, data=self.data)
+                json_data = self.parse_fb_json(response)
+                break
+            except json.decoder.JSONDecodeError:
+                # TODO make this debug only
+                print('Unable to parse JSON:')
+                print(response.text)
+                print('Attempt', attempt_number)
 
-        json_data = self.parse_fb_json(response)
+                if attempt_number >= max_attempts:
+                    raise RetriesExceeded(
+                        'Maximum number of retries has been reached ({}).'.format(max_attempts))
+                time.sleep(retry_timeout)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
 
@@ -166,10 +168,9 @@ class FacebookChatDownloader(ChatDownloader):
     @staticmethod
     def _parse_feedback(feedback):
         new_feedback = {}
-        # print('feedback',feedback)
 
         edges = multi_get(feedback, 'top_reactions', 'edges')
-        # print('edges',edges)
+
         if not edges:
             return new_feedback
 
@@ -209,10 +210,6 @@ class FacebookChatDownloader(ChatDownloader):
         'action_links'
     ]
 
-#     MISSING ATTACHMENT KEYS: {'style_infos'}
-# {'style_type_renderer': {'__typename': 'StoryAttachmentDonationStyleRenderer', 'attachment': {'style_infos': [{'__typename': 'FundraiserForStoryDonationAttachmentStyleInfo', 'donation_comment_text': {'delight_ranges': [], 'image_ranges': [], 'inline_style_ranges': [], 'aggregated_ranges': [], 'ranges': [{'entity': {'__typename': 'FundraiserCharity', '__isEntity': 'FundraiserCharity', 'url': 'https://www.facebook.com/theUSO/', 'mobileUrl': 'https://www.facebook.com/theUSO/', '__isNode': 'FundraiserCharity', 'id': '10157443988509407'}, 'entity_is_weak_reference': False, 'length': 3, 'offset': 20}], 'color_ranges': [], 'text': 'Josh donated $10 to USO.'}, 'use_donation_v2': False}, {'__typename': 'NativeTemplatesAttachmentStyleInfo'}]}, '__module_operation_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentDonationAttachmentStyle_styleTypeRenderer$normalization.graphql'}, '__module_component_CometFeedStoryUFICommentAttachment_attachment': {'__dr': 'CometUFICommentDonationAttachmentStyle.react'}}, 'style_list': ['donation', 'native_templates', 'fallback']}
-# {}
-
     _KNOWN_ATTACHMENT_KEYS = set(
         list(_ATTACHMENT_REMAPPING.keys())+_IGNORE_ATTACHMENT_KEYS)
 
@@ -231,7 +228,7 @@ class FacebookChatDownloader(ChatDownloader):
             ChatDownloader.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
                                  FacebookChatDownloader._REMAP_FUNCTIONS, key, attachment[key])
 
-        for key in ('target', 'media'):
+        for key in ('target', 'media', 'style_infos'):
             if parsed.get(key) == {}:
                 parsed.pop(key)
 
@@ -273,10 +270,6 @@ class FacebookChatDownloader(ChatDownloader):
         'overall_star_rating': 'overall_star_rating',
 
         'profile_picture': ('profile_picture', 'get_uri'),
-
-
-
-
 
         # Photo
         'accessibility_caption': 'accessibility_caption',
@@ -387,9 +380,7 @@ class FacebookChatDownloader(ChatDownloader):
             # multiple_badge_asset
             # information_asset
 
-            'type': item.get('identity_badge_type')
-
-            # 'information_asset', 'text'
+            'icon_name': item.get('identity_badge_type')
 
         }
 
@@ -555,7 +546,7 @@ class FacebookChatDownloader(ChatDownloader):
         #p = (), params=p
         last_ids = []
         while True:
-            for attempt_number in range(max_attempts+1):  # TODO use params max attempts
+            for attempt_number in range(max_attempts + 1):
                 try:
                     response = self._session_post(
                         self._GRAPH_API, headers=self._FB_HEADERS, data=data)
@@ -682,12 +673,11 @@ class FacebookChatDownloader(ChatDownloader):
 
             request_params = initial_request_params + times
 
-
-
-            for attempt_number in range(max_attempts+1):  # TODO use params max attempts
+            # TODO use params max attempts
+            for attempt_number in range(max_attempts+1):
                 try:
                     response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
-                                          params=request_params, data=self.data, timeout=timeout_duration)
+                                                  params=request_params, data=self.data, timeout=timeout_duration)
                     json_data = self.parse_fb_json(response)
                     break
                 except json.decoder.JSONDecodeError:
