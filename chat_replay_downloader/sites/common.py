@@ -26,28 +26,103 @@ class ChatDownloader:
 
     Each chat item is a dictionary and must contain the following fields:
 
-    message:                Actual content/text of the chat item
-    timestamp:              UNIX time (in microseconds) of when the message was sent
-    id:                     Identifier for the chat item
-    author_id:              Idenfifier for the person who sent the message
-    author_name:            Name of the user which sent the message
+    timestamp:          UNIX time (in microseconds) of when the message was sent.
+    message:            Actual content/text of the chat item.
+    message_id:         Identifier for the chat item.
+    message_type:       Message type of the item.
+    author:             A dictionary containing information about the user who
+                        sent the message.
+
+                        Mandatory fields:
+                        * name      The name of the author.
+                        * id        Idenfifier for the author.
+
+                        Optional fields:
+                        * display_name  The name of the author which is displayed
+                                    to the viewer. This may be different to `name`.
+                        * short_name    A shortened version of the author's name.
+                        * type      Type of the author.
+                        * url       URL for the author's channel/page.
+
+                        * images    A list of the author's profile picture in
+                                    different sizes. See below for the
+                                    fields which an image may have.
+                        * badges    A list of the author's badges.
+                                    Mandatory fields:
+                                    * title         The title of the badge.
+
+                                    Optional fields:
+                                    * id            Identifier for the badge.
+                                    * name          Name of the badge.
+                                    * version       Version of the badge.
+                                    * icon_name     Name of the badge icon.
+                                    * icons         A list of images for the badge icons.
+                                                    See below for potential fields.
+                                    * description   The description of the badge.
+                                    * alternative_title
+                                                    Alternative title of the badge.
+                                    * click_action  Action to perform if the badge is clicked.
+                                    * click_url     URL to visit if the badge is clicked.
+
+                        * gender    Gender of the author.
+
+                        The following boolean fields are self-explanatory:
+                        * is_banned
+                        * is_bot
+                        * is_non_coworker
+                        * is_original_poster
+                        * is_verified
 
 
-    If the stream is a replay/vod/clip (i.e. is not live), it must contain the following fields:
+    Mandatory fields for replays/vods/clips (i.e. a video which is not live):
 
-    time_in_seconds:        The number of seconds after the video began, that the message was sent
-    time_text:              Human-readable format for `time_in_seconds`
+    time_in_seconds:    The number of seconds after the video began, that the message was sent.
+    time_text:          Human-readable format for `time_in_seconds`.
 
 
+    Optional fields:
 
-    The following fields are optional:
+    sub_message:        Additional text of the message.
+    action_type:        Action type of the item.
+    amount:             The amount of money which was sent with the message.
+    tooltip:            Text to be displayed when hovering over the message.
+    icon:               Icon associated with the message.
+    target_message_id:  The identifier for a message which this message references.
+    action:             The action of the message.
+    viewer_is_creator:  Whether the viewer is the creator or not.
 
-    author_display_name:    The name of the author which is displayed to the viewer.
-                            This value may be different to `author_name`
+    sticker_images:     A list of the sticker image in different sizes. See
+                        below for the fields which an image may have.
+    sponsor_icons:      A list of the sponsor image in different sizes. See
+                        below for potential fields.
+    ticker_icons:       A list of the ticker image in different sizes. See
+                        below for potential fields.
+    ticker_duration:    How long the ticker message is displayed for.
 
-    author_badges:          A dictionary containing badge information for the author.
 
-                            Potential fields:
+    The following fields indicate HEX colour information for the message:
+
+    author_name_text_colour
+    timestamp_colour
+    body_background_colour
+    header_text_colour
+    header_background_colour
+    body_text_colour
+    background_colour
+    money_chip_text_colour
+    money_chip_background_colour
+    start_background_colour
+    amount_text_colour
+    end_background_colour
+    detail_text_colour
+
+
+    An image contains the following fields:
+    url:                Mandatory. URL of the image.
+    id:                 Mandatory. Identifier for the image.
+    width:              Width of the image.
+    height:             Height of the image.
+
 
 
     TODO
@@ -81,7 +156,8 @@ class ChatDownloader:
             'Accept-Language': 'en-US, en'
         },
 
-        'cookies': None  # cookies file (optional)
+        'cookies': None,  # cookies file (optional),
+        'timeout': 10
     }
     _INIT_PARAMS = _DEFAULT_INIT_PARAMS
 
@@ -250,7 +326,7 @@ class ChatDownloader:
     # TODO make this a class with a __dict__ attribute
 
     @staticmethod
-    def create_image(url, width=None, height=None, id=None):
+    def create_image(url, width=None, height=None, image_id=None):
         image = {
             'url': url
         }
@@ -260,10 +336,10 @@ class ChatDownloader:
             image['height'] = height
 
         # TODO remove id?
-        if width and height and not id:
+        if width and height and not image_id:
             image['id'] = '{}x{}'.format(width, height)
         elif id:
-            image['id'] = id
+            image['id'] = image_id
 
         return image
 
