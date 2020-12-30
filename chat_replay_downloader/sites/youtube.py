@@ -275,7 +275,7 @@ class YouTubeChatDownloader(ChatDownloader):
         elif(text.startswith('//')):
             return 'https:' + text
         elif(text.startswith('/')):  # is a youtube link e.g. '/watch','/results'
-            return YouTubeChatDownloader.YT_HOME + text
+            return YouTubeChatDownloader._YT_HOME + text
         else:  # is a normal link
             return text
 
