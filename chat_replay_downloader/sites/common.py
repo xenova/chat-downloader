@@ -176,6 +176,11 @@ class ChatDownloader:
         'output': None,
         'logging': 'normal',
         'safe_print': False,
+        'pause_on_error': False,
+
+        # If True, program will not sleep when a timeout instruction is given
+        'force_no_timeout': False,
+
 
         # stop getting messages after no messages have been sent for `timeout` seconds
         'timeout': None,
@@ -251,6 +256,12 @@ class ChatDownloader:
     def close(self):
         self.session.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def _session_post(self, url, **kwargs):
         """Make a request using the current session."""
         #print('_session_post', url, data, headers)
@@ -274,6 +285,7 @@ class ChatDownloader:
         try:
             return s.json()
         except JSONDecodeError:
+            # TODO determine if html
             # print(s.text)
             webpage_title = get_title_of_webpage(s.text)
             raise JSONParseError(webpage_title)
@@ -311,7 +323,7 @@ class ChatDownloader:
 
     @staticmethod
     def perform_callback(callback, data, params={}):
-        if(callable(callback)):
+        if callable(callback):
             try:
                 callback(data)
             except TypeError:
@@ -338,7 +350,7 @@ class ChatDownloader:
         # TODO remove id?
         if width and height and not image_id:
             image['id'] = '{}x{}'.format(width, height)
-        elif id:
+        elif image_id:
             image['id'] = image_id
 
         return image

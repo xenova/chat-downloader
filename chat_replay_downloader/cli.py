@@ -15,6 +15,7 @@ from .utils import (
     update_dict_without_overwrite,
     safe_print_text,
     multi_get,
+    log
 )
 
 from .formatting.format import ItemFormatter
@@ -46,11 +47,13 @@ def main():
     parser.add_argument('--output', '-o', default=default_params['output'],
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--logging', choices=['normal', 'none', 'errors_only', 'debug'], default=default_params['logging'],
+    parser.add_argument('--logging', choices=['normal', 'none', 'errors', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
 
     parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
                         help='level of logging to show\n(default: %(default)s)')
+    parser.add_argument('--pause_on_error', action='store_true', default=default_params['pause_on_error'],
+                        help='wait for user input after an error occurs\n(default: %(default)s)')
 
 
     parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
@@ -62,6 +65,8 @@ def main():
     parser.add_argument('--timeout', type=float, default=default_params['timeout'],
                         help='stop getting messages after not receiving anything for a certain amount of time\n(default: %(default)s)')
 
+    parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
+                        help='force no timeout between subsequent requests\n(default: %(default)s)')
 
 
     # INIT PARAMS
@@ -117,7 +122,7 @@ def main():
 
     def print_error(message):
         print(message)
-        if(args.logging in ('debug', 'errors_only')):
+        if(args.logging in ('debug', '')):
             traceback.print_exc()
 
     program_params = {}#default_params.copy()
@@ -134,7 +139,7 @@ def main():
 
 
     if(program_params.get('logging') == 'none'):
-        f = open(os.devnull, 'w')
+        f = open(os.devnull, 'w', encoding='utf-8')
         sys.stdout = f
         sys.stderr = f
     else:
@@ -152,11 +157,11 @@ def main():
         formatted = '[{}] {}: {}'.format(
             multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
             multi_get(item, 'author', 'name'),
-            multi_get(item, 'message'),
-
+            multi_get(item, 'message')
         )
-        safe_print_text(formatted)
-        return
+        if program_params.get('logging') != 'none':
+            safe_print_text(formatted)
+        return # TODO temporary - testing
         #formatted = formatter.format(item, format_name='default')#
         #print(item)
         if formatted:
@@ -167,7 +172,7 @@ def main():
                     print(formatted, flush=True)
         else:
             # False and
-            if(program_params.get('logging') in ('debug', 'errors_only')):
+            if(program_params.get('logging') in ('debug', 'errors')):
                 print('No format specified for type: ', item.get('message_type'))
                 print(item)
 

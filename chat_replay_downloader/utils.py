@@ -140,6 +140,29 @@ def camel_case_split(word):
 def debug_print(*objects, sep=' ', end='\n', flush=True):
     print('[DEBUG]', *objects, sep=sep, end=end, flush=flush)
 
+def log(text, items, logging_level=None, matching='all', pause_on_error=False):
+
+    # matching specifies which logging levels should display the text
+
+    if logging_level is None:
+        logging_level = text
+    if matching != 'all':
+        if not isinstance(matching, (tuple, list)):
+            matching = [matching]
+
+        if logging_level == 'none' or logging_level not in matching:
+            # do nothing
+            return
+
+    if not isinstance(items, (tuple, list)):
+        items = [items]
+
+    for item in items:
+        print('[{}]'.format(text), item, flush=True)
+
+    # TODO fix ?
+    if pause_on_error:# and mode == 'errors'
+        input()
 
 def replace_with_underscores(text, sep='-'):
     return text.replace(sep, '_')

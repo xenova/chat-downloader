@@ -18,9 +18,9 @@ from ..utils import (
     try_get,
     int_or_none,
     replace_with_underscores,
-    debug_print,
     multi_get,
-    update_dict_without_overwrite
+    update_dict_without_overwrite,
+    log
 )
 
 # TODO export as another module?

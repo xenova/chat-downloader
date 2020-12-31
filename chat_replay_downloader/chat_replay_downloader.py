@@ -6,7 +6,9 @@ from .errors import *
 
 from .sites import GET_ALL_SITES
 
-
+from .utils import (
+    log
+)
 
 
 class ChatReplayDownloader:
@@ -55,17 +57,13 @@ class ChatReplayDownloader:
         correct_site = None
         for site in GET_ALL_SITES():
             regex = getattr(site,'_VALID_URL')
-            if(isinstance(regex, str)): # regex has been set (not None)
-                match = re.search(regex, url)
-                if(match): #  and match.group('id')
-                    correct_site = site(self._INIT_PARAMS)
-                    try:
-                        messages = correct_site.get_chat_messages(params)
-                    except Exception as e:
-                        raise e
-                    finally:
-                        correct_site.close()
-                    return messages
+            # print(regex)
+            # print(site, flush=True)
+            if isinstance(regex, str) and re.search(regex, url): # regex has been set (not None)
+                with site(self._INIT_PARAMS) as correct_site:
+                    log('site',correct_site)
+                    messages = correct_site.get_chat_messages(params)
+                return messages
 
 
 
