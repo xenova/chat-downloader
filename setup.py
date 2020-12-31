@@ -11,12 +11,12 @@ with open('HISTORY.md') as history_file:
     history = history_file.read()
 
 requirements = [
-	'bs4',
-	'requests',
-	'datetime',
-	'regex',
-	'argparse',
-	'emoji'
+    'requests',
+    'datetime',
+    'isodate',
+    'regex',
+    'argparse',
+    'emoji'
 ]
 
 setup_requirements = ['pytest-runner', ]
