@@ -12,13 +12,13 @@ class TestChatReplayDownloader(unittest.TestCase):
         test['params']['messages'] = []
         params = test['params']
 
-        if(not params.get('logging')): # if it is not set, make it 'none'
+        if not params.get('logging'): # if it is not set, make it 'none'
             params['logging'] = 'none'
 
 
         expected_result = test.pop('expected_result', None)
 
-        if(not (params and expected_result)):
+        if not (params and expected_result):
             assert False
 
         try:
@@ -31,7 +31,7 @@ class TestChatReplayDownloader(unittest.TestCase):
 
         messages_condition = expected_result.get('messages_condition')
 
-        if(messages_condition and callable(messages_condition)):
+        if messages_condition and callable(messages_condition):
             self.assertTrue(messages_condition(params.get('messages')))
 
 
@@ -41,16 +41,16 @@ class TestChatReplayDownloader(unittest.TestCase):
         }
         types_to_check = [key for key in actual_result if key in expected_result]
 
-        if(types_to_check):
+        if types_to_check:
             for message in test['params']['messages']:
                 #print(message)
 
                 message_type = message.get('message_type')
-                if(message_type not in actual_result['message_types']):
+                if message_type not in actual_result['message_types']:
                     actual_result['message_types'].append(message_type)
 
                 action_type = message.get('action_type')
-                if(action_type not in actual_result['action_types']):
+                if action_type not in actual_result['action_types']:
                     actual_result['action_types'].append(action_type)
 
 

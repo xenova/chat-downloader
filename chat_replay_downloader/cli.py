@@ -125,15 +125,15 @@ def main():
 
     args_dict = args.__dict__
     for key in args_dict:
-        if(key in default_init_params):  # is an init param
+        if key in default_init_params:  # is an init param
             init_params[key] = args_dict[key]  # set initialisation parameters
-        elif(key in default_params):  # is a program param
+        elif key in default_params:  # is a program param
             # set program/get_chat_messages parameters
             program_params[key] = args_dict[key]
         else:  # neither
             pass
 
-    if(program_params.get('logging') == 'none'):
+    if program_params.get('logging') == 'none':
         f = open(os.devnull, 'w', encoding='utf-8')
         sys.stdout = f
         sys.stderr = f
@@ -163,7 +163,7 @@ def main():
                     print(formatted, flush=True)
         else:
             # False and
-            if(program_params.get('logging') in ('debug', 'errors')):
+            if program_params.get('logging') in ('debug', 'errors'):
                 print('No format specified for type: ',
                       item.get('message_type'))
                 print(item)
@@ -181,7 +181,7 @@ def main():
 
     callback = None  # test_callback
 
-    if(args.output):
+    if args.output:
         output_file = ContinuousWriter(args.output, **other_params)
 
         def write_to_file(item):
@@ -223,7 +223,7 @@ def main():
         print(e)
 
     finally:
-        if(args.output):
+        if args.output:
             output_file.close()
 
     # except Exception as e:

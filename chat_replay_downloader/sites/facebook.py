@@ -788,9 +788,9 @@ class FacebookChatDownloader(ChatDownloader):
 
         match = re.search(self._VALID_URL, url)
 
-        if(match):
+        if match:
 
-            if(match.group('id')):  # normal youtube video
+            if match.group('id'):  # normal youtube video
                 return self.get_chat_by_video_id(match.group('id'), params)
 
             else:  # TODO add profile, etc.

@@ -19,16 +19,14 @@ class ChatReplayDownloader:
     #     'Accept-Language': 'en-US, en'
     # }
 
-
-
-    def __init__(self, init_params = {}):
+    def __init__(self, init_params={}):
         self._INIT_PARAMS = init_params
 
     #LIST_OF_MESSAGES = []
 
     # used for debugging
     #__TYPES_OF_KNOWN_MESSAGES = []
-    #for key in __TYPES_OF_MESSAGES:
+    # for key in __TYPES_OF_MESSAGES:
     #	__TYPES_OF_KNOWN_MESSAGES.extend(__TYPES_OF_MESSAGES[key])
 
 
@@ -41,14 +39,16 @@ class ChatReplayDownloader:
 
     # , start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None
     # TODO add dictionary params ->
+
+
     def get_chat_messages(self, params):
-        #super().get
-        url = params.get('url') # the only required argument
-        if(not url):
+        # super().get
+        url = params.get('url')  # the only required argument
+        if not url:
             # TODO raise error
             return
 
-        #self.LIST_OF_MESSAGES = [] # reset list of messages
+        # self.LIST_OF_MESSAGES = [] # reset list of messages
         # TODO add a reset_messages() method?
 
         # loop through all websites and
@@ -56,16 +56,16 @@ class ChatReplayDownloader:
         # based on matching url with predefined regex
         correct_site = None
         for site in GET_ALL_SITES():
-            regex = getattr(site,'_VALID_URL')
+            regex = getattr(site, '_VALID_URL')
             # print(regex)
             # print(site, flush=True)
-            if isinstance(regex, str) and re.search(regex, url): # regex has been set (not None)
+            if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
                 with site(self._INIT_PARAMS) as correct_site:
-                    log('site',correct_site)
+                    log('site', correct_site)
                     messages = correct_site.get_chat_messages(params)
                 return messages
 
-
+        # Raise unsupported site
 
         # TODO raise invalid url error
         #raise InvalidURL('The url provided ({}) is invalid.'.format(url))
@@ -78,10 +78,6 @@ class ChatReplayDownloader:
         # match = re.search(self.__TWITCH_REGEX, url)
         # if(match):
         #     return self.get_twitch_messages(match.group(1), start_time, end_time, callback)
-
-
-
-
 
 
 # when used as a module

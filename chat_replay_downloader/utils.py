@@ -29,7 +29,7 @@ def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
 
 def ensure_seconds(time, default=None):
     """Ensure time is returned in seconds."""
-    if(not time):  # if empty, return default
+    if not time:  # if empty, return default
         return default
 
     try:
@@ -83,7 +83,7 @@ def try_get(src, getter, expected_type=None):
 
 def get_title_of_webpage(html):
     match = re.search('<title>(.*?)</title>', html)
-    if(match):
+    if match:
         return match.group(1)
     else:
         return None
@@ -152,8 +152,7 @@ def log(text, items, logging_level=None, matching='all', pause_on_debug=False):
             matching = [matching]
 
         if logging_level == 'none' or logging_level not in matching:
-            # do nothing
-            return
+            return # do nothing
 
     if not isinstance(items, (tuple, list)):
         items = [items]

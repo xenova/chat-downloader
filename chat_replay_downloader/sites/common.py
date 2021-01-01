@@ -214,8 +214,8 @@ class ChatDownloader:
     def remap(info, remapping_dict, remapping_functions, remap_key, remap_input):
         remap = remapping_dict.get(remap_key)
 
-        if(remap):
-            if(isinstance(remap, tuple)):
+        if remap:
+            if isinstance(remap, tuple):
                 index, mapping_function = remap
                 info[index] = remapping_functions[mapping_function](
                     remap_input)

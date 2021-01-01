@@ -72,7 +72,7 @@ class TwitchChatIRC():
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
 
-        if(self._CURRENT_CHANNEL != channel_lower):
+        if self._CURRENT_CHANNEL != channel_lower:
             self.send_raw('JOIN #{}'.format(channel_lower))
             self._CURRENT_CHANNEL = channel_lower
 
@@ -300,7 +300,7 @@ class TwitchChatDownloader(ChatDownloader):
             # print(info)
             error = info.get('error')
 
-            if(error):
+            if error:
                 # TODO make parse error and raise more general errors
                 raise TwitchError(info.get('message'))
 
@@ -313,9 +313,9 @@ class TwitchChatDownloader(ChatDownloader):
                 before_start = start_time is not None and time_in_seconds < start_time
                 after_end = end_time is not None and time_in_seconds > end_time
 
-                if(before_start):  # still getting to messages
+                if before_start:  # still getting to messages
                     continue
-                elif(after_end):  # after end
+                elif after_end:  # after end
                     return message_list  # while actually searching, if time is invalid
 
                 # TODO if correct message type
@@ -393,7 +393,7 @@ class TwitchChatDownloader(ChatDownloader):
                 if image_urls:
                     badge_id = re.search(
                         TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
-                    if(badge_id):
+                    if badge_id:
                         new_badge['id'] = badge_id.group(1)
 
         return new_badge
@@ -401,7 +401,7 @@ class TwitchChatDownloader(ChatDownloader):
     @staticmethod
     def parse_badges(badges):
         info = []
-        if(not badges):
+        if not badges:
             return info
 
         for badge in badges.split(','):
@@ -746,7 +746,7 @@ class TwitchChatDownloader(ChatDownloader):
         # print(split_info)
         for item in split_info:
             keys = item.split('=', 1)
-            if(len(keys) != 2):
+            if len(keys) != 2:
                 print('ERROR', keys, item, match.groups())  # TODO debug
                 continue
             # print(keys[0],keys[1])
@@ -755,7 +755,7 @@ class TwitchChatDownloader(ChatDownloader):
                                  TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1])
 
         message_match = match.group(3)
-        if(message_match):
+        if message_match:
             info['message'] = message_match
 
         badge_metadata = info.pop('author_badge_metadata', [])
@@ -775,7 +775,7 @@ class TwitchChatDownloader(ChatDownloader):
         #     info.pop('author_badges')
 
         author_display_name = info.get('author_display_name')
-        if(author_display_name):
+        if author_display_name:
             info['author_name'] = author_display_name.lower()
 
         ChatDownloader.create_author_info(
@@ -809,10 +809,10 @@ class TwitchChatDownloader(ChatDownloader):
 
         original_action_type = match.group(2)
 
-        if(original_action_type):
+        if original_action_type:
             new_action_type = TwitchChatDownloader._ACTION_TYPE_REMAPPING.get(
                 original_action_type)
-            if(new_action_type):
+            if new_action_type:
                 info['action_type'] = new_action_type
             else:
                 # unknown action type
@@ -821,10 +821,10 @@ class TwitchChatDownloader(ChatDownloader):
         #message_type_info = [original_action_type, ]
 
         original_message_type = info.get('message_type')
-        if(original_message_type):
+        if original_message_type:
             new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
                 original_message_type)
-            if(new_message_type):
+            if new_message_type:
                 info['message_type'] = new_message_type
             else:
                 print('DEBUG |', 'unknown message type:', original_message_type)
@@ -832,8 +832,8 @@ class TwitchChatDownloader(ChatDownloader):
         else:
             info['message_type'] = info['action_type']  # 'normal_'+
 
-        if(original_action_type == 'CLEARCHAT'):
-            if(message_match):  # is a ban
+        if original_action_type == 'CLEARCHAT':
+            if message_match:  # is a ban
                 info['message_type'] = 'ban_user'
                 info['ban_type'] = 'timeout' if info.get(
                     'ban_duration') else 'permanent'
@@ -843,13 +843,13 @@ class TwitchChatDownloader(ChatDownloader):
                 pass
 
         follower_only = info.get('follower_only')
-        if(follower_only):
+        if follower_only:
             info['follower_only'] = follower_only != -1
-            if(follower_only > 0):
+            if follower_only > 0:
                 info['minutes_to_follow_before_chatting'] = follower_only
 
         slow_mode = info.get('slow_mode')
-        if(slow_mode is not None):
+        if slow_mode is not None:
             if slow_mode != 0:
                 info['slow_mode'] = True
                 info['seconds_to_wait'] = slow_mode
@@ -924,7 +924,7 @@ class TwitchChatDownloader(ChatDownloader):
                 # print('==========', )
                 # continue
 
-                if('PING :tmi.twitch.tv' in readbuffer):
+                if 'PING :tmi.twitch.tv' in readbuffer:
                     twitch_chat_irc.send_raw('PONG :tmi.twitch.tv')
                     # print('pong')
 
@@ -933,11 +933,11 @@ class TwitchChatDownloader(ChatDownloader):
 
                 #print(buffer_size, len(readbuffer))
                 # print(matches)
-                if(matches):
+                if matches:
                     time_since_last_message = 0
 
                     # sometimes a buffer does not contain a full message
-                    if(not readbuffer.endswith('\r\n')):  # last one is incomplete
+                    if not readbuffer.endswith('\r\n'):  # last one is incomplete
                         #matches = matches[:-1]
 
                         last_index = matches[-1].span()[1]
@@ -956,7 +956,7 @@ class TwitchChatDownloader(ChatDownloader):
                         # if(params.get('logging') == 'normal'):
                         #     pass
 
-                        if('all' in messages_groups_to_add):
+                        if 'all' in messages_groups_to_add:
                             pass
 
                         else:
@@ -973,21 +973,21 @@ class TwitchChatDownloader(ChatDownloader):
 
                             # print(data.get('message_type'),
                             #       valid_message_types)
-                            if(data.get('message_type') not in valid_message_types):
+                            if data.get('message_type') not in valid_message_types:
                                 continue
 
                         message_list.append(data)
                         self.perform_callback(callback, data)
 
-                        if(max_messages is not None and len(message_list) >= max_messages):
+                        if max_messages is not None and len(message_list) >= max_messages:
                             return message_list
 
             except socket.timeout:
                 # print('time_since_last_message',time_since_last_message)
-                if(timeout != None):
+                if timeout is not None:
                     time_since_last_message += message_receive_timeout
 
-                    if(time_since_last_message >= timeout):
+                    if time_since_last_message >= timeout:
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
@@ -1011,7 +1011,7 @@ class TwitchChatDownloader(ChatDownloader):
 
         for regex, function_name in self._REGEX_FUNCTION_MAP:
             match = re.search(regex, url)
-            if(match):
+            if match:
                 return getattr(self, function_name)(match.group('id'), params)
 
         # if(match):
