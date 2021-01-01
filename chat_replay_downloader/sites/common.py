@@ -176,7 +176,7 @@ class ChatDownloader:
         'output': None,
         'logging': 'normal',
         'safe_print': False,
-        'pause_on_error': False,
+        'pause_on_debug': False,
 
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,

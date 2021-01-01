@@ -52,7 +52,7 @@ def main():
 
     parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
                         help='level of logging to show\n(default: %(default)s)')
-    parser.add_argument('--pause_on_error', action='store_true', default=default_params['pause_on_error'],
+    parser.add_argument('--pause_on_debug', action='store_true', default=default_params['pause_on_debug'],
                         help='wait for user input after an error occurs\n(default: %(default)s)')
 
 

@@ -834,14 +834,13 @@ class YouTubeChatDownloader(ChatDownloader):
                         ],
                         logging_level=params.get('logging'),
                         matching=('debug','errors'),
-                        pause_on_error=params.get('pause_on_error')
+                        pause_on_debug=params.get('pause_on_debug')
                     )
 
                     if(attempt_number >= max_attempts):
-                        # TODO maybe raise?
                         raise RetriesExceeded(
                             'Maximum number of retries has been reached ({}).'.format(max_attempts))
-                        # return message_list
+
                     time.sleep(retry_timeout)
 
                 except NoContinuation:
@@ -861,7 +860,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         offset_time = replay_chat_item_action.get(
                             'videoOffsetTimeMsec')
                         if(offset_time):
-                            data['time_in_seconds'] = int(offset_time)/1000
+                            data['time_in_seconds'] = float(offset_time)/1000
 
                         action = replay_chat_item_action['actions'][0]
 
@@ -907,12 +906,10 @@ class YouTubeChatDownloader(ChatDownloader):
                         original_item = try_get(
                             action, lambda x: x[original_action_type]['bannerRenderer'])
 
-                        original_message_type = try_get_first_key(
-                            original_item)
-
                         if(original_item):
-                            header = original_item[original_message_type].get(
-                                'header')
+                            original_message_type = try_get_first_key(original_item)
+
+                            header = original_item[original_message_type].get('header')
                             parsed_header = self._parse_item(header)
                             header_message = parsed_header.get('message')
 
@@ -925,7 +922,18 @@ class YouTubeChatDownloader(ChatDownloader):
                             data['header_message'] = header_message
                         else:
                             # TODO debug
-                            pass
+                            log(
+                                'debug',
+                                [
+                                    'No bannerRenderer item',
+                                    'Action type: {}'.format(original_action_type),
+                                    'Action: {}'.format(action),
+                                    'Parsed data: {}'.format(data)
+                                ],
+                                mode=params.get('logging'),
+                                matching=('debug','errors'),
+                                pause_on_debug=params.get('pause_on_debug')
+                            )
 
                     elif(original_action_type in self._KNOWN_IGNORE_ACTION_TYPES):
                         continue
@@ -933,14 +941,15 @@ class YouTubeChatDownloader(ChatDownloader):
                     else:
                         # not processing these
                         log(
-                            params.get('logging'),
+                            'debug',
                             [
                                 'Unknown action: {}'.format(original_action_type),
                                 action,
                                 data
                             ],
+                            mode=params.get('logging'),
                             matching=('debug','errors'),
-                            pause_on_error=params.get('pause_on_error')
+                            pause_on_debug=params.get('pause_on_debug')
                         )
 
                     test_for_missing_keys = original_item.get(
@@ -956,7 +965,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             mode=params.get('logging'),
                             matching=('debug','errors'),
-                            pause_on_error=params.get('pause_on_error')
+                            pause_on_debug=params.get('pause_on_debug')
                         )
 
                     if(missing_keys):  # TODO debugging for missing keys
@@ -971,7 +980,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             mode=params.get('logging'),
                             matching=('debug','errors'),
-                            pause_on_error=params.get('pause_on_error')
+                            pause_on_debug=params.get('pause_on_debug')
                         )
 
                     if(original_message_type):
@@ -998,7 +1007,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 ],
                                 mode=params.get('logging'),
                                 matching=('debug','errors'),
-                                pause_on_error=params.get('pause_on_error')
+                                pause_on_debug=params.get('pause_on_debug')
                             )
 
                     else:  # no type # can ignore message
@@ -1013,7 +1022,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             mode=params.get('logging'),
                             matching=('debug','errors'),
-                            pause_on_error=params.get('pause_on_error')
+                            pause_on_debug=params.get('pause_on_debug')
                         )
                         continue
 
@@ -1067,8 +1076,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 'debug',
                 'Total number of messages: {}'.format(len(message_list)),
                 logging_level=params.get('logging'),
-                matching=('debug','errors'),
-                pause_on_error=params.get('pause_on_error')
+                matching=('debug','errors')
             )
 
             # assume there are no more chat continuations
@@ -1101,7 +1109,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         ],
                         logging_level=params.get('logging'),
                         matching=('debug','errors'),
-                        pause_on_error=params.get('pause_on_error')
+                        pause_on_debug=params.get('pause_on_debug')
                     )
 
                 # sometimes continuation contains timeout info
@@ -1128,6 +1136,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 first_time = False
 
         return message_list
+
     # override base method
     def get_chat_messages(self, params):
         super().get_chat_messages(params)
