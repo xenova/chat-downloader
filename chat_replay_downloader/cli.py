@@ -26,6 +26,7 @@ from .formatting.format import ItemFormatter
 
 #from .chat_replay_downloader import char
 
+
 def main():
     """Console script for chat_replay_downloader."""
 
@@ -55,7 +56,6 @@ def main():
     parser.add_argument('--pause_on_debug', action='store_true', default=default_params['pause_on_debug'],
                         help='wait for user input after an error occurs\n(default: %(default)s)')
 
-
     parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to make for an http request\n(default: %(default)s)')
 
@@ -68,7 +68,6 @@ def main():
     parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
                         help='force no timeout between subsequent requests\n(default: %(default)s)')
 
-
     # INIT PARAMS
     parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
                         help='name of cookies file\n(default: %(default)s)')
@@ -80,22 +79,21 @@ def main():
 
 # choices=['messages', 'superchat', 'all']
 # TODO message groups and message types?
-    splitter = lambda s: [item.strip() for item in re.split('[\s,;]+',s)]
+    def splitter(s):
+        return [item.strip() for item in re.split('[\s,;]+', s)]
     # joiner = lambda s: str(s)[1:-1] if isinstance(s, (list,tuple)) else s
     #', '.join(s) if s else s
 
     group = parser.add_mutually_exclusive_group()
 
     group.add_argument('--message_groups', type=splitter, default=default_params['message_groups'],
-                        help='comma separated list of groups of messages to include\n(default: %(default)s)')
+                       help='comma separated list of groups of messages to include\n(default: %(default)s)')
 
     group.add_argument('--message_types', type=splitter, default=default_params['message_types'],
-                        help='comma separated list of types of messages to include\n(default: %(default)s)')
-
+                       help='comma separated list of types of messages to include\n(default: %(default)s)')
 
     parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
-
 
     parser.add_argument('--message_receive_timeout', type=float, default=default_params['message_receive_timeout'],
                         help='time before requesting for new messages [Twitch only]\n(default: %(default)s)')
@@ -111,8 +109,6 @@ def main():
     # none = completely hide output
     # debug = show a lot more information
 
-
-
     args = parser.parse_args()
 
     # print(args.message_type)
@@ -120,23 +116,22 @@ def main():
     # TODO temp:
     #args.logging = 'debug'
 
-    def print_error(message):
-        print(message)
-        if(args.logging in ('debug', '')):
-            traceback.print_exc()
+    # def print_error(message):
+    #     print(message)
+    #     if(args.logging in ('debug', '')):
 
-    program_params = {}#default_params.copy()
-    init_params = {}#default_init_params.copy()
+    program_params = {}  # default_params.copy()
+    init_params = {}  # default_init_params.copy()
 
     args_dict = args.__dict__
     for key in args_dict:
-        if(key in default_init_params): # is an init param
-            init_params[key] = args_dict[key] # set initialisation parameters
-        elif(key in default_params): # is a program param
-            program_params[key] = args_dict[key] # set program/get_chat_messages parameters
-        else: # neither
+        if(key in default_init_params):  # is an init param
+            init_params[key] = args_dict[key]  # set initialisation parameters
+        elif(key in default_params):  # is a program param
+            # set program/get_chat_messages parameters
+            program_params[key] = args_dict[key]
+        else:  # neither
             pass
-
 
     if(program_params.get('logging') == 'none'):
         f = open(os.devnull, 'w', encoding='utf-8')
@@ -147,11 +142,7 @@ def main():
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
-
-
-
     downloader = ChatReplayDownloader(init_params)
-
 
     def test_callback(item):
         formatted = '[{}] {}: {}'.format(
@@ -161,9 +152,9 @@ def main():
         )
         if program_params.get('logging') != 'none':
             safe_print_text(formatted)
-        return # TODO temporary - testing
+        return  # TODO temporary - testing
         #formatted = formatter.format(item, format_name='default')#
-        #print(item)
+        # print(item)
         if formatted:
             if program_params.get('logging') in ('debug', 'normal'):
                 if program_params.get('safe_print'):
@@ -173,23 +164,22 @@ def main():
         else:
             # False and
             if(program_params.get('logging') in ('debug', 'errors')):
-                print('No format specified for type: ', item.get('message_type'))
+                print('No format specified for type: ',
+                      item.get('message_type'))
                 print(item)
 
     # TODO make command line args for these:
     other_params = {
-        'indent':4,
-        'sort_keys':True,
-        'overwrite':True, # default to be False
+        'indent': 4,
+        'sort_keys': True,
+        'overwrite': True,  # default to be False
 
         # if args.format set... add to params dict
-        'format':'something' # TODO
+        'format': 'something'  # TODO
     }
     formatter = ItemFormatter()
 
-
-
-    callback = None # test_callback
+    callback = None  # test_callback
 
     if(args.output):
         output_file = ContinuousWriter(args.output, **other_params)
@@ -201,57 +191,59 @@ def main():
 
         callback = write_to_file
     else:
-        callback = test_callback#None#test_callback
+        callback = test_callback  # None#test_callback
+
+    program_params['callback'] = callback
 
     try:
-        program_params['callback'] = callback
+        # print(program_params)
+        messages = downloader.get_chat_messages(
+            program_params)  # TODO  returns None?
+        # q.close()
+    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable) as e:
+        log('error', e)
 
-
-        #print(program_params)
-        messages = downloader.get_chat_messages(program_params) # TODO  returns None?
-        #q.close()
-
-
-
-    except NoChatReplay as e:
-        print(e)
-
-    except ParsingError as e:
-        print_error('ParsingError occurred')
-
-    except ConnectionError:
-        print_error('ConnectionError - unable to connect')
-        pass
+    except (ParsingError, ConnectionError) as e:
+        log(
+            'error',
+            [
+                e,
+                traceback.format_exc()
+            ],
+            logging_level=program_params.get('logging'),
+            matching=('debug', 'errors'),
+            pause_on_debug=program_params.get('pause_on_debug')
+        )
 
     except KeyboardInterrupt:
         print('keyboard interrupt')
 
+    except Exception as e:
+        print('unknown exception')
+        print(e)
+
     finally:
         if(args.output):
             output_file.close()
+
     # except Exception as e:
     #     print('other exception')
     #     print(e)
     #     pass
 
     #
-    #print('got',len(program_params.get('messages')),'messages')
-
-
+    # print('got',len(program_params.get('messages')),'messages')
 
     # #print(program_params.get('messages'))
     # with open('test.json', 'w') as outfile:
     #     json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
 
-
-
-
     #print(json.dumps(options.get('messages'), indent=4))
 
     #z = a.get('messages')
 
-    #print(q)
-    #print('got',len(z),'messages')
+    # print(q)
+    # print('got',len(z),'messages')
 
 #     return
 

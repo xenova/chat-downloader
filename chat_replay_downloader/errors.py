@@ -1,8 +1,10 @@
 """File for defining errors"""
 
+
 class InvalidParameter(Exception):
     """Raised if an invalid parameter is specified."""
     pass
+
 
 class RetriesExceeded(Exception):
     """Raised after the maximum number of retries has been reached."""
@@ -15,46 +17,55 @@ class JSONParseError(Exception):
 
 
 class CallbackFunction(Exception):
-	"""Raised when the callback function does not have (only) one required positional argument"""
-	pass
+    """Raised when the callback function does not have (only) one required positional argument"""
+    pass
 
 
 class VideoNotFound(Exception):
-	"""Raised when video cannot be found."""
-	pass
+    """Raised when video cannot be found."""
+    pass
 
 
 class ParsingError(Exception):
-	"""Raised when video data cannot be parsed."""
-	pass
+    """Raised when video data cannot be parsed."""
+    pass
 
 
 class VideoUnavailable(Exception):
-	"""Raised when video is unavailable (e.g. if video is private)."""
-	pass
+    """Raised when video is unavailable."""
+    pass
+
+
+class LoginRequired(Exception):
+    """Raised when video is login is required (e.g. if video is private)."""
+    pass
+
+
+class VideoUnplayable(Exception):
+    """Raised when video is unplayable (e.g. if video is members-only)."""
+    pass
 
 
 class NoChatReplay(Exception):
-	"""Raised when the video does not contain a chat replay."""
-	pass
+    """Raised when the video does not contain a chat replay."""
+    pass
 
 
 class InvalidURL(Exception):
-	"""Raised when the url given is invalid (neither YouTube nor Twitch)."""
-	pass
+    """Raised when the url given is invalid (neither YouTube nor Twitch)."""
+    pass
 
 
 class TwitchError(Exception):
-	"""Raised when an error occurs with a Twitch video."""
-	pass
+    """Raised when an error occurs with a Twitch video."""
+    pass
 
 
 class NoContinuation(Exception):
-	"""Raised when there are no more messages to retrieve (in a live stream)."""
-	pass
+    """Raised when there are no more messages to retrieve (in a live stream)."""
+    pass
 
 
 class CookieError(Exception):
-	"""Raised when an error occurs while loading a cookie file."""
-	pass
-
+    """Raised when an error occurs while loading a cookie file."""
+    pass

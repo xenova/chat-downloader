@@ -68,6 +68,7 @@ def get_colours(argb_int):
 
 
 def try_get(src, getter, expected_type=None):
+    # used when a method is needed
     if not isinstance(getter, (list, tuple)):
         getter = [getter]
     for get in getter:
@@ -140,7 +141,7 @@ def camel_case_split(word):
 def debug_print(*objects, sep=' ', end='\n', flush=True):
     print('[DEBUG]', *objects, sep=sep, end=end, flush=flush)
 
-def log(text, items, logging_level=None, matching='all', pause_on_error=False):
+def log(text, items, logging_level=None, matching='all', pause_on_debug=False):
 
     # matching specifies which logging levels should display the text
 
@@ -161,7 +162,7 @@ def log(text, items, logging_level=None, matching='all', pause_on_error=False):
         print('[{}]'.format(text), item, flush=True)
 
     # TODO fix ?
-    if pause_on_error:# and mode == 'errors'
+    if pause_on_debug:# and mode == 'errors'
         input()
 
 def replace_with_underscores(text, sep='-'):
