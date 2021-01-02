@@ -11,6 +11,7 @@ class CW:
     """
     def __init__(self, file_name, overwrite=False):
         self.file_name = file_name
+        # subclasses must set self.file
 
         if not os.path.exists(file_name) or overwrite:
             directory = os.path.dirname(file_name)
@@ -31,13 +32,14 @@ class CW:
     def write(self, item):
         raise NotImplementedError
 
+    def flush(self):
+        self.file.flush()
 
 class JSONCW(CW):
     """
     Class used to control the continuous writing of a list of dictionaries to a JSON file.
     """
 
-    _MAX_TRUNCATE_ATTEMPTS = 10
     def __init__(self, file_name, overwrite=False, indent=None, separator=', ', indent_character=' ', sort_keys=True):
         super().__init__(file_name, overwrite)
         # open file for appending and reading in binary mode.
@@ -67,7 +69,8 @@ class JSONCW(CW):
                 self.indent, int) else self.indent
         return ''.join(map(lambda x: padding+x, text.splitlines(True)))
 
-    def write(self, item):
+
+    def write(self, item, flush=False):
 
         self.file.seek(0, os.SEEK_END)  # Go to the end of file
 
@@ -86,22 +89,25 @@ class JSONCW(CW):
             #print(self.file.closed)
             # seek to last character
             self.file.seek(-len(indent_padding)-1, os.SEEK_END)
+            self.file.truncate()
+            # _MAX_TRUNCATE_ATTEMPTS = 10
 
-            for attempt_number in range(self._MAX_TRUNCATE_ATTEMPTS+1):
-                try:
-                    self.file.truncate()  # Remove the last character (]) to open the array
-                    break
-                except PermissionError:
-                    print('PermissionError occurred ({}/{})'.format(attempt_number, self._MAX_TRUNCATE_ATTEMPTS))
-                    if attempt_number == self._MAX_TRUNCATE_ATTEMPTS:
-                        raise PermissionError
-                    continue
+            # for attempt_number in range(self._MAX_TRUNCATE_ATTEMPTS+1):
+            #     try:
+            #         self.file.truncate()  # Remove the last character (]) to open the array
+            #         break
+            #     except PermissionError:
+            #         print('PermissionError occurred ({}/{})'.format(attempt_number, self._MAX_TRUNCATE_ATTEMPTS))
+            #         if attempt_number == self._MAX_TRUNCATE_ATTEMPTS:
+            #             raise PermissionError
+            #         continue
 
             self.file.write(self.separator.encode())  # Write the separator
 
         self.file.write(to_write.encode())  # Dump the item
         self.file.write((indent_padding+']').encode())  # Close the array
-        self.file.flush()
+        if flush:
+            self.flush()
 
 class CSVCW(CW):
     """
@@ -152,13 +158,13 @@ class TXTCW(CW):
 
     def __init__(self, file_name, overwrite=False, formatting=None):
         super().__init__(file_name, overwrite)
-        self.file = open(self.file_name, 'a', encoding='utf-8', buffering=1)
+        self.file = open(self.file_name, 'a', encoding='utf-8')#, buffering=1
 
         self.formatting = formatting
 
-    def write(self, item, format):
+    def write(self, item, format, flush=False):
         # TODO make this return the actual text written
-        print(item, file=self.file) # , flush=True
+        print(item, file=self.file, flush=flush) # , flush=True
 
 
 class ContinuousWriter:

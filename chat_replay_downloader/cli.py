@@ -170,7 +170,7 @@ def main():
 
     # TODO make command line args for these:
     other_params = {
-        'indent': 4,
+        'indent': 4, # '\t'
         'sort_keys': True,
         'overwrite': True,  # default to be False
 
@@ -214,7 +214,8 @@ def main():
             matching=('debug', 'errors'),
             pause_on_debug=program_params.get('pause_on_debug')
         )
-
+    except PermissionError as e:
+        print('PermissionError',e)
     except KeyboardInterrupt:
         print('keyboard interrupt')
 
