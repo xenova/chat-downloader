@@ -781,6 +781,8 @@ class TwitchChatDownloader(ChatDownloader):
         ChatDownloader.create_author_info(
             info, 'author_id', 'author_display_name', 'author_name', 'author_badges')
 
+        if info.get('author') == {}:
+            info.pop('author')
         # for i in range(len(badge_info)):
         #     #print(badge_info, badge_info[i])
         #     #if(i < len(badge_metadata)):
@@ -991,7 +993,9 @@ class TwitchChatDownloader(ChatDownloader):
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
-
+            except Exception as e:
+                print('unknown exception')
+                print(e)
         # create new socket
         # twitch_socket = socket.socket()
 
