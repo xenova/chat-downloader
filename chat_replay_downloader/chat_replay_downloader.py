@@ -61,7 +61,7 @@ class ChatReplayDownloader:
             # print(site, flush=True)
             if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
                 with site(self._INIT_PARAMS) as correct_site:
-                    log('site', correct_site)
+                    log('site', correct_site, params.get('logging'))
                     messages = correct_site.get_chat_messages(params)
                 return messages
 

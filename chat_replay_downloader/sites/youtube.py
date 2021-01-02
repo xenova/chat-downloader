@@ -842,10 +842,13 @@ class YouTubeChatDownloader(ChatDownloader):
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, int) else None
 
+        logging_level = params.get('logging')
+
         # log the title
         log(
             'info',
-            'Retrieving chat for "{}"'.format(initial_title_info)
+            'Retrieving chat for "{}"'.format(initial_title_info),
+            logging_level
         )
 
         force_no_timeout = self.get_param_value(params, 'force_no_timeout')
@@ -860,6 +863,8 @@ class YouTubeChatDownloader(ChatDownloader):
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
         messages_types_to_add = self.get_param_value(params, 'message_types')
         # print(types_of_messages_to_add)
+
+
 
         first_time = True
         while True:
@@ -883,7 +888,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             'Retry #{}'.format(attempt_number),
                             'Error: {}'.format(e)
                         ],
-                        logging_level=params.get('logging'),
+                        logging_level,
                         matching=('debug', 'errors'),
                         pause_on_debug=params.get('pause_on_debug')
                     )
@@ -898,7 +903,7 @@ class YouTubeChatDownloader(ChatDownloader):
                     log(
                         'debug',
                         e,
-                        logging_level=params.get('logging'),
+                        logging_level,
                         matching=('debug', 'errors'),
                         pause_on_debug=params.get('pause_on_debug')
                     )
@@ -990,7 +995,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                     'Action: {}'.format(action),
                                     'Parsed data: {}'.format(data)
                                 ],
-                                logging_level=params.get('logging'),
+                                logging_level,
                                 matching=('debug', 'errors'),
                                 pause_on_debug=params.get('pause_on_debug')
                             )
@@ -1008,7 +1013,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 action,
                                 data
                             ],
-                            logging_level=params.get('logging'),
+                            logging_level,
                             matching=('debug', 'errors'),
                             pause_on_debug=params.get('pause_on_debug')
                         )
@@ -1025,7 +1030,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                     original_action_type),
                                 action
                             ],
-                            logging_level=params.get('logging'),
+                            logging_level,
                             matching=('debug', 'errors'),
                             pause_on_debug=params.get('pause_on_debug')
                         )
@@ -1041,7 +1046,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 'Action: {}'.format(action),
                                 'Parsed data: {}'.format(data)
                             ],
-                            logging_level=params.get('logging'),
+                            logging_level,
                             matching=('debug', 'errors'),
                             pause_on_debug=params.get('pause_on_debug')
                         )
@@ -1069,7 +1074,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                     'Action: {}'.format(action),
                                     'Parsed data: {}'.format(data)
                                 ],
-                                logging_level=params.get('logging'),
+                                logging_level,
                                 matching=('debug', 'errors'),
                                 pause_on_debug=params.get('pause_on_debug')
                             )
@@ -1084,7 +1089,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 'Action: {}'.format(action),
                                 'Parsed data: {}'.format(data)
                             ],
-                            logging_level=params.get('logging'),
+                            logging_level,
                             matching=('debug', 'errors'),
                             pause_on_debug=params.get('pause_on_debug')
                         )
@@ -1134,7 +1139,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 log(
                     'debug',
                     'Finished retrieving chat replay.',
-                    logging_level=params.get('logging'),
+                    logging_level,
                     matching=('debug', 'errors')
                 )
                 break
@@ -1143,7 +1148,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 log(
                     'debug',
                     'No actions to process.',
-                    logging_level=params.get('logging'),
+                    logging_level,
                     matching=('debug', 'errors')
                 )
 
@@ -1151,7 +1156,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 log(
                     'debug',
                     'Total number of messages: {}'.format(len(message_list)),
-                    logging_level=params.get('logging'),
+                    logging_level,
                     matching=('debug', 'errors')
                 )
 
@@ -1184,7 +1189,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 continuation_key),
                             cont
                         ],
-                        logging_level=params.get('logging'),
+                        logging_level,
                         matching=('debug', 'errors'),
                         pause_on_debug=params.get('pause_on_debug')
                     )
@@ -1200,7 +1205,7 @@ class YouTubeChatDownloader(ChatDownloader):
                     log(
                         'debug',
                         'Sleeping for {}ms'.format(timeout),
-                        logging_level=params.get('logging'),
+                        logging_level,
                         matching=('debug', 'errors')
                     )
                     time.sleep(timeout/1000)
