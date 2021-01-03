@@ -5,6 +5,7 @@ import os
 import codecs
 import json
 import traceback
+import itertools
 
 from .chat_replay_downloader import *
 
@@ -170,7 +171,7 @@ def main():
 
     # TODO make command line args for these:
     other_params = {
-        'indent': 4, # '\t'
+        #'indent': 4, # '\t'
         'sort_keys': True,
         'overwrite': True,  # default to be False
 
@@ -191,14 +192,31 @@ def main():
 
         callback = write_to_file
     else:
-        callback = test_callback  # None#test_callback
+        callback = test_callback
 
-    program_params['callback'] = callback
+    #program_params['callback'] = callback
+
+    # TODO DEBUGGING:
+    # Temporary
+    program_params['pause_on_debug'] = True
+    program_params['logging'] = 'errors'
+    program_params['message_groups'] = 'all'
 
     try:
         # print(program_params)
-        messages = downloader.get_chat_messages(
-            program_params)  # TODO  returns None?
+        print('try')
+        messages = downloader.get_chat_messages(program_params)
+
+        # if limit:
+        #     q = itertools.islice(q, 5)
+
+        for message in messages:
+            callback(message)
+            #print(message, flush=True)
+
+        print('done')
+
+              # TODO  returns None?
         # q.close()
     except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable) as e:
         log('error', e)
@@ -222,6 +240,7 @@ def main():
     except Exception as e:
         print('unknown exception')
         print(e)
+        traceback.print_exc()
 
     finally:
         if args.output:

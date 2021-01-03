@@ -2,7 +2,6 @@
 from .common import ChatDownloader
 
 from ..errors import (
-    RetriesExceeded,
     NoChatReplay,
     JSONParseError,
     NoContinuation,
@@ -842,7 +841,7 @@ class YouTubeChatDownloader(ChatDownloader):
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, int) else None
 
-        logging_level = params.get('logging')
+        logging_level = self.get_param_value(params, 'logging')
 
         # log the title
         log(
@@ -856,15 +855,17 @@ class YouTubeChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-        max_messages = self.get_param_value(params, 'max_messages')
-        message_list = self.get_param_value(params, 'messages')
+        # max_messages = self.get_param_value(params, 'max_messages')
         callback = self.get_param_value(params, 'callback')
 
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
         messages_types_to_add = self.get_param_value(params, 'message_types')
+
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
         # print(types_of_messages_to_add)
 
 
+        message_count = 0
 
         first_time = True
         while True:
@@ -882,22 +883,7 @@ class YouTubeChatDownloader(ChatDownloader):
                     break
 
                 except JSONParseError as e:
-                    log(
-                        'error',
-                        [
-                            'Retry #{}'.format(attempt_number),
-                            'Error: {}'.format(e)
-                        ],
-                        logging_level,
-                        matching=('debug', 'errors'),
-                        pause_on_debug=params.get('pause_on_debug')
-                    )
-
-                    if attempt_number >= max_attempts:
-                        raise RetriesExceeded(
-                            'Maximum number of retries has been reached ({}).'.format(max_attempts))
-
-                    time.sleep(retry_timeout)
+                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, error=e)
 
                 except NoContinuation as e:
                     log(
@@ -905,10 +891,10 @@ class YouTubeChatDownloader(ChatDownloader):
                         e,
                         logging_level,
                         matching=('debug', 'errors'),
-                        pause_on_debug=params.get('pause_on_debug')
+                        pause_on_debug=pause_on_debug
                     )
                     # Live stream ended
-                    return message_list
+                    return
 
             actions = info.get('actions') or []
 
@@ -997,7 +983,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 ],
                                 logging_level,
                                 matching=('debug', 'errors'),
-                                pause_on_debug=params.get('pause_on_debug')
+                                pause_on_debug=pause_on_debug
                             )
 
                     elif original_action_type in self._KNOWN_IGNORE_ACTION_TYPES:
@@ -1015,7 +1001,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             logging_level,
                             matching=('debug', 'errors'),
-                            pause_on_debug=params.get('pause_on_debug')
+                            pause_on_debug=pause_on_debug
                         )
 
                     test_for_missing_keys = original_item.get(
@@ -1032,7 +1018,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             logging_level,
                             matching=('debug', 'errors'),
-                            pause_on_debug=params.get('pause_on_debug')
+                            pause_on_debug=pause_on_debug
                         )
 
                     if missing_keys:  # TODO debugging for missing keys
@@ -1048,7 +1034,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             logging_level,
                             matching=('debug', 'errors'),
-                            pause_on_debug=params.get('pause_on_debug')
+                            pause_on_debug=pause_on_debug
                         )
 
                     if original_message_type:
@@ -1076,7 +1062,7 @@ class YouTubeChatDownloader(ChatDownloader):
                                 ],
                                 logging_level,
                                 matching=('debug', 'errors'),
-                                pause_on_debug=params.get('pause_on_debug')
+                                pause_on_debug=pause_on_debug
                             )
 
                     else:  # no type # can ignore message
@@ -1091,7 +1077,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             ],
                             logging_level,
                             matching=('debug', 'errors'),
-                            pause_on_debug=params.get('pause_on_debug')
+                            pause_on_debug=pause_on_debug
                         )
                         continue
 
@@ -1125,14 +1111,12 @@ class YouTubeChatDownloader(ChatDownloader):
                         if first_time and before_start:
                             continue  # first time and invalid start time
                         elif before_start or after_end:
-                            return message_list  # while actually searching, if time is invalid
+                            return # while actually searching, if time is invalid
 
                     # valid timing, add
-                    message_list.append(data)
-                    if max_messages is not None and len(message_list) >= max_messages:
-                        return message_list  # if max_messages specified, return once limit has been reached
 
-                    self.perform_callback(callback, data)
+                    message_count += 1
+                    yield data
 
             elif not is_live:
                 # no more actions to process in a chat replay
@@ -1155,7 +1139,7 @@ class YouTubeChatDownloader(ChatDownloader):
             if actions:
                 log(
                     'debug',
-                    'Total number of messages: {}'.format(len(message_list)),
+                    'Total number of messages: {}'.format(message_count),
                     logging_level,
                     matching=('debug', 'errors')
                 )
@@ -1191,7 +1175,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         ],
                         logging_level,
                         matching=('debug', 'errors'),
-                        pause_on_debug=params.get('pause_on_debug')
+                        pause_on_debug=pause_on_debug
                     )
 
                 # sometimes continuation contains timeout info
@@ -1216,7 +1200,7 @@ class YouTubeChatDownloader(ChatDownloader):
             if first_time:
                 first_time = False
 
-        return message_list
+        return
 
     # override base method
     def get_chat_messages(self, params):

@@ -18,9 +18,9 @@ from ..utils import (
     ensure_seconds
 )
 
-from ..errors import (
-    RetriesExceeded
-)
+# from ..errors import (
+#     RetriesExceeded
+# )
 
 
 class FacebookChatDownloader(ChatDownloader):
@@ -123,6 +123,8 @@ class FacebookChatDownloader(ChatDownloader):
     def get_initial_info(self, video_id, params):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging_level')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         # TODO multi attempts
         for attempt_number in range(max_attempts + 1):
@@ -131,16 +133,11 @@ class FacebookChatDownloader(ChatDownloader):
                     video_id), headers=self._FB_HEADERS, data=self.data)
                 json_data = self.parse_fb_json(response)
                 break
-            except json.decoder.JSONDecodeError:
-                # TODO make this debug only
-                print('Unable to parse JSON:')
-                print(response.text)
-                print('Attempt', attempt_number)
-
-                if attempt_number >= max_attempts:
-                    raise RetriesExceeded(
-                        'Maximum number of retries has been reached ({}).'.format(max_attempts))
-                time.sleep(retry_timeout)
+            except json.decoder.JSONDecodeError as e:
+                self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
+                           text='Unable to parse JSON: `{}`'.format(
+                               response.text),
+                           error=e)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
 
@@ -525,10 +522,11 @@ class FacebookChatDownloader(ChatDownloader):
     def get_live_chat_by_video_id(self, video_id, initial_info, params):
         print('live')
 
-        message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging_level')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         buffer_size = 25  # max num comments returned by api call
         cursor = ''
@@ -544,6 +542,8 @@ class FacebookChatDownloader(ChatDownloader):
         }
         data.update(self.data)
         #p = (), params=p
+
+        message_count = 0
         last_ids = []
         while True:
             for attempt_number in range(max_attempts + 1):
@@ -552,16 +552,11 @@ class FacebookChatDownloader(ChatDownloader):
                         self._GRAPH_API, headers=self._FB_HEADERS, data=data)
                     json_data = response.json()
                     break
-                except json.decoder.JSONDecodeError:
-                    # TODO make this debug only
-                    print('Unable to parse JSON:')
-                    print(response.text)
-                    print('Attempt', attempt_number)
-
-                    if attempt_number >= max_attempts:
-                        raise RetriesExceeded(
-                            'Maximum number of retries has been reached ({}).'.format(max_attempts))
-                    time.sleep(retry_timeout)
+                except json.decoder.JSONDecodeError as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
+                           text='Unable to parse JSON: `{}`'.format(
+                               response.text),
+                           error=e)
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback') or {}
             if not feedback:
@@ -610,17 +605,13 @@ class FacebookChatDownloader(ChatDownloader):
                 parsed_node = FacebookChatDownloader._parse_live_stream_node(
                     node)
                 # TODO determine whether to add or not
-                message_list.append(parsed_node)
-                num_to_add += 1
-                # print(parsed_node)
-                # if(max_messages is not None and len(message_list) >= max_messages):
-                #     return message_list  # if max_messages specified, return once limit has been reached
 
-                self.perform_callback(callback, parsed_node)
-                # print(parsed_node)
+                num_to_add += 1
+                message_count += 1
+                yield parsed_node
 
             # got 25 items, and this isn't the first one
-            if num_to_add >= buffer_size and len(message_list) > buffer_size:
+            if num_to_add >= buffer_size and message_count > buffer_size:
                 print(
                     'debug:', 'messages may be coming in faster than requests are being made.')
             print('got', num_to_add, 'messages',
@@ -633,12 +624,13 @@ class FacebookChatDownloader(ChatDownloader):
     def get_chat_replay_by_video_id(self, video_id, initial_info, params):
         print('vod')
 
-        message_list = self.get_param_value(params, 'messages')
         callback = self.get_param_value(params, 'callback')
         max_duration = initial_info.get('duration', float('inf'))
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging_level')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         # useful tool (convert curl to python request)
         # https://curl.trillworks.com/
@@ -664,6 +656,7 @@ class FacebookChatDownloader(ChatDownloader):
         #print(next_start_time, end_time, type(next_start_time), type(end_time))
         # return
         #total = []
+        message_count = 0
         while True:
             next_end_time = min(next_start_time + time_increment, end_time)
             times = (('start_time', next_start_time),
@@ -680,16 +673,11 @@ class FacebookChatDownloader(ChatDownloader):
                                                   params=request_params, data=self.data, timeout=timeout_duration)
                     json_data = self.parse_fb_json(response)
                     break
-                except json.decoder.JSONDecodeError:
-                    # TODO make this debug only
-                    print('Unable to parse JSON:')
-                    print(response.text)
-                    print('Attempt', attempt_number)
-
-                    if attempt_number >= max_attempts:
-                        raise RetriesExceeded(
-                            'Maximum number of retries has been reached ({}).'.format(max_attempts))
-                    time.sleep(retry_timeout)
+                except json.decoder.JSONDecodeError as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
+                           text='Unable to parse JSON: `{}`'.format(
+                               response.text),
+                           error=e)
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads')
             if not payloads:
@@ -704,7 +692,7 @@ class FacebookChatDownloader(ChatDownloader):
 
             if next_start_time >= end_time:
                 print('end')
-                return message_list
+                return
 
             for payload in payloads:
                 time_offset = payload.get('timeoffset')
@@ -738,12 +726,13 @@ class FacebookChatDownloader(ChatDownloader):
                 }
                 # print(temp)
 
-                message_list.append(temp)
+                message_count += 1
+                yield temp
 
                 ChatDownloader.perform_callback(callback, temp)
                 #total += comments
 
-            #print('got', len(payloads), 'messages.','Total:', len(message_list))
+            #print('got', len(payloads), 'messages.','Total:', message_count)
 
     def get_chat_by_video_id(self, video_id, params):
         super().get_chat_messages(params)

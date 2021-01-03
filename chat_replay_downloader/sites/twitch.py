@@ -7,7 +7,6 @@ from .common import ChatDownloader
 
 from ..errors import (
     TwitchError,
-    CallbackFunction,
     InvalidParameter
 )
 
@@ -51,23 +50,18 @@ class TwitchChatIRC():
         self._SOCKET.send((string+'\r\n').encode('utf-8'))
 
     def recvall(self, buffer_size):
-        data = b''
+        fragments = [] # faster than byte string
         while True:
             part = self._SOCKET.recv(buffer_size)
-            data += part
+            fragments.append(part)
 
             # attempt to decode this, otherwise the last byte was incomplete
             # in this case, get more data
             try:
-                return data.decode('utf-8')  # if len(part) < buffer_size:
+                return b''.join(fragments).decode('utf-8')  # if len(part) < buffer_size:
             except UnicodeDecodeError:
                 # print('error', data)
                 continue
-
-                # break
-        # print(data)
-        # TODO perhaps, on decode error, continue receiving
-        return  # ignore needed for times when message is split
 
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
@@ -273,9 +267,8 @@ class TwitchChatDownloader(ChatDownloader):
             self.get_param_value(params, 'end_time'), max_duration)
 
         max_attempts = self.get_param_value(params, 'max_attempts')
-        max_messages = self.get_param_value(params, 'max_messages')
-        message_list = self.get_param_value(params, 'messages')
-        callback = self.get_param_value(params, 'callback')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
+
 
         invalid_message_groups = 'messages' not in (
             self.get_param_value(params, 'message_groups') or [])
@@ -290,6 +283,7 @@ class TwitchChatDownloader(ChatDownloader):
         # api calls start here
         content_offset_seconds = (start_time or 0) + offset
 
+        message_count = 0
         cursor = ''
         while True:
             url = '{}&cursor={}&content_offset_seconds={}'.format(
@@ -316,17 +310,16 @@ class TwitchChatDownloader(ChatDownloader):
                 if before_start:  # still getting to messages
                     continue
                 elif after_end:  # after end
-                    return message_list  # while actually searching, if time is invalid
+                    return  # while actually searching, if time is invalid
 
                 # TODO if correct message type
-                message_list.append(data)
-
-                self.perform_callback(callback, data)
+                message_count += 1
+                yield data
 
             cursor = info.get('_next')
 
             if not cursor:  # no more
-                return message_list
+                return
 
     def get_chat_by_clip_id(self, clip_id, params):
         print('get_chat_by_clip_id:', clip_id)
@@ -781,8 +774,7 @@ class TwitchChatDownloader(ChatDownloader):
         ChatDownloader.create_author_info(
             info, 'author_id', 'author_display_name', 'author_name', 'author_badges')
 
-        if info.get('author') == {}:
-            info.pop('author')
+
         # for i in range(len(badge_info)):
         #     #print(badge_info, badge_info[i])
         #     #if(i < len(badge_metadata)):
@@ -878,12 +870,14 @@ class TwitchChatDownloader(ChatDownloader):
     def get_chat_by_stream_id(self, stream_id, params):
         print('get_chat_by_stream_id:', stream_id)
 
-        twitch_chat_irc = TwitchChatIRC()
+
 
         max_attempts = self.get_param_value(params, 'max_attempts')
-        max_messages = self.get_param_value(params, 'max_messages')
-        message_list = self.get_param_value(params, 'messages')
-        callback = self.get_param_value(params, 'callback')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
+
         message_receive_timeout = self.get_param_value(
             params, 'message_receive_timeout')
         timeout = self.get_param_value(params, 'timeout')
@@ -892,10 +886,6 @@ class TwitchChatDownloader(ChatDownloader):
         # if(params.get('logging') != 'none'):
         #     print('Getting chat for', initial_title_info)
 
-        # max_attempts = self.get_param_value(params, 'max_attempts')
-        # max_messages = self.get_param_value(params, 'max_messages')
-        # message_list = self.get_param_value(params, 'messages')
-        #callback = self.get_param_value(params, 'callback')
 
         messages_groups_to_add = self.get_param_value(
             params, 'message_groups') or []
@@ -904,9 +894,13 @@ class TwitchChatDownloader(ChatDownloader):
 
         #print(messages_groups_to_add, messages_types_to_add, flush=True)
 
-        twitch_chat_irc.set_timeout(message_receive_timeout)
-        twitch_chat_irc.join_channel(stream_id)
+        def create_connection():
+            irc = TwitchChatIRC()
+            irc.set_timeout(message_receive_timeout)
+            irc.join_channel(stream_id)
+            return irc
 
+        twitch_chat_irc = create_connection()
         # if(on_message is None):
         #     on_message = self.__print_message
 
@@ -915,16 +909,12 @@ class TwitchChatDownloader(ChatDownloader):
         time_since_last_message = 0
         readbuffer = ''
 
+        message_count = 0
         while True:
+            attempt_number = 0
             try:
                 new_info = twitch_chat_irc.recvall(buffer_size)
-
-                # print('new_info',new_info)
                 readbuffer += new_info
-                q = readbuffer
-                # print(readbuffer)
-                # print('==========', )
-                # continue
 
                 if 'PING :tmi.twitch.tv' in readbuffer:
                     twitch_chat_irc.send_raw('PONG :tmi.twitch.tv')
@@ -973,16 +963,11 @@ class TwitchChatDownloader(ChatDownloader):
                             for message_type in messages_types_to_add or []:
                                 valid_message_types.append(message_type)
 
-                            # print(data.get('message_type'),
-                            #       valid_message_types)
                             if data.get('message_type') not in valid_message_types:
                                 continue
 
-                        message_list.append(data)
-                        self.perform_callback(callback, data)
-
-                        if max_messages is not None and len(message_list) >= max_messages:
-                            return message_list
+                        message_count += 1
+                        yield data
 
             except socket.timeout:
                 # print('time_since_last_message',time_since_last_message)
@@ -993,9 +978,17 @@ class TwitchChatDownloader(ChatDownloader):
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
-            except Exception as e:
-                print('unknown exception')
-                print(e)
+            except ConnectionResetError as e:
+                twitch_chat_irc = create_connection()
+
+                attempt_number += 1
+                self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, error=e)
+
+            # except Exception as e:
+            #     print('unknown exception')
+            #     print(e)
+            #     print(readbuffer)
+            #     raise e
         # create new socket
         # twitch_socket = socket.socket()
 

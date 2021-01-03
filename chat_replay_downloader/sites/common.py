@@ -2,17 +2,20 @@
 import requests
 from http.cookiejar import MozillaCookieJar, LoadError
 import os
+import time
 
 from ..errors import (
     CookieError,
     ParsingError,
     JSONParseError,
-    CallbackFunction
+    CallbackFunction,
+    RetriesExceeded
 )
 
 from ..utils import (
     get_title_of_webpage,
-    update_dict_without_overwrite
+    update_dict_without_overwrite,
+    log
 )
 
 
@@ -163,13 +166,12 @@ class ChatDownloader:
 
     _DEFAULT_PARAMS = {
         'url': None,  # should be overridden
-        'messages': [],  # list of messages to append to
         'start_time': None,  # get from beginning (even before stream starts)
         'end_time': None,  # get until end
         'callback': None,  # do something for every message
 
         'max_attempts': 30,
-        'retry_timeout':1, # 1 second
+        'retry_timeout': 1,  # 1 second
         # TODO timeout between attempts
         'max_messages': None,
 
@@ -358,15 +360,41 @@ class ChatDownloader:
     @staticmethod
     def create_author_info(info, *author_info_keys):
         """Move all author information to an author dictionary."""
-        if 'author' not in info:
-            info['author'] = {}
+        author_dict = {}
+
         # author_info_keys = ('is_author_banned', 'is_author_banned',
         #                 'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker')
         for key in author_info_keys:
             author_info_item = info.pop(key, None)
             new_key = key.replace('author_', '')
-            if author_info_item not in (None, [], {}): # set it if it contains info
-                info['author'][new_key] = author_info_item
+            # set it if it contains info
+            if author_info_item not in (None, [], {}):
+                author_dict[new_key] = author_info_item
+
+        if 'author' not in info and author_dict != {}:
+            info['author'] = author_dict
+
+    @staticmethod
+    def retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, text=[], error=''):
+        if not isinstance(text, (tuple, list)):
+            text = [text]
+
+        text.append('Retry #{}. {}'.format(attempt_number, error))
+
+        log(
+            'error',
+            text,
+            logging_level,
+            matching=('debug', 'errors'),
+            pause_on_debug=pause_on_debug
+        )
+
+        if attempt_number >= max_attempts:
+            raise RetriesExceeded(
+                'Maximum number of retries has been reached ({}).'.format(max_attempts))
+
+        time.sleep(retry_timeout)
+
     # def _format_item(self, result, item):
     #     # TODO fix this method
 
