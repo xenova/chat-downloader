@@ -392,8 +392,10 @@ class ChatDownloader:
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
-
-        time.sleep(retry_timeout)
+        if retry_timeout>=0:
+            time.sleep(retry_timeout)
+        else:
+            input('Press Enter to continue...')
 
     # def _format_item(self, result, item):
     #     # TODO fix this method

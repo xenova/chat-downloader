@@ -1,4 +1,5 @@
 import json
+from json.decoder import JSONDecodeError
 from urllib import parse
 import xml.etree.ElementTree as ET
 import isodate
@@ -6,6 +7,8 @@ import time
 import re
 
 from .common import ChatDownloader
+
+from requests.exceptions import RequestException
 
 from ..utils import (
     remove_prefixes,
@@ -17,10 +20,6 @@ from ..utils import (
     camel_case_split,
     ensure_seconds
 )
-
-# from ..errors import (
-#     RetriesExceeded
-# )
 
 
 class FacebookChatDownloader(ChatDownloader):
@@ -133,11 +132,14 @@ class FacebookChatDownloader(ChatDownloader):
                     video_id), headers=self._FB_HEADERS, data=self.data)
                 json_data = self.parse_fb_json(response)
                 break
-            except json.decoder.JSONDecodeError as e:
+            except JSONDecodeError as e:
                 self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
                            text='Unable to parse JSON: `{}`'.format(
                                response.text),
                            error=e)
+            except RequestException as e:
+                self.retry(attempt_number, max_attempts, retry_timeout,
+                           logging_level, pause_on_debug, error=e)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
 
@@ -552,11 +554,14 @@ class FacebookChatDownloader(ChatDownloader):
                         self._GRAPH_API, headers=self._FB_HEADERS, data=data)
                     json_data = response.json()
                     break
-                except json.decoder.JSONDecodeError as e:
+                except JSONDecodeError as e:
                     self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
-                           text='Unable to parse JSON: `{}`'.format(
-                               response.text),
-                           error=e)
+                            text='Unable to parse JSON: `{}`'.format(
+                                response.text),
+                            error=e)
+                except RequestException as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout,
+                            logging_level, pause_on_debug, error=e)
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback') or {}
             if not feedback:
@@ -666,18 +671,20 @@ class FacebookChatDownloader(ChatDownloader):
 
             request_params = initial_request_params + times
 
-            # TODO use params max attempts
             for attempt_number in range(max_attempts+1):
                 try:
                     response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
                                                   params=request_params, data=self.data, timeout=timeout_duration)
                     json_data = self.parse_fb_json(response)
                     break
-                except json.decoder.JSONDecodeError as e:
+                except JSONDecodeError as e:
                     self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
-                           text='Unable to parse JSON: `{}`'.format(
-                               response.text),
-                           error=e)
+                            text='Unable to parse JSON: `{}`'.format(
+                                response.text),
+                            error=e)
+                except RequestException as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout,
+                            logging_level, pause_on_debug, error=e)
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads')
             if not payloads:

@@ -5,9 +5,12 @@ import socket
 
 from .common import ChatDownloader
 
+from requests.exceptions import RequestException
+
 from ..errors import (
     TwitchError,
-    InvalidParameter
+    InvalidParameter,
+    JSONParseError
 )
 
 from ..utils import (
@@ -268,6 +271,8 @@ class TwitchChatDownloader(ChatDownloader):
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
 
         invalid_message_groups = 'messages' not in (
@@ -289,8 +294,13 @@ class TwitchChatDownloader(ChatDownloader):
             url = '{}&cursor={}&content_offset_seconds={}'.format(
                 api_url, cursor, content_offset_seconds)
 
-            # TODO use max attempts
-            info = self._session_get_json(url)
+            for attempt_number in range(max_attempts+1):
+                try:
+                    info = self._session_get_json(url)
+                    break
+                except (JSONParseError, RequestException) as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, error=e)
+
             # print(info)
             error = info.get('error')
 
@@ -978,7 +988,7 @@ class TwitchChatDownloader(ChatDownloader):
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
-            except ConnectionResetError as e:
+            except ConnectionError as e:
                 twitch_chat_irc = create_connection()
 
                 attempt_number += 1

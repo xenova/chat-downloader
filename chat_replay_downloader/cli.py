@@ -6,6 +6,7 @@ import codecs
 import json
 import traceback
 import itertools
+from requests.exceptions import RequestException
 
 from .chat_replay_downloader import *
 
@@ -58,7 +59,10 @@ def main():
                         help='wait for user input after an error occurs\n(default: %(default)s)')
 
     parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
-                        help='maximum number of attempts to make for an http request\n(default: %(default)s)')
+                        help='maximum number of attempts to retrieve chat messages. \n(default: %(default)s)')
+
+    parser.add_argument('--retry_timeout', type=int, default=default_params['retry_timeout'],
+                        help='number of seconds to wait before retrying. Setting this to -1 will wait for user input.\n(default: %(default)s)')
 
     parser.add_argument('--max_messages', type=int, default=default_params['max_messages'],
                         help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
@@ -171,7 +175,7 @@ def main():
 
     # TODO make command line args for these:
     other_params = {
-        #'indent': 4, # '\t'
+        'indent': 4,  # '\t'
         'sort_keys': True,
         'overwrite': True,  # default to be False
 
@@ -198,47 +202,53 @@ def main():
 
     # TODO DEBUGGING:
     # Temporary
-    program_params['pause_on_debug'] = True
+    # program_params['pause_on_debug'] = True
     program_params['logging'] = 'errors'
     program_params['message_groups'] = 'all'
 
+    # program_params['retry_timeout'] = -1
     try:
-        # print(program_params)
-        print('try')
         messages = downloader.get_chat_messages(program_params)
 
-        # if limit:
-        #     q = itertools.islice(q, 5)
+        if isinstance(program_params['max_messages'], int):
+            messages = itertools.islice(
+                messages, program_params['max_messages'])
 
         for message in messages:
             callback(message)
-            #print(message, flush=True)
+        log(
+            'debug',
+            'Finished retrieving chat replay.',
+            program_params['logging'],
+            matching=('debug', 'errors')
+        )
 
-        print('done')
-
-              # TODO  returns None?
-        # q.close()
     except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable) as e:
-        log('error', e)
+        log('error', e, program_params['logging'])
 
-    except (ParsingError, ConnectionError) as e:
+    # ParsingError,
+    except RequestException as e:
+        log('error',
+            'Unable to establish a connection. Please check your internet connection.',
+            program_params['logging']
+            )
         log(
             'error',
             [
                 e,
                 traceback.format_exc()
             ],
-            logging_level=program_params.get('logging'),
+            program_params['logging'],
             matching=('debug', 'errors'),
-            pause_on_debug=program_params.get('pause_on_debug')
+            pause_on_debug=program_params['pause_on_debug']
         )
     except PermissionError as e:
-        print('PermissionError',e)
+        print('PermissionError', e)
     except KeyboardInterrupt:
         print('keyboard interrupt')
 
     except Exception as e:
-        print('unknown exception')
+        print('unknown exception', type(e))
         print(e)
         traceback.print_exc()
 

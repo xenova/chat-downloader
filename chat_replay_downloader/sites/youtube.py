@@ -1,6 +1,8 @@
 
 from .common import ChatDownloader
 
+from requests.exceptions import RequestException
+
 from ..errors import (
     NoChatReplay,
     JSONParseError,
@@ -882,7 +884,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             continuation, None if first_time else offset_milliseconds)
                     break
 
-                except JSONParseError as e:
+                except (JSONParseError, RequestException) as e:
                     self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, error=e)
 
                 except NoContinuation as e:
@@ -1120,12 +1122,6 @@ class YouTubeChatDownloader(ChatDownloader):
 
             elif not is_live:
                 # no more actions to process in a chat replay
-                log(
-                    'debug',
-                    'Finished retrieving chat replay.',
-                    logging_level,
-                    matching=('debug', 'errors')
-                )
                 break
             else:
                 # otherwise, is live, so keep trying
