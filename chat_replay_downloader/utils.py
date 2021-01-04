@@ -2,6 +2,7 @@ import datetime
 import re
 import sys
 import emoji
+from colorama import Fore
 
 
 def timestamp_to_microseconds(timestamp):
@@ -137,9 +138,14 @@ def update_dict_without_overwrite(original, new):
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
+LOG_COLOURS = {
+    'info': Fore.GREEN,
+    'debug': Fore.YELLOW,
+    'error': Fore.RED,
+}
 
-def debug_print(*objects, sep=' ', end='\n', flush=True):
-    print('[DEBUG]', *objects, sep=sep, end=end, flush=flush)
+LONGEST_KEY = len(max(LOG_COLOURS.keys(), key=len))
+LOG_FORMAT = '{}{:<'+str(LONGEST_KEY)+'}{} |'
 
 def log(text, items, logging_level, matching='all', pause_on_debug=False):
 
@@ -159,7 +165,7 @@ def log(text, items, logging_level, matching='all', pause_on_debug=False):
         items = [items]
 
     for item in items:
-        print('[{}]'.format(text), item, flush=True)
+        print(LOG_FORMAT.format(LOG_COLOURS.get(text, Fore.GREEN), text, Fore.RESET), item, flush=True)
 
     # TODO fix ?
     if pause_on_debug:# and mode == 'errors'

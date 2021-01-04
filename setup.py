@@ -16,7 +16,8 @@ requirements = [
     'isodate',
     'regex',
     'argparse',
-    'emoji'
+    'emoji',
+    'colorama'
 ]
 
 setup_requirements = ['pytest-runner', ]
