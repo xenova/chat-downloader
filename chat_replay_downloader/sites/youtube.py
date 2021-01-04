@@ -10,7 +10,8 @@ from ..errors import (
     ParsingError,
     VideoUnavailable,
     LoginRequired,
-    VideoUnplayable
+    VideoUnplayable,
+    InvalidParameter
 )
 
 from urllib import parse
@@ -272,6 +273,11 @@ class YouTubeChatDownloader(ChatDownloader):
         ]
     }
 
+    _MESSAGE_TYPES = []
+    for group in _MESSAGE_GROUPS:
+        _MESSAGE_TYPES += _MESSAGE_GROUPS[group]
+
+
     @ staticmethod
     def parse_youtube_link(text):
         if text.startswith(('/redirect', 'https://www.youtube.com/redirect')):  # is a redirect link
@@ -311,7 +317,8 @@ class YouTubeChatDownloader(ChatDownloader):
             elif 'emoji' in run:
                 message_text += run['emoji']['shortcuts'][0]
             else:
-                raise ValueError('Unknown run: {}'.format(run))
+                # unknown run
+                message_text += str(run)
 
         return message_text
 
@@ -848,7 +855,7 @@ class YouTubeChatDownloader(ChatDownloader):
         # log the title
         log(
             'info',
-            'Retrieving chat for "{}"'.format(initial_title_info),
+            'Retrieving chat for "{}".'.format(initial_title_info),
             logging_level
         )
 
@@ -861,11 +868,18 @@ class YouTubeChatDownloader(ChatDownloader):
         callback = self.get_param_value(params, 'callback')
 
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
-        messages_types_to_add = self.get_param_value(params, 'message_types')
+        messages_types_to_add = self.get_param_value(params, 'message_types') or []
+
+        invalid_groups = set(messages_groups_to_add) - self._MESSAGE_GROUPS.keys()
+        if 'all' not in messages_groups_to_add and invalid_groups:
+            raise InvalidParameter('Invalid groups specified: {}'.format(invalid_groups))
+
+        invalid_types = set(messages_types_to_add) - set(self._MESSAGE_TYPES)
+        if invalid_types:
+            raise InvalidParameter('Invalid types specified: {}'.format(invalid_types))
+
 
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
-        # print(types_of_messages_to_add)
-
 
         message_count = 0
 
@@ -885,7 +899,8 @@ class YouTubeChatDownloader(ChatDownloader):
                     break
 
                 except (JSONParseError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, error=e)
+                    self.retry(attempt_number, max_attempts, retry_timeout,
+                               logging_level, pause_on_debug, error=e)
 
                 except NoContinuation as e:
                     log(
@@ -1083,24 +1098,17 @@ class YouTubeChatDownloader(ChatDownloader):
                         )
                         continue
 
-                    # user wants everything, keep going
-                    if 'all' in messages_groups_to_add:
-                        pass
+                    # check whether to skip this message or not, based on its type
 
-                    else:
-                        # check whether to skip this message or not, based on its type
+                    to_add = self.must_add_item(
+                        data,
+                        self._MESSAGE_GROUPS,
+                        messages_groups_to_add,
+                        messages_types_to_add
+                    )
 
-                        valid_message_types = []
-                        for message_group in messages_groups_to_add or []:
-                            valid_message_types += self._MESSAGE_GROUPS.get(
-                                message_group, [])
-
-                        for message_type in messages_types_to_add or []:
-                            valid_message_types.append(message_type)
-
-                        if data.get('message_type') not in valid_message_types:
-                            #print(data.get('message_type'),'cont.', flush=True)
-                            continue
+                    if not to_add:
+                        continue
 
                     # if from a replay, check whether to skip this message or not, based on its time
                     if not is_live:
@@ -1113,7 +1121,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         if first_time and before_start:
                             continue  # first time and invalid start time
                         elif before_start or after_end:
-                            return # while actually searching, if time is invalid
+                            return  # while actually searching, if time is invalid
 
                     # valid timing, add
 

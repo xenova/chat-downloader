@@ -40,13 +40,18 @@ class ChatReplayDownloader:
     # , start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None
     # TODO add dictionary params ->
 
-
     def get_chat_messages(self, params):
         # super().get
         url = params.get('url')  # the only required argument
         if not url:
             # TODO raise error
             return
+
+        if params.get('verbose'):
+            params['logging'] = 'errors'
+
+        logging_level = params.get('logging')
+        pause_on_debug = params.get('pause_on_debug')
 
         # self.LIST_OF_MESSAGES = [] # reset list of messages
         # TODO add a reset_messages() method?
@@ -61,9 +66,19 @@ class ChatReplayDownloader:
             # print(site, flush=True)
             if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
                 with site(self._INIT_PARAMS) as correct_site:
-                    log('site', correct_site, params.get('logging'))
-                    messages = correct_site.get_chat_messages(params)
-                return messages
+
+                    new_keys = {key: params[key]
+                        for key in correct_site._DEFAULT_PARAMS if correct_site._DEFAULT_PARAMS.get(key) != params.get(key)}
+
+                    log('site', correct_site, logging_level)
+                    log(
+                        'debug',
+                        'Parameters: {}'.format(new_keys),
+                        logging_level,
+                        matching=('debug', 'errors'),
+                        pause_on_debug=pause_on_debug
+                    )
+                    return correct_site.get_chat_messages(params)
 
         # Raise unsupported site
 

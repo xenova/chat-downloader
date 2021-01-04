@@ -168,7 +168,7 @@ class ChatDownloader:
         'url': None,  # should be overridden
         'start_time': None,  # get from beginning (even before stream starts)
         'end_time': None,  # get until end
-        'callback': None,  # do something for every message
+        #'callback': None,  # do something for every message
 
         'max_attempts': 30,
         'retry_timeout': 1,  # 1 second
@@ -177,6 +177,7 @@ class ChatDownloader:
 
         'output': None,
         'logging': 'normal',
+        'verbose': False,
         'safe_print': False,
         'pause_on_debug': False,
 
@@ -207,6 +208,20 @@ class ChatDownloader:
 
     def __str__(self):
         return ''
+
+    @staticmethod
+    def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
+        if 'all' in messages_groups_to_add: # user wants everything
+            return True
+
+        valid_message_types = []
+        for message_group in messages_groups_to_add or []:
+            valid_message_types += message_groups_dict.get(message_group, [])
+
+        for message_type in messages_types_to_add or []:
+            valid_message_types.append(message_type)
+
+        return item.get('message_type') in valid_message_types
 
     @staticmethod
     def get_param_value(params, key):

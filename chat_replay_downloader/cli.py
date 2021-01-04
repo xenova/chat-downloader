@@ -50,8 +50,12 @@ def main():
     parser.add_argument('--output', '-o', default=default_params['output'],
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--logging', choices=['normal', 'none', 'errors', 'debug'], default=default_params['logging'],
+    debug_group = parser.add_mutually_exclusive_group()
+
+    debug_group.add_argument('--logging', choices=['normal', 'none', 'errors', 'debug'], default=default_params['logging'],
                         help='level of logging to show\n(default: %(default)s)')
+    debug_group.add_argument('--verbose', '-v', action='store_true', default=default_params['verbose'],
+                        help='print various debugging information\n(default: %(default)s)')
 
     parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
                         help='level of logging to show\n(default: %(default)s)')
@@ -150,9 +154,10 @@ def main():
     downloader = ChatReplayDownloader(init_params)
 
     def test_callback(item):
-        formatted = '[{}] {}: {}'.format(
+        formatted = '[{}] *{}* {}: {}'.format(
             multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
-            multi_get(item, 'author', 'name'),
+            multi_get(item, 'amount') or '',
+            multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name'),
             multi_get(item, 'message')
         )
         if program_params.get('logging') != 'none':
@@ -203,8 +208,9 @@ def main():
     # TODO DEBUGGING:
     # Temporary
     # program_params['pause_on_debug'] = True
-    program_params['logging'] = 'errors'
-    program_params['message_groups'] = 'all'
+    # program_params['logging'] = 'errors'
+    # program_params['verbose'] = True
+    #program_params['message_groups'] = 'all'
 
     # program_params['retry_timeout'] = -1
     try:
@@ -223,7 +229,7 @@ def main():
             matching=('debug', 'errors')
         )
 
-    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable) as e:
+    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter) as e:
         log('error', e, program_params['logging'])
 
     # ParsingError,
