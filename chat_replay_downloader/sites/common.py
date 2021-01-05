@@ -228,7 +228,7 @@ class ChatDownloader:
         return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
     @staticmethod
-    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input):
+    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys = False):
         remap = remapping_dict.get(remap_key)
 
         if remap:
@@ -238,6 +238,9 @@ class ChatDownloader:
                     remap_input)
             else:
                 info[remap] = remap_input
+        elif keep_unknown_keys:
+            info[remap_key] = remap_input
+
         # else:
         #     pass # do nothing
 
