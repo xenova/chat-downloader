@@ -191,8 +191,7 @@ def multi_get(dictionary, *keys, default=None):
     return current
 
 
-invalid_unicode_re = re.compile(
-    u'[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
+invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
 
 
 def replace_invalid_unicode(text, replacement_char='\uFFFD'):
@@ -217,3 +216,20 @@ def safe_print_text(text):
 
     """
     print(safe_convert_text(text), flush=True)
+
+
+def flatten_json(original_json):
+    final = {}
+
+    def flatten(item, prefix=''):
+        if isinstance(item, dict):
+            for key in item:
+                flatten(item[key], '{}{}.'.format(prefix, key))
+        elif isinstance(item, list):
+            for index in range(len(item)):
+                flatten(item[index], '{}{}.'.format(prefix, index))
+        else:
+            final[prefix[:-1]] = item
+    flatten(original_json)
+
+    return final

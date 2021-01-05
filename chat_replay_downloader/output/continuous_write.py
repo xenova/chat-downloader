@@ -3,6 +3,7 @@ import os
 import json
 import csv
 
+from ..utils import flatten_json
 
 class CW:
     """
@@ -135,7 +136,9 @@ class CSVCW(CW):
         self.csv_dict_writer = csv.DictWriter(
             self.file, fieldnames=self.columns)
 
-    def write(self, item):
+    def write(self, item, flatten=True):
+        if flatten:
+            item = flatten_json(item)
         self.all_items.append(item)
 
         new_columns = [column for column in item.keys()
