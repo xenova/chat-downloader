@@ -15,7 +15,8 @@ from ..errors import (
 from ..utils import (
     get_title_of_webpage,
     update_dict_without_overwrite,
-    log
+    log,
+    remove_prefixes
 )
 
 
@@ -359,8 +360,10 @@ class ChatDownloader:
 
     @staticmethod
     def create_image(url, width=None, height=None, image_id=None):
+        if url.startswith('//'):
+            url = 'https:' + url
         image = {
-            'url': url
+            'url':  url,
         }
         if width:
             image['width'] = width
