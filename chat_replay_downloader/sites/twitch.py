@@ -168,6 +168,7 @@ class TwitchChatDownloader(ChatDownloader):
         'multiply_by_1000': lambda x: int_or_none(x) * 1000,
         'parse_int': int_or_none,
         'parse_bool': lambda x: x == '1',
+        'parse_bool_text': lambda x: x == 'true',
 
         'replace_with_underscores': replace_with_underscores,
 
@@ -187,6 +188,7 @@ class TwitchChatDownloader(ChatDownloader):
         'bio': 'bio'
 
     }
+    #
     _REMAPPING = {
         # 'origID' : ('mapped_id', 'remapping_function')
         '_id': 'message_id',
@@ -204,241 +206,108 @@ class TwitchChatDownloader(ChatDownloader):
         'message': ('message_info', 'parse_message_info')
     }
 
-    @staticmethod
-    def parse_author_images(original_url):
-        smaller_icon = original_url.replace('300x300', '70x70')
-        return [
-            ChatDownloader.create_image(original_url, 300, 300),
-            ChatDownloader.create_image(smaller_icon, 70, 70),
-        ]
-        # -70x70
+    _MESSAGE_PARAM_REMAPPING = {
+        'msg-id': 'message_type',
 
-        #         "author_images": [
-        #     {
-        #         "height": 32,
-        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s32-c-k-c0xffffffff-no-rj-mo",
-        #         "width": 32
-        #     },
-        #     {
-        #         "height": 64,
-        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s64-c-k-c0xffffffff-no-rj-mo",
-        #         "width": 64
-        #     }
-        # ],
+        'msg-param-cumulative-months': ('cumulative_months', 'parse_int'),
+        'msg-param-months': ('months', 'parse_int'),
+        'msg-param-displayName': 'raider_display_name',
+        'msg-param-login': 'raider_name',
+        'msg-param-viewerCount': ('number_of_raiders', 'parse_int'),
 
-    @ staticmethod
-    def _parse_item(item, offset=0):
-        info = {}
+        'msg-param-promo-name': 'promotion_name',
+        'msg-param-promo-gift-total': 'number_of_gifts_given_during_promo',
 
-        for key in item:
-            ChatDownloader.remap(info, TwitchChatDownloader._REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])
-
-        if 'time_in_seconds' in info:
-            info['time_in_seconds'] -= offset
-            info['time_text'] = seconds_to_time(int(info['time_in_seconds']))
-
-        message_info = info.pop('message_info', None)
-        if message_info:
-            info['message'] = message_info.get('message')
-            info['author']['badges'] = message_info.get('badges')
-            info['author']['colour'] = message_info.get('colour')
-
-        return info
-
-    _REGEX_FUNCTION_MAP = [
-        (_VALID_VOD_URL, 'get_chat_by_vod_id'),
-        (_VALID_CLIPS_URL, 'get_chat_by_clip_id'),
-        (_VALID_STREAM_URL, 'get_chat_by_stream_id'),
-    ]
-
-    # offset and max_duration are used by clips
-    def get_chat_by_vod_id(self, vod_id, params, offset=0, max_duration=None):
-
-        # twitch does not provide messages before the stream starts,
-        # so we default to a start time of 0
-        start_time = ensure_seconds(
-            self.get_param_value(params, 'start_time'), 0)
-        end_time = ensure_seconds(
-            self.get_param_value(params, 'end_time'), max_duration)
-
-        max_attempts = self.get_param_value(params, 'max_attempts')
-        retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
-
-        messages_groups_to_add = self.get_param_value(
-            params, 'message_groups') or []
-        messages_types_to_add = self.get_param_value(
-            params, 'message_types') or []
-
-        invalid_message_groups = 'messages' not in messages_groups_to_add
-        invalid_message_types = messages_types_to_add and 'text_message' not in messages_types_to_add
-
-        if invalid_message_groups or invalid_message_types:
-            raise InvalidParameter(
-                'Custom method types/groups are not supported for Twitch VODs/clips')
-
-        api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
-
-        content_offset_seconds = (start_time or 0) + offset
-
-        message_count = 0
-        cursor = ''
-        while True:
-            url = '{}&cursor={}&content_offset_seconds={}'.format(
-                api_url, cursor, content_offset_seconds)
-
-            for attempt_number in range(max_attempts+1):
-                try:
-                    info = self._session_get_json(url)
-                    break
-                except (JSONParseError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout,
-                               logging_level, pause_on_debug, error=e)
-
-            error = info.get('error')
-
-            if error:
-                # TODO make parse error and raise more general errors
-                raise TwitchError(info.get('message'))
-
-            for comment in info.get('comments') or []:
-                data = self._parse_item(comment, offset).copy()
-
-                time_in_seconds = data.get('time_in_seconds', 0)
-
-                before_start = start_time is not None and time_in_seconds < start_time
-                after_end = end_time is not None and time_in_seconds > end_time
-
-                if before_start:  # still getting to messages
-                    continue
-                elif after_end:  # after end
-                    return  # while actually searching, if time is invalid
-
-                message_count += 1
-                yield data
-
-            cursor = info.get('_next')
-
-            if not cursor:
-                return
-
-    def get_chat_by_clip_id(self, clip_id, params):
-
-        max_attempts = self.get_param_value(params, 'max_attempts')
-        retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
-
-        query = {
-            'query': '{ clip(slug: "%s") { video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
-        }
-        for attempt_number in range(max_attempts+1):
-            try:
-                clip = self._session_post(self._GQL_API_URL,
-                                  data=json.dumps(query).encode(),
-                                  headers={'Client-ID': self._CLIENT_ID}).json()['data']['clip']
-                break
-            except (JSONParseError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                            logging_level, pause_on_debug, error=e)
+        'msg-param-recipient-id': 'gift_recipient_id',
+        'msg-param-recipient-user-name': 'gift_recipient_display_name',
+        'msg-param-recipient-display-name': 'gift_recipient_display_name',
+        'msg-param-gift-months': ('number_of_months_gifted', 'parse_int'),
 
 
-        vod_id = multi_get(clip, 'video', 'id')
-        offset = clip.get('videoOffsetSeconds')
-        duration = clip.get('durationSeconds')
-        slug = clip.get('slug')
-        title = clip.get('title')
+        'msg-param-sender-login': 'gifter_name',
+        'msg-param-sender-name': 'gifter_display_name',
 
-        log(
-            'info',
-            'Retrieving chat for clip "{}" ({}).'.format(slug, title),
-            logging_level
-        )
+        'msg-param-should-share-streak': ('user_wants_to_share_streaks', 'parse_bool'),
+        'msg-param-streak-months': ('number_of_consecutive_months_subscribed', 'parse_int'),
+        'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
+        'msg-param-sub-plan-name': 'subscription_plan_name',
 
-        return self.get_chat_by_vod_id(vod_id, params, offset, duration)
+        'msg-param-ritual-name': 'ritual_name',
 
-    # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
+        'msg-param-threshold': 'bits_badge_tier',
 
-    _MESSAGE_REGEX = re.compile(
-        r'^@(.+?(?=\s+:))(?:\s\S*?)tmi\.twitch\.tv\s+(\S+)\s+#?\S+\s+?\:?([^\r\n]*)?', re.MULTILINE)
-    # Groups:
-    # 1. Tag info
-    # 2. Action type
-    # 3. Message
 
-    # A full list can be found here: https://twitchinsights.net/badges
-    # https://badges.twitch.tv/v1/badges/global/display
+        # found in vods
 
-    _BADGE_KEYS = ('title', 'description', 'image_url_1x',
-                   'image_url_2x', 'image_url_4x', 'click_action', 'click_url')
-    _BADGE_ID_REGEX = r'v1/(.+)/'
+        # resub
+        'msg-param-multimonth-duration': ('multimonth_duration', 'parse_int'),
+        'msg-param-multimonth-tenure': ('multimonth_tenure', 'parse_int'),
+        'msg-param-was-gifted': ('was_gifted', 'parse_bool_text'),
 
-    @staticmethod
-    def parse_badge_info(name, version, set_subscriber_badge_info=False):
-        new_badge = {
-            'name': replace_with_underscores(name),
-            'version': int_or_none(version, version)
-        }
-        if name == 'subscriber':
-            if set_subscriber_badge_info:
-                TwitchChatDownloader._set_subscriber_badge_info(
-                    new_badge, version)
-        else:  # is global emote
-            new_badge_info = multi_get(
-                TwitchChatDownloader._BADGE_INFO, name, 'versions', version) or {}
+        'msg-param-gifter-id': 'gifter_id',
+        'msg-param-gifter-login': 'gifter_name',
+        'msg-param-gifter-name': 'gifter_display_name',
+        'msg-param-anon-gift': ('was_anonymous_gift', 'parse_bool_text'),
+        'msg-param-gift-month-being-redeemed': ('gift_months_being_redeemed', 'parse_int'),
 
-            if new_badge_info:
-                for key in TwitchChatDownloader._BADGE_KEYS:
-                    new_badge[key] = new_badge_info.get(key)
+        # rewardgift
+        'msg-param-domain': 'domain',
+        'msg-param-selected-count': ('selected_count', 'parse_int'),
+        'msg-param-trigger-type': 'trigger_type',
+        'msg-param-total-reward-count': ('total_reward_count', 'parse_int'),
+        'msg-param-trigger-amount': ('trigger_amount', 'parse_int'),
 
-                image_urls = [
-                    (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
-                if image_urls:
-                    new_badge['icons'] = []
+        # submysterygift
+        'msg-param-origin-id': 'origin_id',
+        'msg-param-sender-count': ('sender_count', 'parse_int'),
+        'msg-param-mass-gift-count': ('mass_gift_count', 'parse_int'),
 
-                for image_url, size in image_urls:
-                    new_badge['icons'].append(
-                        ChatDownloader.create_image(image_url, size, size))
+        # communitypayforward
+        'msg-param-prior-gifter-anonymous': ('prior_gifter_anonymous', 'parse_bool_text'),
+        'msg-param-prior-gifter-user-name': 'prior_gifter_name',
+        'msg-param-prior-gifter-display-name': 'prior_gifter_display_name',
+        'msg-param-prior-gifter-id': 'prior_gifter_id',
 
-                if image_urls:
-                    badge_id = re.search(
-                        TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
-                    if badge_id:
-                        new_badge['id'] = badge_id.group(1)
 
-        return new_badge
+        # not come across yet, but other tools have it:
+        # 'msg-param-charity':'charity',
+        # 'msg-param-bits-amount':'bits_amount',
+        # 'msg-param-total':'total',
+        # 'msg-param-streak-tenure-months':'streak_tenure_months',
+        # 'msg-param-sub-benefit-end-month':'sub_benefit_end_month',
+        # 'msg-param-userID':'user_id',
+        # 'msg-param-fun-string':'fun_string',
+        # 'msg-param-cumulative-tenure-months':'cumulative_tenure_months',
+        # 'msg-param-should-share-streak-tenure':'should-share-streak-tenure',
+        # 'msg-param-min-cheer-amount' :'minimum_cheer_amount',
+        # 'msg-param-gift-name':'gift_name',
 
-    @staticmethod
-    def parse_badges(badges):
-        info = []
-        if not badges:
-            return info
+        # 'msg-param-charity-hashtag':'charity_hashtag',
+        # 'msg-param-charity-hours-remaining':'charity_hours_remaining',
+        # 'msg-param-charity-days-remaining':'charity_days_remaining',
+        # 'msg-param-charity-name':'charity_name',
+        # 'msg-param-charity-learn-more':'charity_learn_more',
 
-        for badge in badges.split(','):
-            split = badge.split('/')
-            info.append(TwitchChatDownloader.parse_badge_info(
-                split[0], split[1]))
-        return info
 
-    @staticmethod
-    def parse_commenter(commenter):
-        info = {}
-        for key in commenter:
-            ChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
-        return info
 
-    @staticmethod
-    def parse_message_info(message):
-        return {
-            'message': message.get('body'),
-            'colour': message.get('user_color'),
-            'badges': list(map(
-                lambda x: TwitchChatDownloader.parse_badge_info(
-                    x.get('_id'), x.get('version'), True), message.get('user_badges') or []))
-        }
+        # to remove later
+        'msg-param-profileImageURL': 'profile_image_url'
+    }
+    _KNOWN_KEYS = {
+        **_REMAPPING, **_MESSAGE_PARAM_REMAPPING
+    }
+
+    _KNOWN_MESSAGE_TYPES = {
+        # created elsewhere
+        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type',
+
+    }
+
+    for key in _KNOWN_KEYS:
+        value = _KNOWN_KEYS[key]
+        if isinstance(_KNOWN_KEYS[key], tuple):
+            value = value[0]
+        _KNOWN_MESSAGE_TYPES.add(value)
 
     _IRC_REMAPPING = {
         # CLEARCHAT
@@ -498,41 +367,17 @@ class TwitchChatDownloader(ChatDownloader):
         'subs-only': ('subscriber_only', 'parse_bool'),
 
         # USERNOTICE
-        'msg-id': 'message_type',  # (, 'replace_with_underscores'),
+
 
         'system-msg': 'system_message',
 
-        # USERNOTICE - other
-        'msg-param-cumulative-months': ('months', 'parse_int'),
-        'msg-param-months': ('months', 'parse_int'),
-        'msg-param-displayName': 'raider_display_name',
-        'msg-param-login': 'raider_name',
-        'msg-param-viewerCount': 'number_of_raiders',
-
-        'msg-param-promo-name': 'promo_name',
-        'msg-param-promo-gift-total': 'number_of_gifts_given_during_promo',
-
-        'msg-param-recipient-id': 'gift_recipient_id',
-        'msg-param-recipient-user-name': 'gift_recipient_display_name',
-        'msg-param-recipient-display-name': 'gift_recipient_display_name',
-        'msg-param-gift-months': ('number_of_months_gifted', 'parse_int'),
-
-        'msg-param-sender-login': 'gifter_name',
-        'msg-param-sender-name': 'gifter_display_name',
-
-        'msg-param-should-share-streak': ('user_wants_to_share_streaks', 'parse_bool'),
-        'msg-param-streak-months': ('number_of_consecutive_months_subscribed', 'parse_int'),
-        'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
-
-        'msg-param-sub-plan-name': 'subscription_plan_name',
-
-        'msg-param-ritual-name': 'ritual_name',
-
-        'msg-param-threshold': 'bits_badge_tier',
-
         # (Commands)
         # HOSTTARGET
-        'number-of-viewers': 'number_of_viewers'
+        'number-of-viewers': 'number_of_viewers',
+
+
+        # USERNOTICE - other
+        **_MESSAGE_PARAM_REMAPPING
     }
 
     _ACTION_TYPE_REMAPPING = {
@@ -742,12 +587,323 @@ class TwitchChatDownloader(ChatDownloader):
             _MESSAGE_GROUPS[message_group] = []
         _MESSAGE_GROUPS[message_group] += list(value.values())
 
+    @staticmethod
+    def parse_author_images(original_url):
+        smaller_icon = original_url.replace('300x300', '70x70')
+        return [
+            ChatDownloader.create_image(original_url, 300, 300),
+            ChatDownloader.create_image(smaller_icon, 70, 70),
+        ]
+        # -70x70
+
+        #         "author_images": [
+        #     {
+        #         "height": 32,
+        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s32-c-k-c0xffffffff-no-rj-mo",
+        #         "width": 32
+        #     },
+        #     {
+        #         "height": 64,
+        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s64-c-k-c0xffffffff-no-rj-mo",
+        #         "width": 64
+        #     }
+        # ],
+
+    @ staticmethod
+    def _parse_item(item, offset, params={}):
+        info = {}
+
+        for key in item:
+            ChatDownloader.remap(info, TwitchChatDownloader._REMAPPING,
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])
+
+        if 'time_in_seconds' in info:
+            info['time_in_seconds'] -= offset
+            info['time_text'] = seconds_to_time(int(info['time_in_seconds']))
+
+        message_info = info.pop('message_info', None)
+        if message_info:
+            info['message'] = message_info.get('message')
+            info['author']['badges'] = message_info.get('badges')
+            info['author']['colour'] = message_info.get('colour')
+
+        user_notice_params = message_info.pop('user_notice_params', {})
+
+        for key in user_notice_params:
+            ChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, user_notice_params[key], True)
+
+        original_message_type = info.get('message_type')
+        if original_message_type:
+            TwitchChatDownloader._set_message_type(info, original_message_type)
+        else:
+            info['message_type'] = 'text_message'
+
+        # remove profile_image_url if present
+        info.pop('profile_image_url', None)
+
+        # test for missing keys
+        missing_keys = info.keys()-TwitchChatDownloader._KNOWN_MESSAGE_TYPES
+
+        #print(user_notice_info.keys(), TwitchChatDownloader._IRC_REMAPPING.keys())
+        if missing_keys:
+            log(
+                'debug',
+                [
+                    'Missing keys found: {}'.format(missing_keys),
+                    'User notice params: {}'.format(
+                        user_notice_params),
+                    'Parsed data: {}'.format(info)
+                ],
+                params.get('logging'),
+                matching=('debug', 'errors'),
+                pause_on_debug=params.get('pause_on_debug')
+            )
+
+        return info
+
+    _REGEX_FUNCTION_MAP = [
+        (_VALID_VOD_URL, 'get_chat_by_vod_id'),
+        (_VALID_CLIPS_URL, 'get_chat_by_clip_id'),
+        (_VALID_STREAM_URL, 'get_chat_by_stream_id'),
+    ]
+
+    # offset and max_duration are used by clips
+    def get_chat_by_vod_id(self, vod_id, params, offset=0, max_duration=None):
+
+        # twitch does not provide messages before the stream starts,
+        # so we default to a start time of 0
+        start_time = ensure_seconds(
+            self.get_param_value(params, 'start_time'), 0)
+        end_time = ensure_seconds(
+            self.get_param_value(params, 'end_time'), max_duration)
+
+        max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
+        messages_groups_to_add = self.get_param_value(
+            params, 'message_groups') or []
+        messages_types_to_add = self.get_param_value(
+            params, 'message_types') or []
+
+        # TODO Remove this and make same as IRC
+        # invalid_message_groups = all(
+        #     key not in messages_groups_to_add for key in ('all', 'messages'))
+        # invalid_message_types = messages_types_to_add and 'text_message' not in messages_types_to_add
+
+        # if invalid_message_groups or invalid_message_types:
+        #     raise InvalidParameter(
+        #         'Custom method types/groups are not supported for Twitch VODs/clips')
+
+        api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
+
+        content_offset_seconds = (start_time or 0) + offset
+
+        message_count = 0
+        cursor = ''
+        while True:
+            url = '{}&cursor={}&content_offset_seconds={}'.format(
+                api_url, cursor, content_offset_seconds)
+
+            for attempt_number in range(max_attempts+1):
+                try:
+                    info = self._session_get_json(url)
+                    break
+                except (JSONParseError, RequestException) as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout,
+                               logging_level, pause_on_debug, error=e)
+
+            error = info.get('error')
+
+            if error:
+                # TODO make parse error and raise more general errors
+                raise TwitchError(info.get('message'))
+
+            comments = info.get('comments') or []
+            for comment in comments:
+                data = self._parse_item(comment, offset, params)
+
+                time_in_seconds = data.get('time_in_seconds', 0)
+
+                before_start = start_time is not None and time_in_seconds < start_time
+                after_end = end_time is not None and time_in_seconds > end_time
+
+                if before_start:  # still getting to messages
+                    continue
+                elif after_end:  # after end
+                    return  # while actually searching, if time is invalid
+
+                to_add = self.must_add_item(
+                    data,
+                    self._MESSAGE_GROUPS,
+                    messages_groups_to_add,
+                    messages_types_to_add
+                )
+
+                if not to_add:
+                    continue
+
+                message_count += 1
+                yield data
+
+            if comments:
+                log(
+                    'debug',
+                    'Total number of messages: {}'.format(message_count),
+                    logging_level,
+                    matching=('debug', 'errors')
+                )
+            cursor = info.get('_next')
+
+            if not cursor:
+                return
+
+    def get_chat_by_clip_id(self, clip_id, params):
+
+        max_attempts = self.get_param_value(params, 'max_attempts')
+        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        logging_level = self.get_param_value(params, 'logging')
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
+        query = {
+            'query': '{ clip(slug: "%s") { video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
+        }
+        for attempt_number in range(max_attempts+1):
+            try:
+                clip = self._session_post(self._GQL_API_URL,
+                                          data=json.dumps(query).encode(),
+                                          headers={'Client-ID': self._CLIENT_ID}).json()['data']['clip']
+                break
+            except (JSONParseError, RequestException) as e:
+                self.retry(attempt_number, max_attempts, retry_timeout,
+                           logging_level, pause_on_debug, error=e)
+
+        vod_id = multi_get(clip, 'video', 'id')
+        offset = clip.get('videoOffsetSeconds')
+        duration = clip.get('durationSeconds')
+        slug = clip.get('slug')
+        title = clip.get('title')
+
+        log(
+            'info',
+            'Retrieving chat for clip "{}" ({}).'.format(slug, title),
+            logging_level
+        )
+
+        return self.get_chat_by_vod_id(vod_id, params, offset, duration)
+
+    # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
+
+    _MESSAGE_REGEX = re.compile(
+        r'^@(.+?(?=\s+:))(?:\s\S*?)tmi\.twitch\.tv\s+(\S+)\s+#?\S+\s+?\:?([^\r\n]*)?', re.MULTILINE)
+    # Groups:
+    # 1. Tag info
+    # 2. Action type
+    # 3. Message
+
+    # A full list can be found here: https://twitchinsights.net/badges
+    # https://badges.twitch.tv/v1/badges/global/display
+
+    _BADGE_KEYS = ('title', 'description', 'image_url_1x',
+                   'image_url_2x', 'image_url_4x', 'click_action', 'click_url')
+    _BADGE_ID_REGEX = r'v1/(.+)/'
+
+    @staticmethod
+    def parse_badge_info(name, version, set_subscriber_badge_info=False):
+        new_badge = {
+            'name': replace_with_underscores(name),
+            'version': int_or_none(version, version)
+        }
+        if name == 'subscriber':
+            if set_subscriber_badge_info:
+                TwitchChatDownloader._set_subscriber_badge_info(
+                    new_badge, version)
+        else:  # is global emote
+            new_badge_info = multi_get(
+                TwitchChatDownloader._BADGE_INFO, name, 'versions', version) or {}
+
+            if new_badge_info:
+                for key in TwitchChatDownloader._BADGE_KEYS:
+                    new_badge[key] = new_badge_info.get(key)
+
+                image_urls = [
+                    (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
+                if image_urls:
+                    new_badge['icons'] = []
+
+                for image_url, size in image_urls:
+                    new_badge['icons'].append(
+                        ChatDownloader.create_image(image_url, size, size))
+
+                if image_urls:
+                    badge_id = re.search(
+                        TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
+                    if badge_id:
+                        new_badge['id'] = badge_id.group(1)
+
+        return new_badge
+
+    @staticmethod
+    def parse_badges(badges):
+        info = []
+        if not badges:
+            return info
+
+        for badge in badges.split(','):
+            split = badge.split('/')
+            info.append(TwitchChatDownloader.parse_badge_info(
+                split[0], split[1]))
+        return info
+
+    @staticmethod
+    def parse_commenter(commenter):
+        info = {}
+        for key in commenter:
+            ChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
+        return info
+
+    @staticmethod
+    def parse_message_info(message):
+        return {
+            'message': message.get('body'),
+            'colour': message.get('user_color'),
+            'badges': list(map(
+                lambda x: TwitchChatDownloader.parse_badge_info(
+                    x.get('_id'), x.get('version'), True), message.get('user_badges') or [])),
+            'user_notice_params': message.get('user_notice_params')
+        }
+
     # print(_MESSAGE_TYPE_REMAPPING)
     @staticmethod
     def _set_subscriber_badge_info(badge, months):
-        badge['months'] = int(months)
-        badge['title'] = badge['description'] = '{}-Month Subscriber'.format(
-            months)
+        num_months = int(months)
+        title = 'Subscriber'
+        if num_months:
+            badge['months'] = num_months
+            title = '{}-Month {}'.format(months, title)
+
+        badge['title'] = badge['description'] = title
+
+    @staticmethod
+    def _set_message_type(info, original_message_type, params={}):
+        new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
+            original_message_type)
+
+        #print(original_message_type, '-->', new_message_type)
+
+        if new_message_type:
+            info['message_type'] = new_message_type
+        else:
+            log(
+                'debug',
+                'Unknown message type:', original_message_type,
+                params.get('logging'),
+                matching=('debug', 'errors'),
+                pause_on_debug=params.get('pause_on_debug')
+            )
 
     @staticmethod
     def _parse_irc_item(match, params={}):
@@ -798,14 +954,7 @@ class TwitchChatDownloader(ChatDownloader):
 
         original_message_type = info.get('message_type')
         if original_message_type:
-            new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
-                original_message_type)
-
-            if new_message_type:
-                info['message_type'] = new_message_type
-            else:
-                print('DEBUG |', 'unknown message type:', original_message_type)
-                #info['message_type'] = 'unknown'
+            TwitchChatDownloader._set_message_type(info, original_message_type)
         else:
             info['message_type'] = info['action_type']
 
@@ -867,13 +1016,13 @@ class TwitchChatDownloader(ChatDownloader):
         for attempt_number in range(max_attempts+1):
             try:
                 stream_info = self._session_post(self._GQL_API_URL,
-                                         data=json.dumps(query).encode(),
-                                         headers={'Client-ID': self._CLIENT_ID}).json()['data']['user']
+                                                 data=json.dumps(
+                                                     query).encode(),
+                                                 headers={'Client-ID': self._CLIENT_ID}).json()['data']['user']
                 break
             except (JSONParseError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, retry_timeout,
-                            logging_level, pause_on_debug, error=e)
-
+                           logging_level, pause_on_debug, error=e)
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
         title = multi_get(stream_info, 'lastBroadcast',
