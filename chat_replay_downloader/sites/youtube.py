@@ -547,6 +547,9 @@ class YouTubeChatDownloader(ChatDownloader):
         'viewerIsCreator': 'viewer_is_creator',
         'targetId': 'target_message_id',
 
+        # removeBannerForLiveChatCommand
+        'targetActionId': 'target_message_id',
+
         # donation_announcement
         'subtext': ('sub_message', 'parse_runs'),
 
@@ -640,10 +643,10 @@ class YouTubeChatDownloader(ChatDownloader):
     # [message deleted] or [message retracted]
     _KNOWN_REMOVE_ACTION_TYPES = {
         'markChatItemsByAuthorAsDeletedAction': [  # TODO ban?
-            'deletedStateMessage'
+            'deletedMessage' # deletedStateMessage
         ],
         'markChatItemAsDeletedAction': [
-            'deletedStateMessage'
+            'deletedMessage' # deletedStateMessage
         ]
     }
 
@@ -652,6 +655,12 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatBannerRenderer',
             'liveChatBannerHeaderRenderer'
             'liveChatTextMessageRenderer'
+        ]
+    }
+
+    _KNOWN_REMOVE_BANNER_TYPES = {
+        'removeBannerForLiveChatCommand':[
+            'removeBanner' # targetActionId
         ]
     }
 
@@ -679,6 +688,7 @@ class YouTubeChatDownloader(ChatDownloader):
         **_KNOWN_REMOVE_ACTION_TYPES,
         **_KNOWN_REPLACE_ACTION_TYPES,
         **_KNOWN_ADD_BANNER_TYPES,
+        **_KNOWN_REMOVE_BANNER_TYPES,
         **_KNOWN_TOOLTIP_ACTION_TYPES,
         **_KNOWN_IGNORE_ACTION_TYPES
     }
@@ -908,7 +918,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         e,
                         logging_level,
                         matching=('debug', 'errors'),
-                        pause_on_debug=pause_on_debug
+                        # pause_on_debug=pause_on_debug
                     )
                     # Live stream ended
                     return
@@ -950,7 +960,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
                     elif original_action_type in self._KNOWN_REMOVE_ACTION_TYPES:
                         original_item = action
-                        original_message_type = 'deletedStateMessage'
+                        original_message_type = 'deletedMessage'
                         data = self._parse_item(original_item, data)
 
                     elif original_action_type in self._KNOWN_REPLACE_ACTION_TYPES:
@@ -988,7 +998,6 @@ class YouTubeChatDownloader(ChatDownloader):
                             data.update(parsed_contents)
                             data['header_message'] = header_message
                         else:
-                            # TODO debug
                             log(
                                 'debug',
                                 [
@@ -1002,6 +1011,11 @@ class YouTubeChatDownloader(ChatDownloader):
                                 matching=('debug', 'errors'),
                                 pause_on_debug=pause_on_debug
                             )
+
+                    elif original_action_type in self._KNOWN_REMOVE_BANNER_TYPES:
+                        original_item = action
+                        original_message_type = 'removeBanner'
+                        data = self._parse_item(original_item, data)
 
                     elif original_action_type in self._KNOWN_IGNORE_ACTION_TYPES:
                         continue
@@ -1055,14 +1069,11 @@ class YouTubeChatDownloader(ChatDownloader):
                         )
 
                     if original_message_type:
-                        if original_message_type == 'deletedStateMessage':
-                            data['message_type'] = 'deleted_message'
-                        else:
 
-                            new_index = remove_prefixes(
-                                original_message_type, 'liveChat')
-                            new_index = remove_suffixes(new_index, 'Renderer')
-                            data['message_type'] = camel_case_split(new_index)
+                        new_index = remove_prefixes(
+                            original_message_type, 'liveChat')
+                        new_index = remove_suffixes(new_index, 'Renderer')
+                        data['message_type'] = camel_case_split(new_index)
 
                         if original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
                             log(

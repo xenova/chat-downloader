@@ -993,5 +993,10 @@
                 }
             }
         }
+    },
+    {
+        "removeBannerForLiveChatCommand": {
+            "targetActionId": "ChwKGkNJejduN25PZ3U0Q0ZjTU01d29kenJjSjZn"
+        }
     }
 ]
