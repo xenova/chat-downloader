@@ -75,8 +75,7 @@ class ChatReplayDownloader:
                         'debug',
                         'Parameters: {}'.format(new_keys),
                         logging_level,
-                        matching=('debug', 'errors'),
-                        pause_on_debug=pause_on_debug
+                        matching=('debug', 'errors')
                     )
                     return correct_site.get_chat_messages(params)
 
