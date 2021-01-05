@@ -277,7 +277,6 @@ class YouTubeChatDownloader(ChatDownloader):
     for group in _MESSAGE_GROUPS:
         _MESSAGE_TYPES += _MESSAGE_GROUPS[group]
 
-
     @ staticmethod
     def parse_youtube_link(text):
         if text.startswith(('/redirect', 'https://www.youtube.com/redirect')):  # is a redirect link
@@ -372,8 +371,8 @@ class YouTubeChatDownloader(ChatDownloader):
 
         item_endpoint = item_info.get('showItemEndpoint')
         if item_endpoint:  # has additional information
-            renderer = try_get(
-                item_endpoint, (lambda x: x['showLiveChatItemEndpoint']['renderer']))
+            renderer = multi_get(
+                item_endpoint, 'showLiveChatItemEndpoint', 'renderer')
 
             if renderer:
                 info.update(YouTubeChatDownloader._parse_item(renderer))
@@ -482,7 +481,7 @@ class YouTubeChatDownloader(ChatDownloader):
     def parse_action_button(item):
         return {
             'url': try_get(item, lambda x: YouTubeChatDownloader.parse_navigation_endpoint(x['buttonRenderer']['navigationEndpoint'])) or '',
-            'text': try_get(item, lambda x: x['buttonRenderer']['text']['simpleText']) or ''
+            'text': multi_get(item, 'buttonRenderer', 'text', 'simpleText') or ''
         }
 
     _REMAP_FUNCTIONS = {
@@ -643,10 +642,10 @@ class YouTubeChatDownloader(ChatDownloader):
     # [message deleted] or [message retracted]
     _KNOWN_REMOVE_ACTION_TYPES = {
         'markChatItemsByAuthorAsDeletedAction': [  # TODO ban?
-            'deletedMessage' # deletedStateMessage
+            'deletedMessage'  # deletedStateMessage
         ],
         'markChatItemAsDeletedAction': [
-            'deletedMessage' # deletedStateMessage
+            'deletedMessage'  # deletedStateMessage
         ]
     }
 
@@ -659,8 +658,8 @@ class YouTubeChatDownloader(ChatDownloader):
     }
 
     _KNOWN_REMOVE_BANNER_TYPES = {
-        'removeBannerForLiveChatCommand':[
-            'removeBanner' # targetActionId
+        'removeBannerForLiveChatCommand': [
+            'removeBanner'  # targetActionId
         ]
     }
 
@@ -773,8 +772,9 @@ class YouTubeChatDownloader(ChatDownloader):
 
         columns = contents.get('twoColumnWatchNextResults')
 
-        livechat_header = try_get(
-            columns, lambda x: x['conversationBar']['liveChatRenderer']['header'])
+        livechat_header = multi_get(
+            columns, 'conversationBar', 'liveChatRenderer', 'header')
+
         if not livechat_header:
             # video exists, but you cannot view chat for some reason
             error_message = try_get(columns, lambda x: self.parse_runs(
@@ -878,16 +878,19 @@ class YouTubeChatDownloader(ChatDownloader):
         callback = self.get_param_value(params, 'callback')
 
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
-        messages_types_to_add = self.get_param_value(params, 'message_types') or []
+        messages_types_to_add = self.get_param_value(
+            params, 'message_types') or []
 
-        invalid_groups = set(messages_groups_to_add) - self._MESSAGE_GROUPS.keys()
+        invalid_groups = set(messages_groups_to_add) - \
+            self._MESSAGE_GROUPS.keys()
         if 'all' not in messages_groups_to_add and invalid_groups:
-            raise InvalidParameter('Invalid groups specified: {}'.format(invalid_groups))
+            raise InvalidParameter(
+                'Invalid groups specified: {}'.format(invalid_groups))
 
         invalid_types = set(messages_types_to_add) - set(self._MESSAGE_TYPES)
         if invalid_types:
-            raise InvalidParameter('Invalid types specified: {}'.format(invalid_types))
-
+            raise InvalidParameter(
+                'Invalid types specified: {}'.format(invalid_types))
 
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
@@ -952,8 +955,9 @@ class YouTubeChatDownloader(ChatDownloader):
                     # We now parse the info and get the message
                     # type based on the type of action
                     if original_action_type in self._KNOWN_ITEM_ACTION_TYPES:
-                        original_item = try_get(
-                            action, lambda x: x[original_action_type]['item'])
+                        original_item = multi_get(
+                            action, original_action_type, 'item')
+
                         original_message_type = try_get_first_key(
                             original_item)
                         data = self._parse_item(original_item, data)
@@ -964,22 +968,24 @@ class YouTubeChatDownloader(ChatDownloader):
                         data = self._parse_item(original_item, data)
 
                     elif original_action_type in self._KNOWN_REPLACE_ACTION_TYPES:
-                        original_item = try_get(
-                            action, lambda x: x[original_action_type]['replacementItem'])
+                        original_item = multi_get(
+                            action, original_action_type, 'replacementItem')
+
                         original_message_type = try_get_first_key(
                             original_item)
                         data = self._parse_item(original_item, data)
 
                     elif original_action_type in self._KNOWN_TOOLTIP_ACTION_TYPES:
-                        original_item = try_get(
-                            action, lambda x: x[original_action_type]['tooltip'])
+                        original_item = multi_get(
+                            action, original_action_type, 'tooltip')
+
                         original_message_type = try_get_first_key(
                             original_item)
                         data = self._parse_item(original_item, data)
 
                     elif original_action_type in self._KNOWN_ADD_BANNER_TYPES:
-                        original_item = try_get(
-                            action, lambda x: x[original_action_type]['bannerRenderer'])
+                        original_item = multi_get(
+                            action, original_action_type, 'bannerRenderer')
 
                         if original_item:
                             original_message_type = try_get_first_key(
