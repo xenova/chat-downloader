@@ -289,7 +289,6 @@ class TwitchChatDownloader(ChatDownloader):
         # 'msg-param-charity-learn-more':'charity_learn_more',
 
 
-
         # to remove later
         'msg-param-profileImageURL': 'profile_image_url'
     }
@@ -299,8 +298,7 @@ class TwitchChatDownloader(ChatDownloader):
 
     _KNOWN_MESSAGE_TYPES = {
         # created elsewhere
-        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type',
-
+        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type'
     }
 
     for key in _KNOWN_KEYS:
@@ -333,7 +331,6 @@ class TwitchChatDownloader(ChatDownloader):
         'color': 'colour',
         'display-name': 'author_display_name',
         'user-id': ('author_id', 'parse_int'),
-        # 'message': 'message', # The message.
 
 
 
@@ -346,10 +343,8 @@ class TwitchChatDownloader(ChatDownloader):
         'bits': ('bits', 'parse_int'),
 
         # TODO change formatting to:
-        # 'id': 'message_id'
 
         'id': 'message_id',
-        # (, 'do_nothing'), #already included in badges
         'mod': ('is_moderator', 'parse_bool'),
         'room-id': ('channel_id', 'parse_int'),
 
@@ -360,21 +355,16 @@ class TwitchChatDownloader(ChatDownloader):
         'emote-only': ('emote_only', 'parse_bool'),
         'followers-only': ('follower_only', 'parse_int'),
 
-        # TODO followers only and slow mode make separate values for duration
-
         'r9k': ('r9k_mode', 'parse_bool'),
         'slow': ('slow_mode', 'parse_int'),
         'subs-only': ('subscriber_only', 'parse_bool'),
 
         # USERNOTICE
-
-
         'system-msg': 'system_message',
 
         # (Commands)
         # HOSTTARGET
         'number-of-viewers': 'number_of_viewers',
-
 
         # USERNOTICE - other
         **_MESSAGE_PARAM_REMAPPING
@@ -504,7 +494,6 @@ class TwitchChatDownloader(ChatDownloader):
             # timeouts
             'timeout_success': 'timeout_success',
 
-
             # timeout errors
             'bad_timeout_self': 'bad_timeout_self',
             'bad_timeout_broadcaster': 'bad_timeout_broadcaster',
@@ -546,8 +535,8 @@ class TwitchChatDownloader(ChatDownloader):
             'no_permission': 'no_permission',
             'msg_ratelimit': 'rate_limit_reached_message',
         }
-
     }
+
     _MESSAGE_GROUPS = {
         'messages': [
             'text_message'
@@ -594,20 +583,6 @@ class TwitchChatDownloader(ChatDownloader):
             ChatDownloader.create_image(original_url, 300, 300),
             ChatDownloader.create_image(smaller_icon, 70, 70),
         ]
-        # -70x70
-
-        #         "author_images": [
-        #     {
-        #         "height": 32,
-        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s32-c-k-c0xffffffff-no-rj-mo",
-        #         "width": 32
-        #     },
-        #     {
-        #         "height": 64,
-        #         "url": "https://yt3.ggpht.com/ytc/AAUvwniAWKgW_6aBJ8jPx_a1jlUo_8bh0WULv7sXYw=s64-c-k-c0xffffffff-no-rj-mo",
-        #         "width": 64
-        #     }
-        # ],
 
     @ staticmethod
     def _parse_item(item, offset, params={}):
@@ -645,7 +620,6 @@ class TwitchChatDownloader(ChatDownloader):
         # test for missing keys
         missing_keys = info.keys()-TwitchChatDownloader._KNOWN_MESSAGE_TYPES
 
-        #print(user_notice_info.keys(), TwitchChatDownloader._IRC_REMAPPING.keys())
         if missing_keys:
             log(
                 'debug',
@@ -803,8 +777,7 @@ class TwitchChatDownloader(ChatDownloader):
     # 2. Action type
     # 3. Message
 
-    # A full list can be found here: https://twitchinsights.net/badges
-    # https://badges.twitch.tv/v1/badges/global/display
+    # A full list can be found here: https://badges.twitch.tv/v1/badges/global/display
 
     _BADGE_KEYS = ('title', 'description', 'image_url_1x',
                    'image_url_2x', 'image_url_4x', 'click_action', 'click_url')
