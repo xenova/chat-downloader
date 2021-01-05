@@ -28,6 +28,7 @@ def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
     """Convert unix time to human-readable timestamp."""
     return datetime.datetime.fromtimestamp(microseconds//1000000).strftime(format)
 
+
 def ensure_seconds(time, default=None):
     """Ensure time is returned in seconds."""
     if not time:  # if empty, return default
@@ -103,11 +104,13 @@ def try_get_first_key(dictionary, default=None):
     except:
         return default
 
+
 def try_get_first_value(dictionary, default=None):
     try:
         return next(iter(dictionary.values()))
     except:
         return default
+
 
 def remove_prefixes(text, prefixes):
     if not isinstance(prefixes, (list, tuple)):
@@ -138,6 +141,7 @@ def update_dict_without_overwrite(original, new):
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
+
 LOG_COLOURS = {
     'info': Fore.GREEN,
     'debug': Fore.YELLOW,
@@ -146,6 +150,7 @@ LOG_COLOURS = {
 
 LONGEST_KEY = len(max(LOG_COLOURS.keys(), key=len))
 LOG_FORMAT = '{}{:<'+str(LONGEST_KEY)+'}{} |'
+
 
 def log(text, items, logging_level, matching='all', pause_on_debug=False):
 
@@ -159,22 +164,24 @@ def log(text, items, logging_level, matching='all', pause_on_debug=False):
             matching = [matching]
 
         if logging_level not in matching:
-            return # do nothing
+            return  # do nothing
 
     if not isinstance(items, (tuple, list)):
         items = [items]
 
     for item in items:
-        print(LOG_FORMAT.format(LOG_COLOURS.get(text, Fore.GREEN), text, Fore.RESET), item, flush=True)
+        print(LOG_FORMAT.format(LOG_COLOURS.get(text, Fore.GREEN),
+                                text, Fore.RESET), item, flush=True)
 
-    # TODO fix ?
-    if pause_on_debug:# and mode == 'errors'
-        input()
+    if pause_on_debug:
+        input('Press Enter to continue...')
+
 
 def replace_with_underscores(text, sep='-'):
     return text.replace(sep, '_')
 
-def multi_get(dictionary, *keys, default = None):
+
+def multi_get(dictionary, *keys, default=None):
     current = dictionary
     for key in keys:
         if isinstance(current, dict):
@@ -183,16 +190,24 @@ def multi_get(dictionary, *keys, default = None):
             return default
     return current
 
+
+invalid_unicode_re = re.compile(
+    u'[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
+
+
+def replace_invalid_unicode(text, replacement_char='\uFFFD'):
+    return invalid_unicode_re.sub(replacement_char, text)
+
+
 def safe_convert_text(text):
-    message = emoji.demojize(text)
+
+    message = emoji.demojize(replace_invalid_unicode(text, ''))
 
     try:
-        return message.encode(
-            'utf-8', 'ignore').decode('utf-8', 'ignore')
+        return message.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
     except UnicodeEncodeError:
         # in the rare case that standard output does not support utf-8
-        return message.encode(
-            'ascii', 'ignore').decode('ascii', 'ignore')
+        return message.encode('ascii', 'ignore').decode('ascii', 'ignore')
 
 
 def safe_print_text(text):
