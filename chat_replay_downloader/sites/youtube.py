@@ -34,13 +34,14 @@ from ..utils import (
     camel_case_split,
     ensure_seconds,
     microseconds_to_timestamp,
-    log
+    log,
+    attempts
 )
 
 
 class YouTubeChatDownloader(ChatDownloader):
-    def __init__(self, updated_init_params={}):
-        super().__init__(updated_init_params)
+    def __init__(self, updated_init_params=None):
+        super().__init__(updated_init_params or {})
 
     def __str__(self):
         return 'YouTube.com'
@@ -70,6 +71,10 @@ class YouTubeChatDownloader(ChatDownloader):
                      $'''
 
     _TESTS = [
+        # Get top live streams
+        # https://www.youtube.com/results?search_query&sp=CAMSAkAB
+
+
         # OTHER:
         # Japanese characters and lots of superchats
         # https://www.youtube.com/watch?v=UlemRwXYWHg
@@ -327,7 +332,9 @@ class YouTubeChatDownloader(ChatDownloader):
     #     return index
 
     @ staticmethod
-    def _parse_item(item, info={}):
+    def _parse_item(item, info=None):
+        if info is None:
+            info = {}
         # info is starting point
         item_index = try_get_first_key(item)
         item_info = item.get(item_index)
@@ -384,10 +391,12 @@ class YouTubeChatDownloader(ChatDownloader):
         # amount is money with currency
         amount = info.get('amount')
         if amount:
+            # print('has amount', item_info)
             pass  # TODO split amount into:
             # currency type
             # amount (float)
 
+        #print('author_name')
         ChatDownloader.create_author_info(
             info, 'author_id', 'author_name', 'author_images', 'author_badges')
 
@@ -901,7 +910,7 @@ class YouTubeChatDownloader(ChatDownloader):
             info = None
             # the following can raise NoContinuation error or JSONParseError
 
-            for attempt_number in range(max_attempts+1):
+            for attempt_number in attempts(max_attempts):
                 try:
                     if is_live:
                         info = self._get_live_info(continuation)
@@ -914,6 +923,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 except (JSONParseError, RequestException) as e:
                     self.retry(attempt_number, max_attempts, retry_timeout,
                                logging_level, pause_on_debug, error=e)
+                    continue
 
                 except NoContinuation as e:
                     log(

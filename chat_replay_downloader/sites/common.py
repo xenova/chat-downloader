@@ -245,10 +245,10 @@ class ChatDownloader:
         # else:
         #     pass # do nothing
 
-    def __init__(self, updated_init_params={}):
+    def __init__(self, updated_init_params=None):
         """Initialise a new session for making requests."""
         # self._name = None
-        self._INIT_PARAMS.update(updated_init_params)
+        self._INIT_PARAMS.update(updated_init_params or {})
 
         self.session = requests.Session()
         self.session.headers = self._INIT_PARAMS.get('headers')
@@ -315,21 +315,17 @@ class ChatDownloader:
     _CALLBACK = None
 
     #_LIST_OF_MESSAGES = []
-    def get_chat_messages(self, params={}):
-        # def get_chat_messages(self, url, list_of_messages = []):
+    def get_chat_messages(self, params=None):
         """
         Returns a list of chat messages. To be redefined in subclasses.
 
         `params` should update its `messages` atttribute to allow for messages to still be
         returned after an exception is raised.
         """
+        if params is None:
+            params = {}
 
         update_dict_without_overwrite(params, self._DEFAULT_PARAMS)
-        # temp = params.copy()
-        # params.update()
-        # params.update(temp)
-        # self._PARAMS.update()
-        # params.update(self._PARAMS)
 
     def get_tests(self):
         t = getattr(self, '_TEST', None)
@@ -343,7 +339,9 @@ class ChatDownloader:
             yield t
 
     @staticmethod
-    def perform_callback(callback, data, params={}):
+    def perform_callback(callback, data, params=None):
+        if params is None:
+            params = {}
         if callable(callback):
             try:
                 callback(data)
@@ -392,12 +390,14 @@ class ChatDownloader:
             if author_info_item not in (None, [], {}):
                 author_dict[new_key] = author_info_item
 
-        if 'author' not in info and author_dict != {}:
+        if 'author' not in info: #  and author_dict != {}
             info['author'] = author_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, text=[], error=''):
-        if not isinstance(text, (tuple, list)):
+    def retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, text = None, error=''):
+        if text is None:
+            text = []
+        elif not isinstance(text, (tuple, list)):
             text = [text]
 
         text.append('Retry #{}. {}'.format(attempt_number, error))

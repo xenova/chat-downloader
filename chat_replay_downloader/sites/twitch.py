@@ -23,7 +23,8 @@ from ..utils import (
     multi_get,
     update_dict_without_overwrite,
     log,
-    remove_prefixes
+    remove_prefixes,
+    attempts
 )
 
 # TODO export as another module?
@@ -63,7 +64,7 @@ class TwitchChatIRC():
             # in this case, get more data
             try:
                 # if len(part) < buffer_size:
-                return b''.join(fragments).decode('utf-8')
+                return b''.join(fragments).decode('utf-8', 'ignore')
             except UnicodeDecodeError:
                 # print('error', data)
                 continue
@@ -96,8 +97,8 @@ class TwitchChatDownloader(ChatDownloader):
     _BADGE_INFO_URL = 'https://badges.twitch.tv/v1/badges/global/display'
     # TODO add local version of badge list?
 
-    def __init__(self, updated_init_params={}):
-        super().__init__(updated_init_params)
+    def __init__(self, updated_init_params=None):
+        super().__init__(updated_init_params or {})
         # self._name = None
         # self.name = 'Twitch.tv'
 
@@ -585,7 +586,10 @@ class TwitchChatDownloader(ChatDownloader):
         ]
 
     @ staticmethod
-    def _parse_item(item, offset, params={}):
+    def _parse_item(item, offset, params=None):
+        if params is None:
+            params = {}
+
         info = {}
 
         for key in item:
@@ -681,7 +685,7 @@ class TwitchChatDownloader(ChatDownloader):
             url = '{}&cursor={}&content_offset_seconds={}'.format(
                 api_url, cursor, content_offset_seconds)
 
-            for attempt_number in range(max_attempts+1):
+            for attempt_number in attempts(max_attempts):
                 try:
                     info = self._session_get_json(url)
                     break
@@ -744,7 +748,7 @@ class TwitchChatDownloader(ChatDownloader):
         query = {
             'query': '{ clip(slug: "%s") { video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
         }
-        for attempt_number in range(max_attempts+1):
+        for attempt_number in attempts(max_attempts):
             try:
                 clip = self._session_post(self._GQL_API_URL,
                                           data=json.dumps(query).encode(),
@@ -861,7 +865,9 @@ class TwitchChatDownloader(ChatDownloader):
         badge['title'] = badge['description'] = title
 
     @staticmethod
-    def _set_message_type(info, original_message_type, params={}):
+    def _set_message_type(info, original_message_type, params=None):
+        if params is None:
+            params = {}
         new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
             original_message_type)
 
@@ -879,7 +885,7 @@ class TwitchChatDownloader(ChatDownloader):
             )
 
     @staticmethod
-    def _parse_irc_item(match, params={}):
+    def _parse_irc_item(match):
         info = {}
 
         split_info = match.group(1).split(';')
@@ -986,7 +992,7 @@ class TwitchChatDownloader(ChatDownloader):
             }
         }
 
-        for attempt_number in range(max_attempts+1):
+        for attempt_number in attempts(max_attempts):
             try:
                 stream_info = self._session_post(self._GQL_API_URL,
                                                  data=json.dumps(
@@ -1019,8 +1025,8 @@ class TwitchChatDownloader(ChatDownloader):
         readbuffer = ''
 
         message_count = 0
+        attempt_number = 0
         while True:
-            attempt_number = 0
             try:
                 new_info = twitch_chat_irc.recvall(buffer_size)
                 readbuffer += new_info
@@ -1053,7 +1059,7 @@ class TwitchChatDownloader(ChatDownloader):
 
                     for match in matches:
 
-                        data = self._parse_irc_item(match, params)
+                        data = self._parse_irc_item(match)
 
                         # check whether to skip this message or not, based on its type
 
@@ -1070,6 +1076,8 @@ class TwitchChatDownloader(ChatDownloader):
                         message_count += 1
                         yield data
 
+                attempt_number = 0
+
             except socket.timeout:
                 # print('time_since_last_message',time_since_last_message)
                 if timeout is not None:
@@ -1083,8 +1091,11 @@ class TwitchChatDownloader(ChatDownloader):
                 twitch_chat_irc = create_connection()
 
                 attempt_number += 1
+
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
+
+
 
             # except Exception as e:
             #     print('unknown exception')

@@ -158,10 +158,13 @@ def main():
             multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
             multi_get(item, 'amount') or '',
             multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name'),
-            multi_get(item, 'message')
+            (multi_get(item, 'message') or '').strip()
         )
         if program_params.get('logging') != 'none':
             safe_print_text(formatted)
+
+
+
         return  # TODO temporary - testing
         #formatted = formatter.format(item, format_name='default')#
         # print(item)
@@ -210,10 +213,18 @@ def main():
     # program_params['pause_on_debug'] = True
     # program_params['logging'] = 'errors'
     # program_params['verbose'] = True
-    #program_params['message_groups'] = 'all'
+    # program_params['message_groups'] = 'all'
 
     # program_params['retry_timeout'] = -1
     try:
+
+        # TODO print program version
+        log(
+            'debug',
+            'Python version: {}'.format(sys.version),
+            program_params['logging'],
+        )
+
         messages = downloader.get_chat_messages(program_params)
 
         if isinstance(program_params['max_messages'], int):
@@ -230,10 +241,11 @@ def main():
         )
 
     except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter) as e:
-        log('error', e, program_params['logging'])
+        log('error', e, program_params['logging']) # always show
 
     # ParsingError,
     except RequestException as e:
+        # TODO if e instance of (no internet connection)...
         log('error',
             'Unable to establish a connection. Please check your internet connection.',
             program_params['logging']
@@ -261,103 +273,3 @@ def main():
     finally:
         if args.output:
             output_file.close()
-
-    # except Exception as e:
-    #     print('other exception')
-    #     print(e)
-    #     pass
-
-    #
-    # print('got',len(program_params.get('messages')),'messages')
-
-    # #print(program_params.get('messages'))
-    # with open('test.json', 'w') as outfile:
-    #     json.dump(program_params.get('messages'), outfile, indent=4, sort_keys=True)
-
-    #print(json.dumps(options.get('messages'), indent=4))
-
-    #z = a.get('messages')
-
-    # print(q)
-    # print('got',len(z),'messages')
-
-#     return
-
-
-#     try:
-#         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
-
-#         num_of_messages = 0
-
-#         def print_item(item):
-#             chat_downloader.print_item(item)
-
-#         def write_to_file(item):
-
-#             # only file format capable of appending properly
-#             with open(args.output, 'a', encoding='utf-8') as f:
-#                 if('ticker_duration' not in item):  # needed for duplicates
-#                     num_of_messages += 1
-#                     print_item(item)
-#                     text = chat_downloader.message_to_string(item)
-#                     print(text, file=f)
-
-#         callback = None if args.output is None else print_item
-#         if(args.output is not None):
-#             if(args.output.endswith('.json')):
-#                 pass
-#             elif(args.output.endswith('.csv')):
-#                 fieldnames = []
-#             else:
-#                 open(args.output, 'w').close()  # empty the file
-#                 callback = write_to_file
-
-#         chat_messages = chat_downloader.get_chat_replay(
-#             args.url,
-#             start_time=args.start_time,
-#             end_time=args.end_time,
-#             message_types=args.message_types,
-#             chat_type=args.chat_type,
-#             callback=callback
-#         )
-
-#         if(args.output is not None):
-#             if(args.output.endswith('.json')):
-#                 num_of_messages = len(chat_messages)
-#                 with open(args.output, 'w') as f:
-#                     json.dump(chat_messages, f, sort_keys=True)
-
-#             elif(args.output.endswith('.csv')):
-#                 num_of_messages = len(chat_messages)
-#                 fieldnames = []
-#                 for message in chat_messages:
-#                     fieldnames = list(set(fieldnames + list(message.keys())))
-#                 fieldnames.sort()
-
-#                 with open(args.output, 'w', newline='', encoding='utf-8') as f:
-#                     fc = csv.DictWriter(f, fieldnames=fieldnames)
-#                     fc.writeheader()
-#                     fc.writerows(chat_messages)
-
-#             print('Finished writing', num_of_messages,
-#                   'messages to', args.output, flush=True)
-
-#     except InvalidURL as e:
-#         print('[Invalid URL]', e)
-#     except ParsingError as e:
-#         print('[Parsing Error]', e)
-#     except NoChatReplay as e:
-#         print('[No Chat Replay]', e)
-#     except VideoUnavailable as e:
-#         print('[Video Unavailable]', e)
-#     except TwitchError as e:
-#         print('[Twitch Error]', e)
-#     except (LoadError, CookieError) as e:
-#         print('[Cookies Error]', e)
-#     except KeyboardInterrupt:
-#         print('Interrupted.')
-#     return 0
-
-
-# if __name__ == "__main__":
-#     sys.exit(main())  # pragma: no cover

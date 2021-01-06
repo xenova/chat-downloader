@@ -19,8 +19,8 @@ class ChatReplayDownloader:
     #     'Accept-Language': 'en-US, en'
     # }
 
-    def __init__(self, init_params={}):
-        self._INIT_PARAMS = init_params
+    def __init__(self, init_params=None):
+        self._INIT_PARAMS = init_params or {}
 
     #LIST_OF_MESSAGES = []
 
@@ -29,8 +29,6 @@ class ChatReplayDownloader:
     # for key in __TYPES_OF_MESSAGES:
     #	__TYPES_OF_KNOWN_MESSAGES.extend(__TYPES_OF_MESSAGES[key])
 
-
-# def get_chat_messages(self, url, list_of_messages = []):
 
 # python -m chat_replay_downloader
 

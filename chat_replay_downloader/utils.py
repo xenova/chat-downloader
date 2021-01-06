@@ -191,6 +191,10 @@ def multi_get(dictionary, *keys, default=None):
     return current
 
 
+
+
+# \uD800-\uDFFF
+# \u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F\u0009-\u000D\u0085
 invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
 
 
@@ -233,3 +237,6 @@ def flatten_json(original_json):
     flatten(original_json)
 
     return final
+
+def attempts(max_attempts):
+    return range(1, max_attempts+1)

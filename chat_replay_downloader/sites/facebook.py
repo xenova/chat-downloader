@@ -18,7 +18,8 @@ from ..utils import (
     try_get,
     seconds_to_time,
     camel_case_split,
-    ensure_seconds
+    ensure_seconds,
+    attempts
 )
 
 
@@ -35,8 +36,8 @@ class FacebookChatDownloader(ChatDownloader):
     _INITIAL_LSD_REGEX = r'<input.*?name=\"lsd\".*?value=\"([^\"]+)[^>]*>'
     _INITIAL_TIMEOUT_DURATION = 10
 
-    def __init__(self, updated_init_params={}):
-        super().__init__(updated_init_params)
+    def __init__(self, updated_init_params=None):
+        super().__init__(updated_init_params or {})
 
         # update headers for all subsequent FB requests
         self.update_session_headers(self._FB_HEADERS)
@@ -126,7 +127,7 @@ class FacebookChatDownloader(ChatDownloader):
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         # TODO multi attempts
-        for attempt_number in range(max_attempts + 1):
+        for attempt_number in attempts(max_attempts):
             try:
                 response = self._session_post(self._VIDEO_PAGE_TAHOE_TEMPLATE.format(
                     video_id), headers=self._FB_HEADERS, data=self.data)
@@ -467,28 +468,30 @@ class FacebookChatDownloader(ChatDownloader):
     }
 
     @ staticmethod
-    def _parse_live_stream_node(node, info={}):
+    def _parse_live_stream_node(node, info=None):
+        if info is None:
+            info = {}
+
         for key in node:
             ChatDownloader.remap(info, FacebookChatDownloader._REMAPPING,
                                  FacebookChatDownloader._REMAP_FUNCTIONS, key, node[key])
 
-        author_info = info.pop('author', None)
-        #info['author'] = {}
-        if author_info:
-            ChatDownloader.create_author_info(info, 'is_author_banned', 'is_author_banned',
+
+        author_info = info.pop('author', {})
+        ChatDownloader.create_author_info(info, 'is_author_banned', 'is_author_banned',
                                               'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker', 'author_badges')
 
-            for key in author_info:
-                ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
-                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
+        for key in author_info:
+            ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
+                                    FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
 
-            if 'profile_picture_depth_0' in author_info:
-                info['author']['images'] = []
-                for size in ((0, 32), (1, 24)):
-                    url = multi_get(
-                        author_info, 'profile_picture_depth_{}'.format(size[0]), 'uri')
-                    info['author']['images'].append(
-                        ChatDownloader.create_image(url, size[1], size[1]))
+        if 'profile_picture_depth_0' in author_info:
+            info['author']['images'] = []
+            for size in ((0, 32), (1, 24)):
+                url = multi_get(
+                    author_info, 'profile_picture_depth_{}'.format(size[0]), 'uri')
+                info['author']['images'].append(
+                    ChatDownloader.create_image(url, size[1], size[1]))
 
         # author_badges = info.pop('author_badges', None)
         # if author_badges:
@@ -533,8 +536,7 @@ class FacebookChatDownloader(ChatDownloader):
         buffer_size = 25  # max num comments returned by api call
         cursor = ''
         variables = {
-            'videoID': video_id,
-
+            'videoID': video_id
         }
         data = {
             'variables': json.dumps(variables),
@@ -548,7 +550,7 @@ class FacebookChatDownloader(ChatDownloader):
         message_count = 0
         last_ids = []
         while True:
-            for attempt_number in range(max_attempts + 1):
+            for attempt_number in attempts(max_attempts):
                 try:
                     response = self._session_post(
                         self._GRAPH_API, headers=self._FB_HEADERS, data=data)
@@ -671,7 +673,7 @@ class FacebookChatDownloader(ChatDownloader):
 
             request_params = initial_request_params + times
 
-            for attempt_number in range(max_attempts+1):
+            for attempt_number in attempts(max_attempts):
                 try:
                     response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
                                                   params=request_params, data=self.data, timeout=timeout_duration)
