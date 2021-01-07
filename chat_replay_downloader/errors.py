@@ -52,7 +52,7 @@ class NoChatReplay(Exception):
 
 
 class InvalidURL(Exception):
-    """Raised when the url given is invalid (neither YouTube nor Twitch)."""
+    """Raised when the url given is invalid."""
     pass
 
 

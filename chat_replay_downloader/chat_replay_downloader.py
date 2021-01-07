@@ -77,6 +77,7 @@ class ChatReplayDownloader:
                     )
                     return correct_site.get_chat_messages(params)
 
+        raise InvalidURL('Invalid URL: "{}"'.format(url))
         # Raise unsupported site
 
         # TODO raise invalid url error
