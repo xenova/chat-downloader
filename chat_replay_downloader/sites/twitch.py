@@ -269,6 +269,7 @@ class TwitchChatDownloader(ChatDownloader):
         'msg-param-prior-gifter-display-name': 'prior_gifter_display_name',
         'msg-param-prior-gifter-id': 'prior_gifter_id',
 
+        'msg-param-fun-string':'fun_string',
 
         # not come across yet, but other tools have it:
         # 'msg-param-charity':'charity',
@@ -277,7 +278,7 @@ class TwitchChatDownloader(ChatDownloader):
         # 'msg-param-streak-tenure-months':'streak_tenure_months',
         # 'msg-param-sub-benefit-end-month':'sub_benefit_end_month',
         # 'msg-param-userID':'user_id',
-        # 'msg-param-fun-string':'fun_string',
+        #
         # 'msg-param-cumulative-tenure-months':'cumulative_tenure_months',
         # 'msg-param-should-share-streak-tenure':'should-share-streak-tenure',
         # 'msg-param-min-cheer-amount' :'minimum_cheer_amount',
