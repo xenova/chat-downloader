@@ -631,7 +631,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatModeChangeMessageRenderer',  # e.g. slow mode enabled
 
             # TODO find examples of:
-            'liveChatPurchasedProductMessageRenderer',  # product purchased
+            #'liveChatPurchasedProductMessageRenderer',  # product purchased
 
 
         ]

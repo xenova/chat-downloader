@@ -169,15 +169,18 @@ def main():
         if program_params.get('logging') != 'none':
 
             try:
+                time = multi_get(item, 'time_text') or multi_get(item, 'timestamp')
                 author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
                 message = (multi_get(item, 'message') or '').strip()
-                formatted = '[{}] *{}* {}: {}'.format(
-                    multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
-                    multi_get(item, 'amount') or '',
+                amount = multi_get(item, 'amount')
+
+                formatted = '[{}] {}{}: {}'.format(
+                    time,
+                    '*{}* '.format(amount) if amount else '',
                     author,
                     message
                 )
-                safe_print(message)
+                safe_print(formatted)
 
                 # print(author,':', message.encode(encoding, 'ignore').decode(encoding, 'ignore'))
                 #.encode(encoding).decode(encoding)
