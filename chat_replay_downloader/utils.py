@@ -3,7 +3,8 @@ import re
 import sys
 import emoji
 from colorama import Fore
-
+import os
+import locale
 
 def timestamp_to_microseconds(timestamp):
     """
@@ -141,6 +142,42 @@ def update_dict_without_overwrite(original, new):
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
+def supports_colour():
+    """
+    Return True if the running system's terminal supports colour,
+    and False otherwise.
+    """
+    def vt_codes_enabled_in_windows_registry():
+        """
+        Check the Windows Registry to see if VT code handling has been enabled
+        by default, see https://superuser.com/a/1300251/447564.
+        """
+        try:
+            # winreg is only available on Windows.
+            import winreg
+        except ImportError:
+            return False
+        else:
+            reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Console')
+            try:
+                reg_key_value, _ = winreg.QueryValueEx(reg_key, 'VirtualTerminalLevel')
+            except FileNotFoundError:
+                return False
+            else:
+                return reg_key_value == 1
+
+    # isatty is not always implemented, #6223.
+    is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+
+    return is_a_tty and (
+        sys.platform != 'win32' or
+        'ANSICON' in os.environ or
+        # Windows Terminal supports VT codes.
+        'WT_SESSION' in os.environ or
+        # Microsoft Visual Studio Code's built-in terminal supports colours.
+        os.environ.get('TERM_PROGRAM') == 'vscode' or
+        vt_codes_enabled_in_windows_registry()
+    )
 
 LOG_COLOURS = {
     'info': Fore.GREEN,
@@ -149,7 +186,7 @@ LOG_COLOURS = {
 }
 
 LONGEST_KEY = len(max(LOG_COLOURS.keys(), key=len))
-LOG_FORMAT = '{}{:<'+str(LONGEST_KEY)+'}{} |'
+LOG_FORMAT = '{:<'+str(LONGEST_KEY)+'}'
 
 
 def log(text, items, logging_level, matching='all', pause_on_debug=False):
@@ -169,9 +206,14 @@ def log(text, items, logging_level, matching='all', pause_on_debug=False):
     if not isinstance(items, (tuple, list)):
         items = [items]
 
+    if supports_colour():
+        to_print = LOG_COLOURS.get(text, Fore.GREEN)+LOG_FORMAT.format(text) + Fore.RESET
+    else:
+        to_print = LOG_FORMAT.format(text)
+
     for item in items:
-        print(LOG_FORMAT.format(LOG_COLOURS.get(text, Fore.GREEN),
-                                text, Fore.RESET), item, flush=True)
+        print(to_print, '|', item, flush=True)
+
 
     if pause_on_debug:
         input('Press Enter to continue...')
@@ -201,27 +243,6 @@ invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
 def replace_invalid_unicode(text, replacement_char='\uFFFD'):
     return invalid_unicode_re.sub(replacement_char, text)
 
-
-def safe_convert_text(text):
-
-    message = emoji.demojize(replace_invalid_unicode(text, ''))
-
-    try:
-        return message.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
-    except UnicodeEncodeError:
-        # in the rare case that standard output does not support utf-8
-        return message.encode('ascii', 'ignore').decode('ascii', 'ignore')
-
-
-def safe_print_text(text):
-    """
-    Ensure printing to standard output can be done safely (especially on Windows).
-    There are usually issues with printing emojis and non utf-8 characters.
-
-    """
-    print(safe_convert_text(text), flush=True)
-
-
 def flatten_json(original_json):
     final = {}
 
@@ -240,3 +261,121 @@ def flatten_json(original_json):
 
 def attempts(max_attempts):
     return range(1, max_attempts+1)
+
+
+def preferredencoding():
+    """Get preferred encoding.
+    Returns the best encoding scheme for the system, based on
+    locale.getpreferredencoding() and some further tweaks.
+    """
+    try:
+        pref = locale.getpreferredencoding()
+        'TEST'.encode(pref)
+    except Exception:
+        pref = 'utf-8'
+
+    return pref
+
+
+def _windows_write_string(s, out, skip_errors=True):
+    """ Returns True if the string was written using special methods,
+    False if it has yet to be written out."""
+    # Adapted from http://stackoverflow.com/a/3259271/35070
+
+    import ctypes
+    import ctypes.wintypes
+
+    WIN_OUTPUT_IDS = {
+        1: -11,
+        2: -12,
+    }
+
+    try:
+        fileno = out.fileno()
+    except AttributeError:
+        # If the output stream doesn't have a fileno, it's virtual
+        return False
+    except io.UnsupportedOperation:
+        # Some strange Windows pseudo files?
+        return False
+    if fileno not in WIN_OUTPUT_IDS:
+        return False
+
+    GetStdHandle = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD)(
+        ('GetStdHandle', ctypes.windll.kernel32))
+    h = GetStdHandle(WIN_OUTPUT_IDS[fileno])
+
+    WriteConsoleW = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.BOOL, ctypes.wintypes.HANDLE, ctypes.wintypes.LPWSTR,
+        ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.wintypes.DWORD),
+        ctypes.wintypes.LPVOID)(('WriteConsoleW', ctypes.windll.kernel32))
+    written = ctypes.wintypes.DWORD(0)
+
+    GetFileType = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)(('GetFileType', ctypes.windll.kernel32))
+    FILE_TYPE_CHAR = 0x0002
+    FILE_TYPE_REMOTE = 0x8000
+    GetConsoleMode = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.BOOL, ctypes.wintypes.HANDLE,
+        ctypes.POINTER(ctypes.wintypes.DWORD))(
+        ('GetConsoleMode', ctypes.windll.kernel32))
+    INVALID_HANDLE_VALUE = ctypes.wintypes.DWORD(-1).value
+
+    def not_a_console(handle):
+        if handle == INVALID_HANDLE_VALUE or handle is None:
+            return True
+        return ((GetFileType(handle) & ~FILE_TYPE_REMOTE) != FILE_TYPE_CHAR
+                or GetConsoleMode(handle, ctypes.byref(ctypes.wintypes.DWORD())) == 0)
+
+    if not_a_console(h):
+        return False
+
+    def next_nonbmp_pos(s):
+        try:
+            return next(i for i, c in enumerate(s) if ord(c) > 0xffff)
+        except StopIteration:
+            return len(s)
+
+    while s:
+        count = min(next_nonbmp_pos(s), 1024)
+
+        ret = WriteConsoleW(
+            h, s, count if count else 2, ctypes.byref(written), None)
+        if ret == 0:
+            if skip_errors:
+                continue
+            else:
+                raise OSError('Failed to write string')
+        if not count:  # We just wrote a non-BMP character
+            assert written.value == 2
+            s = s[1:]
+        else:
+            assert written.value > 0
+            s = s[written.value:]
+    return True
+
+
+def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False):
+    """
+    Ensure printing to standard output can be done safely (especially on Windows).
+    There are usually issues with printing emojis and non utf-8 characters.
+
+    """
+    output_string = sep.join(map(lambda x: str(x), objects)) + end
+
+    if out is None:
+        out = sys.stdout
+
+    if sys.platform == 'win32' and encoding is None and hasattr(out, 'fileno'):
+        if _windows_write_string(output_string, out):
+            return
+
+    if 'b' in getattr(out, 'mode', '') or not hasattr(out, 'buffer'):
+        out.write(output_string)
+    else:
+        enc = encoding or getattr(out, 'encoding', None) or preferredencoding()
+        byt = output_string.encode(enc, 'ignore')
+        out.buffer.write(byt)
+
+    if flush:
+        out.flush()

@@ -15,19 +15,16 @@ from .output.continuous_write import ContinuousWriter
 
 from .utils import (
     update_dict_without_overwrite,
-    safe_print_text,
     multi_get,
-    log
+    log,
+    safe_print
 )
 
 from .formatting.format import ItemFormatter
 
-# from .errors import (
-#     LoadError
-# )
-
 #from .chat_replay_downloader import char
 
+# import safeprint
 
 def main():
     """Console script for chat_replay_downloader."""
@@ -76,6 +73,13 @@ def main():
 
     parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
                         help='force no timeout between subsequent requests\n(default: %(default)s)')
+
+    # TODO
+    # parser.add_argument('--force_encoding', default=default_params['force_encoding'],
+    #                     help='force certain encoding\n(default: %(default)s)')
+
+
+
 
     # INIT PARAMS
     parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
@@ -153,33 +157,60 @@ def main():
 
     downloader = ChatReplayDownloader(init_params)
 
+    # printer = safeprint.Printer()
+
+    # set PYTHONIOENCODING=utf-8
+    # sys.setdefaultencoding('utf-8')
+
+    # python -m chat_replay_downloader https://www.youtube.com/watch?v=nlGllxnSfgA --output test.json --start_time 5:32 --end_time 5:40
+    # print(sys.getdefaultencoding())
     def test_callback(item):
-        formatted = '[{}] *{}* {}: {}'.format(
-            multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
-            multi_get(item, 'amount') or '',
-            multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name'),
-            (multi_get(item, 'message') or '').strip()
-        )
+
         if program_params.get('logging') != 'none':
-            safe_print_text(formatted)
+
+            try:
+                author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
+                message = (multi_get(item, 'message') or '').strip()
+                formatted = '[{}] *{}* {}: {}'.format(
+                    multi_get(item, 'timestamp') or multi_get(item, 'time_text'),
+                    multi_get(item, 'amount') or '',
+                    author,
+                    message
+                )
+                safe_print(message)
+
+                # print(author,':', message.encode(encoding, 'ignore').decode(encoding, 'ignore'))
+                #.encode(encoding).decode(encoding)
+                # print(sys.getdefaultencoding())
+                # printer.print(message)
+                # print()#.encode('utf-8')
+                # print(message.decode('utf-8'))
+                # print(message.encode('utf-16'))
+            except OSError as e:
+                print('PRINTING ERROR OCCURRED')
+                print('Cause of error:')
+                print(json.dumps(formatted))
+                raise e
+                # traceback.print_exc()
+                # exit()
 
 
 
-        return  # TODO temporary - testing
-        #formatted = formatter.format(item, format_name='default')#
-        # print(item)
-        if formatted:
-            if program_params.get('logging') in ('debug', 'normal'):
-                if program_params.get('safe_print'):
-                    safe_print_text(formatted)
-                else:
-                    print(formatted, flush=True)
-        else:
-            # False and
-            if program_params.get('logging') in ('debug', 'errors'):
-                print('No format specified for type: ',
-                      item.get('message_type'))
-                print(item)
+        # return  # TODO temporary - testing
+        # #formatted = formatter.format(item, format_name='default')#
+        # # print(item)
+        # if formatted:
+        #     if program_params.get('logging') in ('debug', 'normal'):
+        #         if program_params.get('safe_print'):
+        #             safe_print_text(formatted)
+        #         else:
+        #             print(formatted, flush=True)
+        # else:
+        #     # False and
+        #     if program_params.get('logging') in ('debug', 'errors'):
+        #         print('No format specified for type: ',
+        #               item.get('message_type'))
+        #         print(item)
 
     # TODO make command line args for these:
     other_params = {
@@ -210,10 +241,10 @@ def main():
 
     # TODO DEBUGGING:
     # Temporary
-    # program_params['pause_on_debug'] = True
-    # program_params['logging'] = 'errors'
-    # program_params['verbose'] = True
-    # program_params['message_groups'] = 'all'
+    program_params['pause_on_debug'] = True
+    program_params['logging'] = 'errors'
+    program_params['verbose'] = True
+    program_params['message_groups'] = 'all'
 
     # program_params['retry_timeout'] = -1
     try:
@@ -240,7 +271,7 @@ def main():
             matching=('debug', 'errors')
         )
 
-    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter) as e:
+    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL) as e:
         log('error', e, program_params['logging']) # always show
 
     # ParsingError,
@@ -266,6 +297,7 @@ def main():
         print('keyboard interrupt')
 
     except Exception as e:
+        raise e
         print('unknown exception', type(e))
         print(e)
         traceback.print_exc()

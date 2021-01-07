@@ -14,7 +14,6 @@ from ..utils import (
     remove_prefixes,
     multi_get,
     try_get_first_value,
-    safe_convert_text,
     try_get,
     seconds_to_time,
     camel_case_split,
