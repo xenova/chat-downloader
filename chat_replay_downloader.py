@@ -218,10 +218,12 @@ class ChatReplayDownloader:
             print(safe_string, flush=True)
 
     def __parse_youtube_link(self, text):
-        if(text.startswith('/redirect')):  # is a redirect link
+        if text.startswith(('/redirect', 'https://www.youtube.com/redirect')):  # is a redirect link
             info = dict(parse.parse_qsl(parse.urlsplit(text).query))
-            return info['q'] if 'q' in info else ''
-        elif(text.startswith('/watch')):  # is a youtube video link
+            return info.get('q') or ''
+        elif text.startswith('//'):
+            return 'https:' + text
+        elif text.startswith('/'):  # is a youtube link e.g. '/watch','/results'
             return self.__YT_HOME + text
         else:  # is a normal link
             return text
@@ -244,7 +246,7 @@ class ChatReplayDownloader:
             elif 'emoji' in run:
                 message_text += run['emoji']['shortcuts'][0]
             else:
-                raise ValueError('Unknown run: {}'.format(run))
+                message_text += str(run)
 
         return message_text
 
