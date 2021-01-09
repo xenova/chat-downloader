@@ -234,7 +234,7 @@ def main():
         def write_to_file(item):
             test_callback(item)
 
-            output_file.write(item)
+            output_file.write(item, flush=True)
 
         callback = write_to_file
     else:

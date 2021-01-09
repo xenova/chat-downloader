@@ -72,6 +72,7 @@ def get_colours(argb_int):
 
 def try_get(src, getter, expected_type=None):
     # used when a method is needed
+    # or list/number index retrieval
     if not isinstance(getter, (list, tuple)):
         getter = [getter]
     for get in getter:
@@ -86,10 +87,7 @@ def try_get(src, getter, expected_type=None):
 
 def get_title_of_webpage(html):
     match = re.search('<title>(.*?)</title>', html)
-    if match:
-        return match.group(1)
-    else:
-        return None
+    return match.group(1) if match else None
 
 
 def int_or_none(v, default=None):
@@ -212,7 +210,7 @@ def log(text, items, logging_level, matching='all', pause_on_debug=False):
         to_print = LOG_FORMAT.format(text)
 
     for item in items:
-        print(to_print, '|', item, flush=True)
+        safe_print(to_print, '|', item, flush=True)
 
 
     if pause_on_debug:
@@ -377,5 +375,5 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
         byt = output_string.encode(enc, 'ignore')
         out.buffer.write(byt)
 
-    if flush:
+    if flush and hasattr(out, 'flush'):
         out.flush()

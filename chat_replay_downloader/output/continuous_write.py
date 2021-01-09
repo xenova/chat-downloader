@@ -32,7 +32,7 @@ class CW:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def write(self, item):
+    def write(self, item, flush=False):
         raise NotImplementedError
 
     def flush(self):
@@ -136,7 +136,7 @@ class CSVCW(CW):
         self.csv_dict_writer = csv.DictWriter(
             self.file, fieldnames=self.columns)
 
-    def write(self, item, flatten=True):
+    def write(self, item, flush=False, flatten=True):
         if flatten:
             item = flatten_json(item)
         self.all_items.append(item)
@@ -156,6 +156,8 @@ class CSVCW(CW):
         else:
             self.csv_dict_writer.writerow(item)  # write newest item
 
+        if flush:
+            self.flush()
 
 class TXTCW(CW):
     """
@@ -168,7 +170,7 @@ class TXTCW(CW):
 
         self.formatting = formatting
 
-    def write(self, item, format, flush=False):
+    def write(self, item, flush=False):
         # TODO make this return the actual text written
         print(item, file=self.file, flush=flush) # , flush=True
 
@@ -188,8 +190,8 @@ class ContinuousWriter:
             key: kwargs[key] for key in kwargs if key in writer_class.__init__.__code__.co_varnames}
         self.writer = writer_class(file_name, **new_kwargs)
 
-    def write(self, item):
-        self.writer.write(item)
+    def write(self, item, flush=False):
+        self.writer.write(item, flush)
 
     def __enter__(self):
         return self
