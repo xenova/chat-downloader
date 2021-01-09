@@ -483,191 +483,6 @@
         }
     },
     {
-        "addBannerToLiveChatCommand": {
-            "bannerRenderer": {
-                "liveChatBannerRenderer": {
-                    "header": {
-                        "liveChatBannerHeaderRenderer": {
-                            "icon": {
-                                "iconType": "KEEP"
-                            },
-                            "text": {
-                                "runs": [
-                                    {
-                                        "text": "Pinned by "
-                                    },
-                                    {
-                                        "text": "ChilledCow"
-                                    }
-                                ]
-                            },
-                            "contextMenuButton": {
-                                "buttonRenderer": {
-                                    "icon": {
-                                        "iconType": "MORE_VERT"
-                                    },
-                                    "trackingParams": "CBEQ8FsiEwiOg_XputLtAhVqwEkHHTj9Cbk=",
-                                    "accessibilityData": {
-                                        "accessibilityData": {
-                                            "label": "Comment actions"
-                                        }
-                                    },
-                                    "command": {
-                                        "clickTrackingParams": "CBEQ8FsiEwiOg_XputLtAhVqwEkHHTj9Cbk=",
-                                        "commandMetadata": {
-                                            "webCommandMetadata": {
-                                                "ignoreNavigation": true
-                                            }
-                                        },
-                                        "liveChatItemContextMenuEndpoint": {
-                                            "params": "Q2pzS09Rb2FRMHBZWWpoMFlXUTBaWGREUmxGTmJHZDNiMlJzVGpoT09IY1NHME5PVEU4NVdVOWtOR1YzUTBaYVIwRTVRV05rZW1JMFMxUm5NQkFBR2pnS0RRb0xOWEZoY0RWaFR6UnBPVUVxSndvWVZVTlRTalJuYTFaRE5rNXlka2xKT0hWdGVuUm1NRTkzRWdzMWNXRndOV0ZQTkdrNVFTQUJLQUV5R2dvWVZVTlRTalJuYTFaRE5rNXlka2xKT0hWdGVuUm1NRTkzT0FFJTNE"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "contents": {
-                        "liveChatTextMessageRenderer": {
-                            "message": {
-                                "runs": [
-                                    {
-                                        "text": "There\\'s a new giveaway on the Discord server, join now for a chance to win! "
-                                    },
-                                    {
-                                        "emoji": {
-                                            "emojiId": "UCSJ4gkVC6NrvII8umztf0Ow/0IfaXqT4DsaagQfh4p7ACA",
-                                            "shortcuts": [
-                                                ":_studyheart:",
-                                                ":studyheart:"
-                                            ],
-                                            "searchTerms": [
-                                                "_studyheart",
-                                                "studyheart"
-                                            ],
-                                            "image": {
-                                                "thumbnails": [
-                                                    {
-                                                        "url": "https://yt3.ggpht.com/OJYOKAVcMqC6xXRU4rPPkYeCMqg0bMOjskVGQFnAw-S0vPODtT6K-74XEB5oszxo8nI4ITlQWQ=w24-h24-c-k-nd",
-                                                        "width": 24,
-                                                        "height": 24
-                                                    },
-                                                    {
-                                                        "url": "https://yt3.ggpht.com/OJYOKAVcMqC6xXRU4rPPkYeCMqg0bMOjskVGQFnAw-S0vPODtT6K-74XEB5oszxo8nI4ITlQWQ=w48-h48-c-k-nd",
-                                                        "width": 48,
-                                                        "height": 48
-                                                    }
-                                                ],
-                                                "accessibility": {
-                                                    "accessibilityData": {
-                                                        "label": ":_studyheart:"
-                                                    }
-                                                }
-                                            },
-                                            "isCustomEmoji": true
-                                        }
-                                    },
-                                    {
-                                        "text": " "
-                                    },
-                                    {
-                                        "text": "https://bit.ly/discord-giveaway",
-                                        "navigationEndpoint": {
-                                            "clickTrackingParams": "CAEQl98BIhMIjoP16brS7QIVasBJBx04_Qm5",
-                                            "commandMetadata": {
-                                                "webCommandMetadata": {
-                                                    "url": "/redirect?q=https%3A%2F%2Fbit.ly%2Fdiscord-giveaway&redir_token=QUFFLUhqbVNQVkJQVi1STVJLRmZJYVRpYWczNmZ1eVhiQXxBQ3Jtc0tucjExSVJzbUpUa0RDNGVrY1o2X0J0Y2hoNkdwTThhNGI4UHFKM1pVamdRcnpFcks5dWxuRDFrdE1wM2JRTzI3bnZKbmVTQmhIMC1MbnJKakx4R2l6YjBkTk0waXRDcDdiNzhfRnFPUjlrcEhNQzdyQQ%3D%3D&event=live_chat",
-                                                    "webPageType": "WEB_PAGE_TYPE_UNKNOWN",
-                                                    "rootVe": 83769
-                                                }
-                                            },
-                                            "urlEndpoint": {
-                                                "url": "/redirect?q=https%3A%2F%2Fbit.ly%2Fdiscord-giveaway&redir_token=QUFFLUhqbVNQVkJQVi1STVJLRmZJYVRpYWczNmZ1eVhiQXxBQ3Jtc0tucjExSVJzbUpUa0RDNGVrY1o2X0J0Y2hoNkdwTThhNGI4UHFKM1pVamdRcnpFcks5dWxuRDFrdE1wM2JRTzI3bnZKbmVTQmhIMC1MbnJKakx4R2l6YjBkTk0waXRDcDdiNzhfRnFPUjlrcEhNQzdyQQ%3D%3D&event=live_chat",
-                                                "target": "TARGET_NEW_WINDOW",
-                                                "nofollow": true
-                                            }
-                                        }
-                                    }
-                                ]
-                            },
-                            "authorName": {
-                                "simpleText": "ChilledCow"
-                            },
-                            "authorPhoto": {
-                                "thumbnails": [
-                                    {
-                                        "url": "https://yt3.ggpht.com/ytc/AAUvwnizf2xTocHmL70D5Wx_a2J8yAiPDdNT5Xwiew=s32-c-k-c0xffffffff-no-rj-mo",
-                                        "width": 32,
-                                        "height": 32
-                                    },
-                                    {
-                                        "url": "https://yt3.ggpht.com/ytc/AAUvwnizf2xTocHmL70D5Wx_a2J8yAiPDdNT5Xwiew=s64-c-k-c0xffffffff-no-rj-mo",
-                                        "width": 64,
-                                        "height": 64
-                                    }
-                                ]
-                            },
-                            "id": "CjkKGkNKWGI4dGFkNGV3Q0ZRTWxnd29kbE44Tjh3EhtDTkxPOVlPZDRld0NGWkdBOUFjZHpiNEtUZzA%3D",
-                            "timestampUsec": "1604229791526293",
-                            "authorBadges": [
-                                {
-                                    "liveChatAuthorBadgeRenderer": {
-                                        "icon": {
-                                            "iconType": "VERIFIED"
-                                        },
-                                        "tooltip": "Verified",
-                                        "accessibility": {
-                                            "accessibilityData": {
-                                                "label": "Verified"
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    "liveChatAuthorBadgeRenderer": {
-                                        "icon": {
-                                            "iconType": "OWNER"
-                                        },
-                                        "tooltip": "Owner",
-                                        "accessibility": {
-                                            "accessibilityData": {
-                                                "label": "Owner"
-                                            }
-                                        }
-                                    }
-                                },
-                                {
-                                    "liveChatAuthorBadgeRenderer": {
-                                        "customThumbnail": {
-                                            "thumbnails": [
-                                                {
-                                                    "url": "https://yt3.ggpht.com/zFwnQLo7173TsBHhOvFbNbnRqAsI9Mm5Q1tCS--LRan6JLNpoq9GSruy2D8NFpkOsvLlZHCSTQk=s16-c-k"
-                                                },
-                                                {
-                                                    "url": "https://yt3.ggpht.com/zFwnQLo7173TsBHhOvFbNbnRqAsI9Mm5Q1tCS--LRan6JLNpoq9GSruy2D8NFpkOsvLlZHCSTQk=s32-c-k"
-                                                }
-                                            ]
-                                        },
-                                        "tooltip": "Member (10 months)",
-                                        "accessibility": {
-                                            "accessibilityData": {
-                                                "label": "Member (10 months)"
-                                            }
-                                        }
-                                    }
-                                }
-                            ],
-                            "authorExternalChannelId": "UCSJ4gkVC6NrvII8umztf0Ow"
-                        }
-                    },
-                    "actionId": "ChwKGkNNdWR0TnFkNGV3Q0Zia0UxZ0FkZHAwS293",
-                    "viewerIsCreator": false,
-                    "targetId": "live-chat-banner"
-                }
-            }
-        }
-    },
-    {
         "replaceChatItemAction": {
             "targetItemId": "CkUKGkNManQyNHV6MHUwQ0ZZV3hnZ29kdHBvTGpnEidDSW1QdmFpdjB1MENGY2tPdHdBZFE4QU1nUTE2MDgxMTgxODg3MTA%3D",
             "replacementItem": {
@@ -990,6 +805,136 @@
                 "liveChatPlaceholderItemRenderer": {
                     "id": "CjkKGkNLbnE1dHl4MHUwQ0ZSREhnZ29kU2pFTmN3EhtDTERINGZhdjB1MENGUXEwV0FvZDN2QU53UTA%3D",
                     "timestampUsec": "1608117823059241"
+                }
+            }
+        }
+    },
+    {
+        "addBannerToLiveChatCommand": {
+            "bannerRenderer": {
+                "liveChatBannerRenderer": {
+                    "header": {
+                        "liveChatBannerHeaderRenderer": {
+                            "icon": {
+                                "iconType": "KEEP"
+                            },
+                            "text": {
+                                "runs": [
+                                    {
+                                        "text": "Pinned by "
+                                    },
+                                    {
+                                        "text": "Study IQ education"
+                                    }
+                                ]
+                            },
+                            "contextMenuButton": {
+                                "buttonRenderer": {
+                                    "icon": {
+                                        "iconType": "MORE_VERT"
+                                    },
+                                    "trackingParams": "CBAQ8FsiEwjLvaaBgYvuAhWHsIIKHRxuBm4=",
+                                    "accessibilityData": {
+                                        "accessibilityData": {
+                                            "label": "Comment actions"
+                                        }
+                                    },
+                                    "command": {
+                                        "clickTrackingParams": "CBAQ8FsiEwjLvaaBgYvuAhWHsIIKHRxuBm4=",
+                                        "commandMetadata": {
+                                            "webCommandMetadata": {
+                                                "ignoreNavigation": true
+                                            }
+                                        },
+                                        "liveChatItemContextMenuEndpoint": {
+                                            "params": "Q2pzS09Rb2FRMDVIYjJrdFMyVnBkVFJEUmxkVlNHWlJiMlJGT0dOSVVYY1NHME5RUTBGM09XMWxhWFUwUTBaVk1HSmFRVzlrZUVwRlNFaEJNQkFBR2pnS0RRb0xTMDFpYVhkVVRGUklOSGNxSndvWVZVTnlRemh0VDNGS1VYQnZRamRPZFVsTlMwbFRObkpSRWd0TFRXSnBkMVJNVkVnMGR5QUJLQUV5R2dvWVZVTnlRemh0VDNGS1VYQnZRamRPZFVsTlMwbFRObkpST0FFJTNE"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "contents": {
+                        "liveChatTextMessageRenderer": {
+                            "message": {
+                                "runs": [
+                                    {
+                                        "text": "Click here to buy Dr Vipan's course : "
+                                    },
+                                    {
+                                        "text": "https://bit.ly/2wJs0SV",
+                                        "navigationEndpoint": {
+                                            "clickTrackingParams": "CAEQl98BIhMIy72mgYGL7gIVh7CCCh0cbgZu",
+                                            "commandMetadata": {
+                                                "webCommandMetadata": {
+                                                    "url": "/redirect?event=live_chat&redir_token=QUFFLUhqazhWMWxESENQNUFvWnB6S0xrckNTdWpBSWhXZ3xBQ3Jtc0tuTm9PM0E0Y2pEbnFRanM3S1lpTzJ3RHQ1SmNYMmRReVNvMVhlMFFyM2hBZFQxODM5VjBZZ040YVQ3MWVqbmpMb2ZVQWxDOERjQXdBb3cxVDY2TXZxM0FIZnROcXplR3BlYkk0elk5cVRnelRIMUI1NA%3D%3D&q=https%3A%2F%2Fbit.ly%2F2wJs0SV",
+                                                    "webPageType": "WEB_PAGE_TYPE_UNKNOWN",
+                                                    "rootVe": 83769
+                                                }
+                                            },
+                                            "urlEndpoint": {
+                                                "url": "/redirect?event=live_chat&redir_token=QUFFLUhqazhWMWxESENQNUFvWnB6S0xrckNTdWpBSWhXZ3xBQ3Jtc0tuTm9PM0E0Y2pEbnFRanM3S1lpTzJ3RHQ1SmNYMmRReVNvMVhlMFFyM2hBZFQxODM5VjBZZ040YVQ3MWVqbmpMb2ZVQWxDOERjQXdBb3cxVDY2TXZxM0FIZnROcXplR3BlYkk0elk5cVRnelRIMUI1NA%3D%3D&q=https%3A%2F%2Fbit.ly%2F2wJs0SV",
+                                                "target": "TARGET_NEW_WINDOW",
+                                                "nofollow": true
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            "authorName": {
+                                "simpleText": "Study IQ education"
+                            },
+                            "authorPhoto": {
+                                "thumbnails": [
+                                    {
+                                        "url": "https://yt3.ggpht.com/ytc/AAUvwnhqDdKWW9x00cObyI4L7T_yjNP1O12bIHagmQ=s32-c-k-c0xffffffff-no-rj-mo",
+                                        "width": 32,
+                                        "height": 32
+                                    },
+                                    {
+                                        "url": "https://yt3.ggpht.com/ytc/AAUvwnhqDdKWW9x00cObyI4L7T_yjNP1O12bIHagmQ=s64-c-k-c0xffffffff-no-rj-mo",
+                                        "width": 64,
+                                        "height": 64
+                                    }
+                                ]
+                            },
+                            "id": "CjkKGkNOR29pLUtlaXU0Q0ZXVUhmUW9kRThjSFF3EhtDUENBdzltZWl1NENGVTBiWkFvZHhKRUhIQTA%3D",
+                            "timestampUsec": "1610036879217790",
+                            "authorBadges": [
+                                {
+                                    "liveChatAuthorBadgeRenderer": {
+                                        "icon": {
+                                            "iconType": "VERIFIED"
+                                        },
+                                        "tooltip": "Verified",
+                                        "accessibility": {
+                                            "accessibilityData": {
+                                                "label": "Verified"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "liveChatAuthorBadgeRenderer": {
+                                        "icon": {
+                                            "iconType": "OWNER"
+                                        },
+                                        "tooltip": "Owner",
+                                        "accessibility": {
+                                            "accessibilityData": {
+                                                "label": "Owner"
+                                            }
+                                        }
+                                    }
+                                }
+                            ],
+                            "authorExternalChannelId": "UCrC8mOqJQpoB7NuIMKIS6rQ"
+                        }
+                    },
+                    "actionId": "ChwKGkNJLVd2LU9laXU0Q0Zab0hyUVlkcGVJTFNn",
+                    "viewerIsCreator": false,
+                    "targetId": "live-chat-banner",
+                    "isStackable": false
                 }
             }
         }

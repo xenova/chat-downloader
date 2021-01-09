@@ -7,9 +7,10 @@ import time
 from ..errors import (
     CookieError,
     ParsingError,
-    JSONParseError,
     CallbackFunction,
-    RetriesExceeded
+    RetriesExceeded,
+    InvalidParameter,
+    UnexpectedHTML
 )
 
 from ..utils import (
@@ -152,6 +153,7 @@ class ChatDownloader:
     # target_id
     # action
     # viewer_is_creator
+    # is_stackable
     # sub_message
 
     _DEFAULT_INIT_PARAMS = {
@@ -184,6 +186,8 @@ class ChatDownloader:
 
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,
+
+        'force_encoding': None, # use default
 
 
         # stop getting messages after no messages have been sent for `timeout` seconds
@@ -229,7 +233,7 @@ class ChatDownloader:
         return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
     @staticmethod
-    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys = False):
+    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys = False, replace_char_with_underscores=None):
         remap = remapping_dict.get(remap_key)
 
         if remap:
@@ -240,6 +244,8 @@ class ChatDownloader:
             else:
                 info[remap] = remap_input
         elif keep_unknown_keys:
+            if replace_char_with_underscores:
+                remap_key = remap_key.replace(replace_char_with_underscores, '_')
             info[remap_key] = remap_input
 
         # else:
@@ -307,9 +313,8 @@ class ChatDownloader:
             return s.json()
         except JSONDecodeError:
             # TODO determine if html
-            # print(s.text)
             webpage_title = get_title_of_webpage(s.text)
-            raise JSONParseError(webpage_title)
+            raise UnexpectedHTML(webpage_title, s.text)
 
     _VALID_URL = None
     _CALLBACK = None
@@ -377,21 +382,31 @@ class ChatDownloader:
         return image
 
     @staticmethod
-    def create_author_info(info, *author_info_keys):
-        """Move all author information to an author dictionary."""
-        author_dict = {}
+    def move_to_dict(info, dict_name, replace_key=None, *info_keys):
+        """
+        Move all items with keys that contain some text to a separate dictionary.
 
-        # author_info_keys = ('is_author_banned', 'is_author_banned',
-        #                 'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker')
-        for key in author_info_keys:
-            author_info_item = info.pop(key, None)
-            new_key = key.replace('author_', '')
-            # set it if it contains info
-            if author_info_item not in (None, [], {}):
-                author_dict[new_key] = author_info_item
+        These keys are modifed by removing some text.
+        """
+        if replace_key is None:
+            replace_key = dict_name+'_'
 
-        if 'author' not in info: #  and author_dict != {}
-            info['author'] = author_dict
+        new_dict = {}
+
+        keys = (info_keys or info or {}).copy()
+        for key in keys:
+            if replace_key in key:
+                info_item = info.pop(key, None)
+                new_key = key.replace(replace_key, '')
+
+                # set it if it contains info
+                if info_item not in (None, [], {}):
+                    new_dict[new_key] = info_item
+
+        if dict_name not in info and new_dict != {}:
+            info[dict_name] = new_dict
+
+        return new_dict
 
     @staticmethod
     def retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, text = None, error=''):
@@ -402,22 +417,59 @@ class ChatDownloader:
 
         text.append('Retry #{}. {}'.format(attempt_number, error))
 
+        is_unexpected_html = isinstance(error, UnexpectedHTML)
+        must_sleep = retry_timeout>=0
         log(
             'error',
             text,
             logging_level,
             matching=('debug', 'errors'),
-            pause_on_debug=pause_on_debug
+            pause_on_debug=(pause_on_debug and not is_unexpected_html and not must_sleep)
         )
+        if is_unexpected_html:
+            log(
+                'error',
+                error.html,
+                logging_level,
+                matching=('debug', 'errors'),
+                pause_on_debug=pause_on_debug and not must_sleep
+            )
+
+
 
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
-        if retry_timeout>=0:
+
+        if must_sleep:
+            log(
+                'error',
+                'Sleeping for {}s.'.format(retry_timeout),
+                logging_level,
+                matching=('debug', 'errors'),
+                pause_on_debug=pause_on_debug
+            )
             time.sleep(retry_timeout)
         else:
             input('Press Enter to continue...')
 
+    @staticmethod
+    def check_for_invalid_types(messages_types_to_add, allowed_message_types):
+        invalid_types = set(messages_types_to_add) - set(allowed_message_types)
+        if invalid_types:
+            raise InvalidParameter(
+                'Invalid types specified: {}'.format(invalid_types))
+
+
+    @staticmethod
+    def get_mapped_keys(remapping):
+        mapped_keys = set()
+        for key in remapping:
+            value = remapping[key]
+            if isinstance(remapping[key], tuple):
+                value = value[0]
+            mapped_keys.add(value)
+        return mapped_keys
     # def _format_item(self, result, item):
     #     # TODO fix this method
 

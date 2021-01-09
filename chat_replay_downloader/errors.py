@@ -15,6 +15,14 @@ class JSONParseError(Exception):
     """Raised when unable to parse JSON."""
     pass
 
+class UnexpectedHTML(Exception):
+    """
+    Raised when JSON is expected, but HTML is returned instead
+    This usually occurs when an internal service error occurs.
+    """
+    def __init__(self, message=None, html=None):
+        super().__init__(message)
+        self.html = html
 
 class CallbackFunction(Exception):
     """Raised when the callback function does not have (only) one required positional argument"""

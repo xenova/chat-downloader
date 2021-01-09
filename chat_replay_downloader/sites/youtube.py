@@ -5,13 +5,13 @@ from requests.exceptions import RequestException
 
 from ..errors import (
     NoChatReplay,
-    JSONParseError,
     NoContinuation,
     ParsingError,
     VideoUnavailable,
     LoginRequired,
     VideoUnplayable,
-    InvalidParameter
+    InvalidParameter,
+    UnexpectedHTML
 )
 
 from urllib import parse
@@ -49,16 +49,20 @@ class YouTubeChatDownloader(ChatDownloader):
     # Regex provided by youtube-dl
     _VALID_URL = r'''(?x)^
                      (
-                         (?:https?://|//)                                    # http(s):// or protocol-independent URL
+                         # http(s):// or protocol-independent URL
+                         (?:https?://|//)
                          (?:(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com/|
                             youtube\.googleapis\.com/)                        # the various hostnames, with wildcard subdomains
                          (?:.*?\#/)?                                          # handle anchor (#/) redirect urls
                          (?:                                                  # the various things that can precede the ID:
-                             (?:(?:v|embed|e)/(?!videoseries))                # v/ or embed/ or e/
+                             # v/ or embed/ or e/
+                             (?:(?:v|embed|e)/(?!videoseries))
                              |(?:                                             # or the v= param in all its forms
-                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?  # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
+                                 # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
+                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?
                                  (?:\?|\#!?)                                  # the params delimiter ? or # or #!
-                                 (?:.*?[&;])??                                # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
+                                 # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
+                                 (?:.*?[&;])??
                                  v=
                              )
                          ))
@@ -66,8 +70,10 @@ class YouTubeChatDownloader(ChatDownloader):
                             youtu\.be                                        # just youtu.be/xxxx
                          )/)
                      )?                                                       # all until now is optional -> you can pass the naked ID
-                     (?P<id>[0-9A-Za-z_-]{11})                                # here is it! the YouTube video ID
-                     (?(1).+)?                                                # if we found the ID, everything can follow
+                     # here is it! the YouTube video ID
+                     (?P<id>[0-9A-Za-z_-]{11})
+                     # if we found the ID, everything can follow
+                     (?(1).+)?
                      $'''
 
     _TESTS = [
@@ -396,9 +402,7 @@ class YouTubeChatDownloader(ChatDownloader):
             # currency type
             # amount (float)
 
-        #print('author_name')
-        ChatDownloader.create_author_info(
-            info, 'author_id', 'author_name', 'author_images', 'author_badges')
+        ChatDownloader.move_to_dict(info, 'author')
 
         time_in_seconds = info.get('time_in_seconds')
         time_text = info.get('time_text')
@@ -554,6 +558,7 @@ class YouTubeChatDownloader(ChatDownloader):
         'text': ('message', 'parse_runs'),
         'viewerIsCreator': 'viewer_is_creator',
         'targetId': 'target_message_id',
+        'isStackable': 'is_stackable',
 
         # removeBannerForLiveChatCommand
         'targetActionId': 'target_message_id',
@@ -631,7 +636,7 @@ class YouTubeChatDownloader(ChatDownloader):
             'liveChatModeChangeMessageRenderer',  # e.g. slow mode enabled
 
             # TODO find examples of:
-            #'liveChatPurchasedProductMessageRenderer',  # product purchased
+            # 'liveChatPurchasedProductMessageRenderer',  # product purchased
 
 
         ]
@@ -738,32 +743,35 @@ class YouTubeChatDownloader(ChatDownloader):
         error_screen = multi_get(playability_status, 'errorScreen')
         error_screen_info = try_get_first_value(error_screen)
 
-        reason = ''
-        subreason = ''
+        error_reasons = {
+            'reason': '',
+            'subreason': '',
+        }
 
         if error_screen:
             if error_screen_info:
-                # parse reason
-                for r in ('reason', 'itemTitle'):
-                    reason = multi_get(
-                        error_screen_info, r, 'simpleText') or error_screen_info.get(r)
-                    if reason:
-                        break
-
-                # parse subreason
-                for s in ('subreason', 'offerDescription'):
-                    subreason = multi_get(
-                        error_screen_info, s, 'simpleText') or error_screen_info.get(s)
-                    if subreason:
-                        break
-
+                # parse reason and subreason
+                for error_type in error_reasons:
+                    for r in (error_type, 'itemTitle', 'offerDescription'):
+                        error_reasons[error_type] = multi_get(error_screen_info, r, 'simpleText') or try_get(
+                            error_screen_info, lambda x: self.parse_runs(x[r])) or error_screen_info.get(r)
+                        if error_reasons[error_type]:
+                            break
             else:
-                reason = playability_status.get('reason')
-                subreason = playability_status.get('subreason')
+                error_reasons['reason'] = playability_status.get('reason')
+                error_reasons['subreason'] = playability_status.get(
+                    'subreason')
 
-            error_message = '{}.'.format(reason.rstrip('.'))
-            if subreason:
-                error_message += ' {}.'.format(subreason.rstrip('.'))
+            error_message = ''
+            for error_type in error_reasons:
+                if error_reasons[error_type]:
+                    if isinstance(error_reasons[error_type], str):
+                        error_message += ' {}.'.format(
+                            error_reasons[error_type].rstrip('.'))
+                    else:
+                        error_message += str(error_reasons[error_type])
+
+            error_message = error_message.strip()
 
             if status == 'ERROR':
                 raise VideoUnavailable(error_message)
@@ -896,10 +904,8 @@ class YouTubeChatDownloader(ChatDownloader):
             raise InvalidParameter(
                 'Invalid groups specified: {}'.format(invalid_groups))
 
-        invalid_types = set(messages_types_to_add) - set(self._MESSAGE_TYPES)
-        if invalid_types:
-            raise InvalidParameter(
-                'Invalid types specified: {}'.format(invalid_types))
+        self.check_for_invalid_types(
+            messages_types_to_add, self._MESSAGE_TYPES)
 
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
@@ -908,7 +914,7 @@ class YouTubeChatDownloader(ChatDownloader):
         first_time = True
         while True:
             info = None
-            # the following can raise NoContinuation error or JSONParseError
+            # the following can raise NoContinuation error or UnexpectedHTML
 
             for attempt_number in attempts(max_attempts):
                 try:
@@ -920,7 +926,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             continuation, None if first_time else offset_milliseconds)
                     break
 
-                except (JSONParseError, RequestException) as e:
+                except (UnexpectedHTML, RequestException) as e:
                     self.retry(attempt_number, max_attempts, retry_timeout,
                                logging_level, pause_on_debug, error=e)
                     continue

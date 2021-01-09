@@ -477,8 +477,7 @@ class FacebookChatDownloader(ChatDownloader):
 
 
         author_info = info.pop('author', {})
-        ChatDownloader.create_author_info(info, 'is_author_banned', 'is_author_banned',
-                                              'is_author_original_poster', 'is_author_bot', 'is_author_non_coworker', 'author_badges')
+        ChatDownloader.move_to_dict(info, 'author')
 
         for key in author_info:
             ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,

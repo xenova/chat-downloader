@@ -10,7 +10,7 @@ from requests.exceptions import RequestException
 from ..errors import (
     TwitchError,
     InvalidParameter,
-    JSONParseError
+    UnexpectedHTML
 )
 
 from ..utils import (
@@ -54,20 +54,23 @@ class TwitchChatIRC():
     def send_raw(self, string):
         self._SOCKET.send((string+'\r\n').encode('utf-8'))
 
-    def recvall(self, buffer_size):
-        fragments = []  # faster than byte string
-        while True:
-            part = self._SOCKET.recv(buffer_size)
-            fragments.append(part)
+    def recv(self, buffer_size):
+        return self._SOCKET.recv(buffer_size).decode('utf-8', 'ignore')
 
-            # attempt to decode this, otherwise the last byte was incomplete
-            # in this case, get more data
-            try:
-                # if len(part) < buffer_size:
-                return b''.join(fragments).decode('utf-8', 'ignore')
-            except UnicodeDecodeError:
-                # print('error', data)
-                continue
+    # def recvall(self, buffer_size):
+    #     fragments = []  # faster than byte string
+    #     while True:
+    #         part = self._SOCKET.recv(buffer_size)
+    #         fragments.append(part)
+
+    #         # attempt to decode this, otherwise the last byte was incomplete
+    #         # in this case, get more data
+    #         try:
+    #             # if len(part) < buffer_size:
+    #             return b''.join(fragments).decode('utf-8') # , 'ignore'
+    #         except UnicodeDecodeError:
+    #             # print('error', data)
+    #             continue
 
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
@@ -153,6 +156,9 @@ class TwitchChatDownloader(ChatDownloader):
     _GQL_API_URL = 'https://gql.twitch.tv/gql'
     _API_TEMPLATE = 'https://api.twitch.tv/v5/videos/{}/comments?client_id={}'
 
+    _PING_TEXT = 'PING :tmi.twitch.tv'
+    _PONG_TEXT = 'PONG :tmi.twitch.tv'
+
     _SUBSCRIPTION_TYPES = {
         'Prime': 'Prime',
         '1000': 'Tier 1',
@@ -177,6 +183,8 @@ class TwitchChatDownloader(ChatDownloader):
         'parse_subscription_type': lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x),
         'parse_commenter': lambda x: TwitchChatDownloader.parse_commenter(x),
         'parse_message_info': lambda x: TwitchChatDownloader.parse_message_info(x),
+
+        'decode_pseudo_BNF': lambda x: TwitchChatDownloader.decode_pseudo_BNF(x)
     }
     _AUTHOR_REMAPPING = {
         '_id': ('id', 'parse_int'),
@@ -190,16 +198,12 @@ class TwitchChatDownloader(ChatDownloader):
 
     }
     #
-    _REMAPPING = {
-        # 'origID' : ('mapped_id', 'remapping_function')
+    _COMMENT_REMAPPING = {
         '_id': 'message_id',
         'created_at': ('timestamp', 'parse_timestamp'),
         'commenter': ('author', 'parse_commenter'),
 
         'content_offset_seconds': 'time_in_seconds',
-
-
-
 
         'source': 'source',
         'state': 'state',
@@ -294,20 +298,19 @@ class TwitchChatDownloader(ChatDownloader):
         # to remove later
         'msg-param-profileImageURL': 'profile_image_url'
     }
-    _KNOWN_KEYS = {
-        **_REMAPPING, **_MESSAGE_PARAM_REMAPPING
-    }
 
-    _KNOWN_MESSAGE_TYPES = {
+
+
+    # Create set of known types
+    _KNOWN_COMMENT_KEYS = {
         # created elsewhere
         'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type'
     }
 
-    for key in _KNOWN_KEYS:
-        value = _KNOWN_KEYS[key]
-        if isinstance(_KNOWN_KEYS[key], tuple):
-            value = value[0]
-        _KNOWN_MESSAGE_TYPES.add(value)
+    _KNOWN_COMMENT_KEYS.update(ChatDownloader.get_mapped_keys({
+        **_COMMENT_REMAPPING, **_MESSAGE_PARAM_REMAPPING
+    }))
+    # print('_KNOWN_COMMENT_KEYS',_KNOWN_COMMENT_KEYS)
 
     _IRC_REMAPPING = {
         # CLEARCHAT
@@ -336,21 +339,46 @@ class TwitchChatDownloader(ChatDownloader):
 
 
 
+        # reply-parent-display-name
+
+
         # PRIVMSG
         'badge-info': ('author_badge_metadata', 'parse_badges'),
         'badges': ('author_badges', 'parse_badges'),
 
-
-
         'bits': ('bits', 'parse_int'),
-
-        # TODO change formatting to:
 
         'id': 'message_id',
         'mod': ('is_moderator', 'parse_bool'),
         'room-id': ('channel_id', 'parse_int'),
 
         'tmi-sent-ts': ('timestamp', 'multiply_by_1000'),
+
+        'subscriber': ('is_subscriber', 'parse_bool'),
+        'turbo': ('is_turbo', 'parse_bool'),
+
+        'client-nonce':'client_nonce',
+
+        'user-type': 'user_type',
+
+
+
+        'reply-parent-msg-body': ('in_reply_to_message', 'decode_pseudo_BNF'),
+        'reply-parent-user-id': ('in_reply_to_author_id', 'parse_int'),
+        'reply-parent-msg-id': 'in_reply_to_message_id',
+        'reply-parent-display-name': 'in_reply_to_author_display_name',
+        'reply-parent-user-login': 'in_reply_to_author_name',
+
+
+        'custom-reward-id': 'custom_reward_id',
+
+
+        # Information to replace text in the message with emote images. This can be empty.
+        # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
+        # TODO parse emote info?
+        'emotes':'emotes',
+        'flags':'flags',
+
 
 
         # ROOMSTATE
@@ -360,6 +388,7 @@ class TwitchChatDownloader(ChatDownloader):
         'r9k': ('r9k_mode', 'parse_bool'),
         'slow': ('slow_mode', 'parse_int'),
         'subs-only': ('subscriber_only', 'parse_bool'),
+        'rituals': ('rituals_enabled', 'parse_bool'),
 
         # USERNOTICE
         'system-msg': 'system_message',
@@ -368,9 +397,31 @@ class TwitchChatDownloader(ChatDownloader):
         # HOSTTARGET
         'number-of-viewers': 'number_of_viewers',
 
+        # ban user
+        'target-user-id': ('target_author_id', 'parse_int'),
+
         # USERNOTICE - other
         **_MESSAGE_PARAM_REMAPPING
     }
+
+    _KNOWN_IRC_KEYS = {
+        # banned user
+        'banned_user', 'ban_type',
+
+        # slow mode
+        'seconds_to_wait',
+
+        # follower only
+        'minutes_to_follow_before_chatting',
+
+        # parsed elsewhere
+        'action_type',
+        'author',
+        'in_reply_to',
+        'message'
+    }
+    _KNOWN_IRC_KEYS.update(ChatDownloader.get_mapped_keys(_IRC_REMAPPING))
+
 
     _ACTION_TYPE_REMAPPING = {
         # tags
@@ -390,6 +441,9 @@ class TwitchChatDownloader(ChatDownloader):
 
     # msg-id's
     _MESSAGE_GROUP_REMAPPINGS = {
+        # TODO add rest of
+        # https://dev.twitch.tv/docs/irc/msg-id
+
         'messages': {
             'highlighted-message': 'highlighted_message',
             'skip-subs-mode-message': 'send_message_in_subscriber_only_mode',
@@ -587,15 +641,15 @@ class TwitchChatDownloader(ChatDownloader):
         ]
 
     @ staticmethod
-    def _parse_item(item, offset, params=None):
-        if params is None:
-            params = {}
+    def _parse_item(item, offset):
+        # if params is None:
+        #     params = {}
 
         info = {}
 
         for key in item:
-            ChatDownloader.remap(info, TwitchChatDownloader._REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])
+            ChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key]) # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -621,23 +675,6 @@ class TwitchChatDownloader(ChatDownloader):
 
         # remove profile_image_url if present
         info.pop('profile_image_url', None)
-
-        # test for missing keys
-        missing_keys = info.keys()-TwitchChatDownloader._KNOWN_MESSAGE_TYPES
-
-        if missing_keys:
-            log(
-                'debug',
-                [
-                    'Missing keys found: {}'.format(missing_keys),
-                    'User notice params: {}'.format(
-                        user_notice_params),
-                    'Parsed data: {}'.format(info)
-                ],
-                params.get('logging'),
-                matching=('debug', 'errors'),
-                pause_on_debug=params.get('pause_on_debug')
-            )
 
         return info
 
@@ -690,8 +727,8 @@ class TwitchChatDownloader(ChatDownloader):
                 try:
                     info = self._session_get_json(url)
                     break
-                except (JSONParseError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout,
+                except (UnexpectedHTML, RequestException) as e:
+                    self.retry(attempt_number, max_attempts, retry_timeout * (2**attempt_number),
                                logging_level, pause_on_debug, error=e)
 
             error = info.get('error')
@@ -702,7 +739,27 @@ class TwitchChatDownloader(ChatDownloader):
 
             comments = info.get('comments') or []
             for comment in comments:
-                data = self._parse_item(comment, offset, params)
+                data = self._parse_item(comment, offset)
+
+
+                # test for missing keys
+                missing_keys = data.keys()-TwitchChatDownloader._KNOWN_COMMENT_KEYS
+
+                if missing_keys:
+                    log(
+                        'debug',
+                        [
+                            'Missing keys found: {}'.format(missing_keys),
+                            'Original data: {}'.format(comment),
+                            'Parsed data: {}'.format(data),
+                            comment.keys(),
+                            TwitchChatDownloader._KNOWN_COMMENT_KEYS
+                        ],
+                        logging_level,
+                        matching=('debug', 'errors'),
+                        pause_on_debug=pause_on_debug
+                    )
+
 
                 time_in_seconds = data.get('time_in_seconds', 0)
 
@@ -755,7 +812,7 @@ class TwitchChatDownloader(ChatDownloader):
                                           data=json.dumps(query).encode(),
                                           headers={'Client-ID': self._CLIENT_ID}).json()['data']['clip']
                 break
-            except (JSONParseError, RequestException) as e:
+            except (UnexpectedHTML, RequestException) as e:
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
 
@@ -776,7 +833,7 @@ class TwitchChatDownloader(ChatDownloader):
     # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
 
     _MESSAGE_REGEX = re.compile(
-        r'^@(.+?(?=\s+:))(?:\s\S*?)tmi\.twitch\.tv\s+(\S+)\s+#?\S+\s+?\:?([^\r\n]*)?', re.MULTILINE)
+        r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:.+#\S+)?(?:.:)*([^\r\n]*)', re.MULTILINE)
     # Groups:
     # 1. Tag info
     # 2. Action type
@@ -830,7 +887,20 @@ class TwitchChatDownloader(ChatDownloader):
             return info
 
         for badge in badges.split(','):
-            split = badge.split('/')
+            split = badge.split('/', 1)
+            key_length = len(split)
+            if key_length == 1:
+                # If there's no /, we assign a value of None (null).
+                split.append(None)
+            elif key_length == 2:
+                pass
+            else:
+                print('INVALID BADGE FOUND')
+                print(badge)
+                print(badges)
+                input()
+                continue # TODO debug
+
             info.append(TwitchChatDownloader.parse_badge_info(
                 split[0], split[1]))
         return info
@@ -853,6 +923,12 @@ class TwitchChatDownloader(ChatDownloader):
                     x.get('_id'), x.get('version'), True), message.get('user_badges') or [])),
             'user_notice_params': message.get('user_notice_params')
         }
+    @staticmethod
+    def decode_pseudo_BNF(text):
+        """
+        Decode text according to https://ircv3.net/specs/extensions/message-tags.html
+        """
+        return text.replace('\:',';').replace('\s',' ')
 
     # print(_MESSAGE_TYPE_REMAPPING)
     @staticmethod
@@ -893,11 +969,22 @@ class TwitchChatDownloader(ChatDownloader):
 
         for item in split_info:
             keys = item.split('=', 1)
-            if len(keys) != 2:
+            key_length = len(keys)
+            if key_length == 1:
+                # If there's no equals, we assign the tag a value of true.
+                keys.append(True)
+            elif key_length == 2:
+                pass
+            else:
+                print('INVALID ITEM FOUND')
+                print(split_info)
+                input() # TODO debug
                 continue
 
             ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1])
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1],
+                                 keep_unknown_keys=True,
+                                 replace_char_with_underscores='-')
 
         message_match = match.group(3)
         if message_match:
@@ -918,8 +1005,16 @@ class TwitchChatDownloader(ChatDownloader):
         if author_display_name:
             info['author_name'] = author_display_name.lower()
 
-        ChatDownloader.create_author_info(
-            info, 'author_id', 'author_display_name', 'author_name', 'author_badges')
+
+        in_reply_to = ChatDownloader.move_to_dict(info, 'in_reply_to')
+
+
+        ChatDownloader.move_to_dict(in_reply_to, 'author')
+        # ChatDownloader.move_to_dict(info['in_reply_to'], 'author')
+        ChatDownloader.move_to_dict(info, 'author')
+
+
+
 
         original_action_type = match.group(2)
 
@@ -1000,7 +1095,7 @@ class TwitchChatDownloader(ChatDownloader):
                                                      query).encode(),
                                                  headers={'Client-ID': self._CLIENT_ID}).json()['data']['user']
                 break
-            except (JSONParseError, RequestException) as e:
+            except (UnexpectedHTML, RequestException) as e:
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
 
@@ -1023,45 +1118,79 @@ class TwitchChatDownloader(ChatDownloader):
         twitch_chat_irc = create_connection()
 
         time_since_last_message = 0
+
+        last_ping_time = time.time()
+
+        # TODO make this param
+        ping_every = 60 # how often to ping the server
+
         readbuffer = ''
 
         message_count = 0
         attempt_number = 0
+
+        test = 0
         while True:
             try:
-                new_info = twitch_chat_irc.recvall(buffer_size)
+                new_info = twitch_chat_irc.recv(buffer_size)
+
+                if not new_info:
+                    raise ConnectionError('Lost connection, reconnecting.')
+
                 readbuffer += new_info
 
-                if 'PING :tmi.twitch.tv' in readbuffer:
-                    twitch_chat_irc.send_raw('PONG :tmi.twitch.tv')
-                    # print('pong')
+                if self._PING_TEXT in readbuffer:
+                    twitch_chat_irc.send_raw(self._PONG_TEXT)
 
                 matches = list(self._MESSAGE_REGEX.finditer(readbuffer))
-                # print(readbuffer)
 
-                #print(buffer_size, len(readbuffer))
-                # print(matches)
                 if matches:
-                    time_since_last_message = 0
-
-                    # sometimes a buffer does not contain a full message
-                    # last one is incomplete
                     if not readbuffer.endswith('\r\n'):
-                        #matches = matches[:-1]
+                        # sometimes a buffer does not contain a full message
+                        # last one is incomplete
 
-                        last_index = matches[-1].span()[1]
+                        span = matches[-1].span()
+
+                        pass_on = readbuffer[span[0]:]
+
+                        # check whether message was cut off
+                        if '\r\n' in pass_on: # last message not matched
+                            # only pass on incomplete message
+
+                            pass_on = pass_on[span[1]-span[0]:] # readbuffer[span[1]:]
+
+                        else: # actual message cut off (matched, but not complete)
+                            matches.pop() # remove the last match (as it is incomplete)
+
                         # pass remaining information to next attempt
-                        readbuffer = readbuffer[last_index:]
+                        readbuffer = pass_on
 
                     else:
                         # the whole readbuffer was read correctly.
                         # clear readbuffer
                         readbuffer = ''
 
+                    time_since_last_message = 0
+
                     for match in matches:
 
                         data = self._parse_irc_item(match)
 
+                        # test for missing keys
+                        missing_keys = data.keys()-TwitchChatDownloader._KNOWN_IRC_KEYS
+
+                        if missing_keys:
+                            log(
+                                'debug',
+                                [
+                                    'Missing keys found: {}'.format(missing_keys),
+                                    'Original data: {}'.format(match.groups()),
+                                    'Parsed data: {}'.format(data)
+                                ],
+                                logging_level,
+                                matching=('debug', 'errors'),
+                                pause_on_debug=pause_on_debug
+                            )
                         # check whether to skip this message or not, based on its type
 
                         to_add = self.must_add_item(
@@ -1077,6 +1206,37 @@ class TwitchChatDownloader(ChatDownloader):
                         message_count += 1
                         yield data
 
+                    log(
+                        'debug',
+                        'Total number of messages: {}'.format(message_count),
+                        logging_level,
+                        matching=('debug', 'errors')
+                    )
+
+                elif readbuffer.endswith('\r\n'):
+                    # No matches, but data has been read successfully.
+                    # This means that we can safely reset the readbuffer.
+                    # This is used to periodically reset the readbuffer,
+                    # to avoid a massive buffer from forming.
+                    readbuffer = ''
+
+                    log(
+                        'debug',
+                        'No matches found in "\n{}\n"'.format(readbuffer.strip()),
+                        logging_level,
+                        matching=('debug', 'errors')
+                    )
+
+
+
+                current_time = time.time()
+
+                time_since_last_ping = current_time - last_ping_time
+
+                if time_since_last_ping > ping_every:
+                    twitch_chat_irc.send_raw('PING')
+                    last_ping_time = current_time
+
                 attempt_number = 0
 
             except socket.timeout:
@@ -1088,6 +1248,7 @@ class TwitchChatDownloader(ChatDownloader):
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
+
             except ConnectionError as e:
                 twitch_chat_irc = create_connection()
 
@@ -1096,24 +1257,6 @@ class TwitchChatDownloader(ChatDownloader):
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
 
-
-
-            # except Exception as e:
-            #     print('unknown exception')
-            #     print(e)
-            #     print(readbuffer)
-            #     raise e
-        # create new socket
-        # twitch_socket = socket.socket()
-
-        # # start connection
-        # twitch_socket.connect((self._HOST, self._PORT))
-        # # print('Connected to',self._HOST,'on port',self._PORT)
-
-        # # log in
-        # self.send_raw(twitch_socket, 'CAP REQ :twitch.tv/tags')
-        #  self.send_raw(twitch_socket, 'PASS ' + self._PASS)
-        #   self.send_raw(twitch_socket, 'NICK ' + self._NICK)
 
     def get_chat_messages(self, params):
         super().get_chat_messages(params)
