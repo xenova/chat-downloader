@@ -1,7 +1,8 @@
+import unittest
+
 # Allow direct execution
 import os
 import sys
-import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from chat_replay_downloader.sites import GET_ALL_SITES
