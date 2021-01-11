@@ -86,7 +86,7 @@ def try_get(src, getter, expected_type=None):
 
 
 def get_title_of_webpage(html):
-    match = re.search('<title>(.*?)</title>', html)
+    match = re.search('<title(?:[^>]*)>(.*?)</title>', html)
     return match.group(1) if match else None
 
 
