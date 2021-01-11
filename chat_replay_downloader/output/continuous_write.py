@@ -46,9 +46,9 @@ class JSONCW(CW):
     def __init__(self, file_name, overwrite=False, indent=None, separator=', ', indent_character=' ', sort_keys=True):
         super().__init__(file_name, overwrite)
         # open file for appending and reading in binary mode.
-        self.file = open(self.file_name, 'ab+')
+        self.file = open(self.file_name, 'rb+')
 
-        self.file.seek(0)  # go to beginning of file
+        # self.file.seek(0)  # go to beginning of file
 
         previous_items = []  # save previous
         if not overwrite:  # may have other data
@@ -121,13 +121,18 @@ class CSVCW(CW):
     def __init__(self, file_name, overwrite=False, sort_keys=True):
         super().__init__(file_name, overwrite)
 
-        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8', buffering=1)
 
+        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8') # , buffering=1
+
+        if not overwrite:
         # save previous data
-        self.file.seek(0)  # go to beginning of file
-        csv_dict_reader = csv.DictReader(self.file)
-        self.columns = list(csv_dict_reader.fieldnames or [])
-        self.all_items = [dict(x) for x in csv_dict_reader]
+            self.file.seek(0)  # go to beginning of file
+            csv_dict_reader = csv.DictReader(self.file)
+            self.columns = list(csv_dict_reader.fieldnames or [])
+            self.all_items = [dict(x) for x in csv_dict_reader]
+        else:
+            self.columns = []
+            self.all_items = []
 
         self._reset_dict_writer()
         self.sort_keys = sort_keys
