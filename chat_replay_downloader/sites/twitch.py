@@ -2,6 +2,7 @@ import re
 import json
 import time
 import socket
+import base64
 
 from .common import ChatDownloader
 
@@ -10,7 +11,8 @@ from requests.exceptions import RequestException
 from ..errors import (
     TwitchError,
     InvalidParameter,
-    UnexpectedHTML
+    UnexpectedHTML,
+    NoChatReplay
 )
 
 from ..utils import (
@@ -273,7 +275,7 @@ class TwitchChatDownloader(ChatDownloader):
         'msg-param-prior-gifter-display-name': 'prior_gifter_display_name',
         'msg-param-prior-gifter-id': 'prior_gifter_id',
 
-        'msg-param-fun-string':'fun_string',
+        'msg-param-fun-string': 'fun_string',
 
         # not come across yet, but other tools have it:
         # 'msg-param-charity':'charity',
@@ -298,8 +300,6 @@ class TwitchChatDownloader(ChatDownloader):
         # to remove later
         'msg-param-profileImageURL': 'profile_image_url'
     }
-
-
 
     # Create set of known types
     _KNOWN_COMMENT_KEYS = {
@@ -357,7 +357,7 @@ class TwitchChatDownloader(ChatDownloader):
         'subscriber': ('is_subscriber', 'parse_bool'),
         'turbo': ('is_turbo', 'parse_bool'),
 
-        'client-nonce':'client_nonce',
+        'client-nonce': 'client_nonce',
 
         'user-type': 'user_type',
 
@@ -376,8 +376,8 @@ class TwitchChatDownloader(ChatDownloader):
         # Information to replace text in the message with emote images. This can be empty.
         # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
         # TODO parse emote info?
-        'emotes':'emotes',
-        'flags':'flags',
+        'emotes': 'emotes',
+        'flags': 'flags',
 
 
 
@@ -421,7 +421,6 @@ class TwitchChatDownloader(ChatDownloader):
         'message'
     }
     _KNOWN_IRC_KEYS.update(ChatDownloader.get_mapped_keys(_IRC_REMAPPING))
-
 
     _ACTION_TYPE_REMAPPING = {
         # tags
@@ -649,7 +648,7 @@ class TwitchChatDownloader(ChatDownloader):
 
         for key in item:
             ChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key]) # , True
+                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -677,6 +676,135 @@ class TwitchChatDownloader(ChatDownloader):
         info.pop('profile_image_url', None)
 
         return info
+
+    _OPERATION_HASHES = {
+        'StreamMetadata': '1c719a40e481453e5c48d9bb585d971b8b372f8ebb105b17076722264dfa5b3e',
+        'BrowsePage_Popular': 'c3322a9df3121f437182beb5a75c2a8db9a1e27fa57701ffcae70e681f502557',
+        'ChannelVideoShelvesQuery': 'fb663273aa958ebe2f58d5fcb3aacc112d67ebfd7f414b095c5d1498d21aad92',
+        'ClipsCards__User': 'b73ad2bfaecfd30a9e6c28fada15bd97032c83ec77a0440766a56fe0bd632777',
+
+
+        'CollectionSideBar': '27111f1b382effad0b6def325caef1909c733fe6a4fbabf54f8d491ef2cf2f14',
+        'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
+        'ChannelCollectionsContent': '07e3691a1bad77a36aba590c351180439a40baefc1c275356f40fc7082419a84',
+        'ComscoreStreamingQuery': 'e1edae8122517d013405f237ffcc124515dc6ded82480a88daef69c83b53ac01',
+        'VideoPreviewOverlay': '3006e77e51b128d838fa4e835723ca4dc9a05c5efd4466c1085215c6e437e65c',
+        'VideoMetadata': '226edb3e692509f727fd56821f5653c05740242c82b0388883e0c0e75dcbf687',
+    }
+
+    def _download_base_gql(self, ops):
+        return self._session_post(self._GQL_API_URL, data=json.dumps(ops).encode(), headers={
+            'Content-Type': 'text/plain;charset=UTF-8',
+            'Client-ID': self._CLIENT_ID
+        }).json()
+
+    def _download_gql(self, ops):
+        for op in ops:
+            op['extensions'] = {
+                'persistedQuery': {
+                    'version': 1,
+                    'sha256Hash': self._OPERATION_HASHES[op['operationName']],
+                }
+            }
+        return self._download_base_gql(ops)
+
+    def get_user_clips(self, user_name, limit=100, filter_by='LAST_WEEK'):
+
+        # filter_by:
+        # LAST_WEEK
+        # LAST_DAY
+        # LAST_MONTH
+        # ALL_TIME
+
+        #offset= 20# , offset = 0
+
+        count = limit
+        offset = 0
+        to_return = []
+        while True:
+            cursor = base64.b64encode(str(offset).encode()).decode()
+            num_to_get = max(min(count, 100), 0)
+            if num_to_get <= 0:
+                break
+            # print('num_to_get', num_to_get)
+
+            query = [{
+                'operationName': 'ClipsCards__User',
+                'variables':
+                {
+                    'cursor': cursor,
+                    'login': user_name,
+                    'limit': num_to_get,
+                    'criteria':
+                    {
+                        'filter': filter_by
+                    }
+                }
+            }]
+            clips = self._download_gql(query)[0]['data']['user']['clips']
+
+            edges = clips['edges']
+
+            count -= len(edges)
+
+            to_return += edges
+
+            if not clips['pageInfo']['hasNextPage']:
+                break
+
+        return to_return
+
+
+        # TODO check if pageInfo hasNextPage
+
+        # print(len(edges))
+        return edges
+
+    def get_user_vods(self, user_name):
+        query = [{
+            'operationName': 'ChannelVideoShelvesQuery',
+            'variables': {
+                'channelLogin': user_name,
+                'first': 5
+            }
+        }]
+        edges = self._download_gql(query)[0]['data']['user']['videoShelves']['edges']
+        # print(len(edges))
+        return edges
+
+    def get_top_livestreams(self, limit=30):
+        count = limit
+
+        cursor = ''
+
+        to_return = []
+        while True:
+            num_to_get = max(min(count, 30), 0)
+            if num_to_get <= 0:
+                break
+            # print('num_to_get', num_to_get)
+
+            query = [{
+                'operationName': 'BrowsePage_Popular',
+                'variables': {
+                    'limit': num_to_get,
+                    'cursor': cursor,
+                    'platformType': 'all',
+                    'options': {
+                        'sort': 'VIEWER_COUNT'  # RECENT, RELEVANCE, VIEWER_COUNT_ASC
+                    },
+                    'sortTypeIsRecency': False
+                }
+            }]
+            edges = self._download_gql(query)[0]['data']['streams']['edges']
+
+            cursor = edges[-1]['cursor']
+            count -= num_to_get
+
+            to_return += edges
+
+        return to_return
+        # print(streams)
 
     _REGEX_FUNCTION_MAP = [
         (_VALID_VOD_URL, 'get_chat_by_vod_id'),
@@ -741,7 +869,6 @@ class TwitchChatDownloader(ChatDownloader):
             for comment in comments:
                 data = self._parse_item(comment, offset)
 
-
                 # test for missing keys
                 missing_keys = data.keys()-TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
@@ -759,7 +886,6 @@ class TwitchChatDownloader(ChatDownloader):
                         matching=('debug', 'errors'),
                         pause_on_debug=pause_on_debug
                     )
-
 
                 time_in_seconds = data.get('time_in_seconds', 0)
 
@@ -808,16 +934,19 @@ class TwitchChatDownloader(ChatDownloader):
         }
         for attempt_number in attempts(max_attempts):
             try:
-                clip = self._session_post(self._GQL_API_URL,
-                                          data=json.dumps(query).encode(),
-                                          headers={'Client-ID': self._CLIENT_ID}).json()['data']['clip']
+                clip = self._download_base_gql(query)['data']['clip']
                 break
             except (UnexpectedHTML, RequestException) as e:
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
 
         vod_id = multi_get(clip, 'video', 'id')
+        if vod_id is None:
+            raise NoChatReplay('Video does not have a chat replay. This is because the original VOD has been deleted.')
+
+
         offset = clip.get('videoOffsetSeconds')
+
         duration = clip.get('durationSeconds')
         slug = clip.get('slug')
         title = clip.get('title')
@@ -899,7 +1028,7 @@ class TwitchChatDownloader(ChatDownloader):
                 print(badge)
                 print(badges)
                 input()
-                continue # TODO debug
+                continue  # TODO debug
 
             info.append(TwitchChatDownloader.parse_badge_info(
                 split[0], split[1]))
@@ -923,12 +1052,13 @@ class TwitchChatDownloader(ChatDownloader):
                     x.get('_id'), x.get('version'), True), message.get('user_badges') or [])),
             'user_notice_params': message.get('user_notice_params')
         }
+
     @staticmethod
     def decode_pseudo_BNF(text):
         """
         Decode text according to https://ircv3.net/specs/extensions/message-tags.html
         """
-        return text.replace('\:',';').replace('\s',' ')
+        return text.replace('\:', ';').replace('\s', ' ')
 
     # print(_MESSAGE_TYPE_REMAPPING)
     @staticmethod
@@ -978,7 +1108,7 @@ class TwitchChatDownloader(ChatDownloader):
             else:
                 print('INVALID ITEM FOUND')
                 print(split_info)
-                input() # TODO debug
+                input()  # TODO debug
                 continue
 
             ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
@@ -1005,16 +1135,11 @@ class TwitchChatDownloader(ChatDownloader):
         if author_display_name:
             info['author_name'] = author_display_name.lower()
 
-
         in_reply_to = ChatDownloader.move_to_dict(info, 'in_reply_to')
-
 
         ChatDownloader.move_to_dict(in_reply_to, 'author')
         # ChatDownloader.move_to_dict(info['in_reply_to'], 'author')
         ChatDownloader.move_to_dict(info, 'author')
-
-
-
 
         original_action_type = match.group(2)
 
@@ -1077,23 +1202,20 @@ class TwitchChatDownloader(ChatDownloader):
         messages_types_to_add = self.get_param_value(
             params, 'message_types') or []
 
-        query = {
+        query = [{
             'operationName': 'StreamMetadata',
             'variables': {'channelLogin': stream_id.lower()},
-            'extensions': {
-                'persistedQuery': {
-                    'version': 1,
-                    'sha256Hash': '1c719a40e481453e5c48d9bb585d971b8b372f8ebb105b17076722264dfa5b3e',
-                }
-            }
-        }
+            # 'extensions': {
+            #     'persistedQuery': {
+            #         'version': 1,
+            #         'sha256Hash': '1c719a40e481453e5c48d9bb585d971b8b372f8ebb105b17076722264dfa5b3e',
+            #     }
+            # }
+        }]
 
         for attempt_number in attempts(max_attempts):
             try:
-                stream_info = self._session_post(self._GQL_API_URL,
-                                                 data=json.dumps(
-                                                     query).encode(),
-                                                 headers={'Client-ID': self._CLIENT_ID}).json()['data']['user']
+                stream_info = self._download_gql(query)[0]['data']['user']
                 break
             except (UnexpectedHTML, RequestException) as e:
                 self.retry(attempt_number, max_attempts, retry_timeout,
@@ -1122,7 +1244,7 @@ class TwitchChatDownloader(ChatDownloader):
         last_ping_time = time.time()
 
         # TODO make this param
-        ping_every = 60 # how often to ping the server
+        ping_every = 60  # how often to ping the server
 
         readbuffer = ''
 
@@ -1154,13 +1276,15 @@ class TwitchChatDownloader(ChatDownloader):
                         pass_on = readbuffer[span[0]:]
 
                         # check whether message was cut off
-                        if '\r\n' in pass_on: # last message not matched
+                        if '\r\n' in pass_on:  # last message not matched
                             # only pass on incomplete message
 
-                            pass_on = pass_on[span[1]-span[0]:] # readbuffer[span[1]:]
+                            # readbuffer[span[1]:]
+                            pass_on = pass_on[span[1]-span[0]:]
 
-                        else: # actual message cut off (matched, but not complete)
-                            matches.pop() # remove the last match (as it is incomplete)
+                        # actual message cut off (matched, but not complete)
+                        else:
+                            matches.pop()  # remove the last match (as it is incomplete)
 
                         # pass remaining information to next attempt
                         readbuffer = pass_on
@@ -1183,7 +1307,8 @@ class TwitchChatDownloader(ChatDownloader):
                             log(
                                 'debug',
                                 [
-                                    'Missing keys found: {}'.format(missing_keys),
+                                    'Missing keys found: {}'.format(
+                                        missing_keys),
                                     'Original data: {}'.format(match.groups()),
                                     'Parsed data: {}'.format(data)
                                 ],
@@ -1218,15 +1343,15 @@ class TwitchChatDownloader(ChatDownloader):
                     # This means that we can safely reset the readbuffer.
                     # This is used to periodically reset the readbuffer,
                     # to avoid a massive buffer from forming.
-                    readbuffer = ''
 
                     log(
                         'debug',
-                        'No matches found in "\n{}\n"'.format(readbuffer.strip()),
+                        'No matches found in "\n{}\n"'.format(
+                            readbuffer.strip()),
                         logging_level,
                         matching=('debug', 'errors')
                     )
-
+                    readbuffer = ''
 
 
                 current_time = time.time()
@@ -1256,7 +1381,6 @@ class TwitchChatDownloader(ChatDownloader):
 
                 self.retry(attempt_number, max_attempts, retry_timeout,
                            logging_level, pause_on_debug, error=e)
-
 
     def get_chat_messages(self, params):
         super().get_chat_messages(params)
