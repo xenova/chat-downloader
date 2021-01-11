@@ -166,24 +166,22 @@ class CSVCW(CW):
 
 class TXTCW(CW):
     """
-    Class used to control the continuous writing of a list of dictionaries to a TXT file.
+    Class used to control the continuous writing of a text to a TXT file.
     """
 
-    def __init__(self, file_name, overwrite=False, formatting=None):
+    def __init__(self, file_name, overwrite=False):
         super().__init__(file_name, overwrite)
         self.file = open(self.file_name, 'a', encoding='utf-8')#, buffering=1
 
-        self.formatting = formatting
-
     def write(self, item, flush=False):
-        # TODO make this return the actual text written
         print(item, file=self.file, flush=flush) # , flush=True
 
 
 class ContinuousWriter:
     _SUPPORTED_WRITERS = {
         'json': JSONCW,
-        'csv': CSVCW
+        'csv': CSVCW,
+        'txt':TXTCW
     }
 
     def __init__(self, file_name, **kwargs):

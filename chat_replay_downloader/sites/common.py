@@ -4,6 +4,7 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import os
 import time
 
+
 from ..errors import (
     CookieError,
     ParsingError,
@@ -23,10 +24,29 @@ from ..utils import (
 
 from json import JSONDecodeError
 
+class Chat():
+    def __init__(self, chat, **kwargs):
+        self.chat = chat
+
+        self.title = kwargs.get('title')
+        self.duration = kwargs.get('duration')
+        self.is_live = kwargs.get('is_live')
+
+
+        # TODO
+        # author/user/uploader/creator
+
+
+    def __iter__(self):
+        for item in self.chat:
+            yield item
+
+
+
 
 class ChatDownloader:
     """
-    Subclasses of this should re-define the get_chat_messages()
+    Subclasses of this should re-define the get_chat()
     method and define a _VALID_URL regexp.
 
     Each chat item is a dictionary and must contain the following fields:
@@ -196,7 +216,6 @@ class ChatDownloader:
 
         'message_groups': ['messages'],  # 'all' can be chosen here
         'message_types': None,  # ['text_message'], # messages
-        # ,'superchat'
 
 
         # YouTube only
@@ -319,18 +338,24 @@ class ChatDownloader:
     _VALID_URL = None
     _CALLBACK = None
 
+
+
     #_LIST_OF_MESSAGES = []
-    def get_chat_messages(self, params=None):
-        """
-        Returns a list of chat messages. To be redefined in subclasses.
+    # def get_chat_messages(self, params=None):
+    #     pass
 
-        `params` should update its `messages` atttribute to allow for messages to still be
-        returned after an exception is raised.
-        """
-        if params is None:
-            params = {}
+    def get_chat(self, params=None):
+        # pass
+        raise NotImplementedError
 
-        update_dict_without_overwrite(params, self._DEFAULT_PARAMS)
+        # if params is None:
+        #     params = {}
+
+        # update_dict_without_overwrite(params, self._DEFAULT_PARAMS)
+        # TODO must override
+        # m = self.get_chat_messages(params)
+
+        # return Chat(m)
 
     def get_tests(self):
         t = getattr(self, '_TEST', None)
@@ -382,7 +407,7 @@ class ChatDownloader:
         return image
 
     @staticmethod
-    def move_to_dict(info, dict_name, replace_key=None, *info_keys):
+    def move_to_dict(info, dict_name, replace_key=None, create_when_empty = False, *info_keys):
         """
         Move all items with keys that contain some text to a separate dictionary.
 
@@ -403,7 +428,7 @@ class ChatDownloader:
                 if info_item not in (None, [], {}):
                     new_dict[new_key] = info_item
 
-        if dict_name not in info and new_dict != {}:
+        if dict_name not in info and (create_when_empty or new_dict != {}):
             info[dict_name] = new_dict
 
         return new_dict
@@ -442,6 +467,7 @@ class ChatDownloader:
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
 
         if must_sleep:
+            # TODO add option for exponential retry...
             log(
                 'error',
                 'Sleeping for {}s.'.format(retry_timeout),

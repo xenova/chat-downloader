@@ -6,6 +6,8 @@ import codecs
 import json
 import traceback
 import itertools
+import time
+
 from requests.exceptions import RequestException
 
 from .chat_replay_downloader import *
@@ -146,14 +148,14 @@ def main():
         else:  # neither
             pass
 
-    if program_params.get('logging') == 'none':
-        f = open(os.devnull, 'w', encoding='utf-8')
-        sys.stdout = f
-        sys.stderr = f
-    else:
-        # set encoding of standard output and standard error
-        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+    # if program_params.get('logging') == 'none':
+    #     f = open(os.devnull, 'w', encoding='utf-8')
+    #     sys.stdout = f
+    #     sys.stderr = f
+    # else:
+    #     # set encoding of standard output and standard error
+    #     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+    #     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
     downloader = ChatReplayDownloader(init_params)
 
@@ -164,12 +166,14 @@ def main():
 
     # python -m chat_replay_downloader https://www.youtube.com/watch?v=nlGllxnSfgA --output test.json --start_time 5:32 --end_time 5:40
     # print(sys.getdefaultencoding())
+
+    video_is_live = False
     def test_callback(item):
 
         if program_params.get('logging') != 'none':
 
             try:
-                time = multi_get(item, 'time_text') or multi_get(item, 'timestamp')
+                time = multi_get(item, 'timestamp') if video_is_live else multi_get(item, 'time_text')
                 author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
                 message = (multi_get(item, 'message') or '').strip()
                 amount = multi_get(item, 'amount')
@@ -259,20 +263,55 @@ def main():
             program_params['logging'],
         )
 
-        messages = downloader.get_chat_messages(program_params)
+        chat = downloader.get_chat(program_params)
+
+        video_is_live = chat.is_live
+        # print(messages)
+        # print(messages.duration)
+        # print(messages.chat)
 
         if isinstance(program_params['max_messages'], int):
-            messages = itertools.islice(
-                messages, program_params['max_messages'])
+            chat.chat = itertools.islice(
+                chat.chat, program_params['max_messages'])
 
-        for message in messages:
-            callback(message)
+
+
+        # log the title
         log(
-            'debug',
-            'Finished retrieving chat replay.',
-            program_params['logging'],
-            matching=('debug', 'errors')
+            'info',
+            'Retrieving chat for "{}".'.format(chat.title),
+            program_params['logging']
         )
+
+        # message_count = 0
+        #     message_count+=1
+        for message in chat:
+            callback(message)
+
+
+            # log(
+            #     'debug',
+            #     'Total number of messages: {}'.format(message_count),
+            #     program_params['logging'],
+            #     matching=('debug', 'errors')
+            # )
+
+            # percentage = round(100*message.get('time_in_seconds')/messages.duration, 2)
+            # print(percentage, end='\r')
+
+
+        # for i in messages:
+        #     print(i, flush=True)
+        #     time.sleep(1)
+        # messages = downloader.get_chat_messages(program_params)
+
+
+        # log(
+        #     'debug',
+        #     'Finished retrieving chat replay.',
+        #     program_params['logging'],
+        #     matching=('debug', 'errors')
+        # )
 
     except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL) as e:
         log('error', e, program_params['logging']) # always show

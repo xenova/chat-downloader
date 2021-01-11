@@ -7,7 +7,8 @@ from .errors import *
 from .sites import GET_ALL_SITES
 
 from .utils import (
-    log
+    log,
+    update_dict_without_overwrite
 )
 
 
@@ -38,7 +39,7 @@ class ChatReplayDownloader:
     # , start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None
     # TODO add dictionary params ->
 
-    def get_chat_messages(self, params):
+    def get_chat(self, params):
         # super().get
         url = params.get('url')  # the only required argument
         if not url:
@@ -68,6 +69,8 @@ class ChatReplayDownloader:
                     new_keys = {key: params[key]
                         for key in correct_site._DEFAULT_PARAMS if correct_site._DEFAULT_PARAMS.get(key) != params.get(key)}
 
+                    # TODO still need?
+                    update_dict_without_overwrite(params, correct_site._DEFAULT_PARAMS)
                     log('site', correct_site, logging_level)
                     log(
                         'debug',
@@ -75,10 +78,15 @@ class ChatReplayDownloader:
                         logging_level,
                         matching=('debug', 'errors')
                     )
-                    return correct_site.get_chat_messages(params)
 
+                    return correct_site.get_chat(params)
+
+
+        # if valid url
         raise InvalidURL('Invalid URL: "{}"'.format(url))
+        # otherwise
         # Raise unsupported site
+
 
         # TODO raise invalid url error
         #raise InvalidURL('The url provided ({}) is invalid.'.format(url))
