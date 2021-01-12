@@ -169,22 +169,27 @@ def main():
 
     video_is_live = False
     def test_callback(item):
-
+        formatted = formatter.format(item, format_name='default')
+        # print(formatted.encode())
+        safe_print(formatted)
+        return
         if program_params.get('logging') != 'none':
 
             try:
-                time = multi_get(item, 'timestamp') if video_is_live else multi_get(item, 'time_text')
-                author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
-                message = (multi_get(item, 'message') or '').strip()
-                amount = multi_get(item, 'amount')
+                # time = multi_get(item, 'timestamp') if video_is_live else multi_get(item, 'time_text')
+                # author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
+                # message = (multi_get(item, 'message') or '').strip()
+                # amount = multi_get(item, 'amount')
 
-                formatted = '[{}] {}{}: {}'.format(
-                    time,
-                    '*{}* '.format(amount) if amount else '',
-                    author,
-                    message
-                )
-                safe_print(formatted)
+                # formatted = '[{}] {}{}: {}'.format(
+                #     time,
+                #     '*{}* '.format(amount) if amount else '',
+                #     author,
+                #     message
+                # )
+
+                formatted = formatter.format(item, format_name='default')
+                safe_print(item)
 
                 # print(author,':', message.encode(encoding, 'ignore').decode(encoding, 'ignore'))
                 #.encode(encoding).decode(encoding)
@@ -296,7 +301,7 @@ def main():
             #     matching=('debug', 'errors')
             # )
 
-            # percentage = round(100*message.get('time_in_seconds')/messages.duration, 2)
+            # percentage = round(100*message.get('time_in_seconds')/chat.duration, 2)
             # print(percentage, end='\r')
 
 

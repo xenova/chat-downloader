@@ -3,9 +3,10 @@ import datetime
 import os
 import json
 
-# from ..utils import (
-#     microseconds_to_timestamp
-# )
+from ..utils import (
+    nested_update,
+    multi_get
+)
 
 # TODO remove and use utils
 
@@ -21,7 +22,9 @@ class ItemFormatter:
 
 # 'always_show': True (default False)
 
-    def __init__(self, path=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'custom_formats.json')):
+    def __init__(self, path=None):
+        if path is None:
+            path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'custom_formats.json')
         with open(path) as custom_formats:
             self.format_file = json.load(custom_formats)
 
@@ -33,38 +36,42 @@ class ItemFormatter:
         split = result.group(1).split('|')
         # print(split)
         for index in split:
-            value = item.get(index)
-            formatting_info = format_object.get(index)
+            # print(index.split('.'))
+            value = multi_get(item, *index.split('.'))
+            # print(value)
+
             if value:  # found and non-empty, will return
+
+                formatting_info = format_object.get(index)
                 if formatting_info:
-                    pass
-                    prefix = formatting_info.get('prefix') or ''
+                    template = ''
+                    if isinstance(formatting_info, str):
+                        template = formatting_info
+                    elif isinstance(formatting_info, dict):
+                        template = formatting_info.get('template') or ''
 
-                    suffix = formatting_info.get('suffix') or ''
+                        formatting = formatting_info.get('format')
+                        if formatting:
+                            if index == 'timestamp':
+                                value = microseconds_to_timestamp(
+                                    value, formatting)
+                            elif index == '':
+                                pass
 
-                    # Apply formatting
-                    formatting = formatting_info.get('format')
-                    if formatting:
-                        if index == 'timestamp':
-                            value = microseconds_to_timestamp(
-                                value, formatting)
-                        elif index == '':
-                            pass
+                        # Apply separator
+                        separator = formatting_info.get('separator')
+                        if separator:
+                            if index == 'author.badges':
+                                value = separator.join(
+                                    map(lambda key: key.get('title'), value))
+                            elif isinstance(value, (tuple, list)):
+                                value = separator.join(map(lambda x: str(x),value))
+                            else:
+                                pass
+                    else:
+                        pass
 
-                    # Apply separator
-                    separator = formatting_info.get('separator')
-                    if separator:
-                        if index == 'author_badges':
-                            value = separator.join(
-                                map(lambda key: key.get('title'), value))
-                        elif isinstance(value, (tuple, list)):
-                            value = separator.join(value)
-                        else:
-                            pass
-                            # incorrect
-                    # print(formatting)
-
-                    return '{}{}{}'.format(prefix, value, suffix)
+                    return template.format(value)
 
                 else:
                     return str(value)
@@ -87,20 +94,28 @@ class ItemFormatter:
         if not format_object:
             return  # raise no format given
 
-        #f = format_object.get()
+        inherit = format_object.get('inherit')
+        if inherit:
+            parent = self.format_file.get(inherit) or {}
+            format_object = nested_update(parent, format_object)
+
         template = format_object.get('template')
         keys = format_object.get('keys')
 
         substitution = re.sub(self._INDEX_REGEX, lambda result: self.replace(
             result, item, keys), template)
-        empty_substitution = re.sub(self._INDEX_REGEX, '', template)
-        #print(substitution, empty_substitution)
-        # returns (new, num_modifications)
-        if substitution != empty_substitution:  # some substitution made
-            return substitution
-        else:
-            return None
 
+        return substitution
+        # empty_substitution = re.sub(self._INDEX_REGEX, '', template)
+        # #print(substitution, empty_substitution)
+        # # returns (new, num_modifications)
+        # if substitution != empty_substitution:  # some substitution made
+        #     return substitution
+        # else:
+        #     return None
+
+
+# TODO make formatting e.g. author.name
 
 item1 = {
     "action_type": "text_message",

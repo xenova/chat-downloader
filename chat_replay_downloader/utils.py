@@ -5,6 +5,7 @@ import emoji
 from colorama import Fore
 import os
 import locale
+import collections.abc
 
 def timestamp_to_microseconds(timestamp):
     """
@@ -377,3 +378,13 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
 
     if flush and hasattr(out, 'flush'):
         out.flush()
+
+def nested_update(d, u):
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = nested_update(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
+
+# def nested_get()

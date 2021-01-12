@@ -695,16 +695,16 @@ class YouTubeChatDownloader(ChatDownloader):
     }
 
     # Not checked for
-    _KNOWN_IGNORE_ACTION_TYPES = {
-        'authorBadges': [
-            'liveChatAuthorBadgeRenderer'
-        ],
-        'showLiveChatItemEndpoint': [
-            'liveChatPaidStickerRenderer',
-            'liveChatPaidMessageRenderer',
-            'liveChatMembershipItemRenderer'
-        ]
-    }
+    # _KNOWN_IGNORE_ACTION_TYPES = {
+    #     'authorBadges': [
+    #         'liveChatAuthorBadgeRenderer'
+    #     ],
+    #     'showLiveChatItemEndpoint': [
+    #         'liveChatPaidStickerRenderer',
+    #         'liveChatPaidMessageRenderer',
+    #         'liveChatMembershipItemRenderer'
+    #     ]
+    # }
     _KNOWN_IGNORE_ACTION_TYPES = {}
 
     _KNOWN_ACTION_TYPES = {
