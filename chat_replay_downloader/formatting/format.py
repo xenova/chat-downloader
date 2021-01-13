@@ -23,8 +23,10 @@ class ItemFormatter:
 # 'always_show': True (default False)
 
     def __init__(self, path=None):
-        if path is None:
+
+        if path is None or not os.path.exists(path):
             path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'custom_formats.json')
+
         with open(path) as custom_formats:
             self.format_file = json.load(custom_formats)
 
@@ -38,12 +40,11 @@ class ItemFormatter:
         for index in split:
             # print(index.split('.'))
             value = multi_get(item, *index.split('.'))
-            # print(value)
 
-            if value:  # found and non-empty, will return
+            if value is not None:
 
                 formatting_info = format_object.get(index)
-                if formatting_info:
+                if formatting_info is not None:
                     template = ''
                     if isinstance(formatting_info, str):
                         template = formatting_info
@@ -55,7 +56,7 @@ class ItemFormatter:
                             if index == 'timestamp':
                                 value = microseconds_to_timestamp(
                                     value, formatting)
-                            elif index == '':
+                            elif index == '...':
                                 pass
 
                         # Apply separator
@@ -75,32 +76,50 @@ class ItemFormatter:
 
                 else:
                     return str(value)
-                # print(value)
-
-                # return ''  # value
-
-            #
 
         return ''  # no match, return empty
 
     def format(self, item, format_name='default', format_object=None):
+        default_format_object = self.format_file.get(format_name, self.format_file.get('default'))
         if format_object is None:
-            format_object = self.format_file.get(format_name)
+            format_object = default_format_object
 
         if isinstance(format_object, list):
-            format_object = next((x for x in format_object if item.get(
-                'message_type') in x.get('matching')), None)
+            does_match = False
+
+            for fmt in format_object:
+                matching = fmt.get('matching')
+                message_type = item.get('message_type')
+                if isinstance(matching, list):
+                    does_match = message_type in matching
+                elif matching == 'all':
+                    does_match = True
+                else:
+                    does_match = message_type == matching
+
+                if does_match:
+                    format_object = fmt
+                    break
+
+            if not does_match:
+                format_object = default_format_object
+            # format_object = next((x for x in format_object if item.get(
+            #     'message_type') in x.get('matching') or x.get('matching') == 'all'), None)
 
         if not format_object:
             return  # raise no format given
 
+        # print('before',format_object)
         inherit = format_object.get('inherit')
         if inherit:
             parent = self.format_file.get(inherit) or {}
+            # print('parent',parent)
             format_object = nested_update(parent, format_object)
 
-        template = format_object.get('template')
-        keys = format_object.get('keys')
+
+        # print('after',format_object)
+        template = format_object.get('template') or ''
+        keys = format_object.get('keys') or {}
 
         substitution = re.sub(self._INDEX_REGEX, lambda result: self.replace(
             result, item, keys), template)

@@ -1,5 +1,3 @@
-
-
 {
     "default": {
         "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}{message}",
@@ -14,46 +12,24 @@
                 "separator": ", "
             },
             "amount": "*{}* ",
-            "message":": {}"
+            "message": ": {}"
         }
     },
     "24_hour": {
         "inherit": "default",
-        "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}: {message}",
         "keys": {
             "timestamp": {
-                "prefix": "[",
-                "format": "%H:%M",
-                "suffix": "] "
+                "template": "[{}] ",
+                "format": "%H:%M"
             }
         }
     },
-    "test": [
+    "twitch": [
         {
             "matching": [
                 "text_message"
             ],
-            "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}: {message}",
-            "keys": {
-                "time_text": {
-                    "prefix": "[",
-                    "suffix": "] "
-                },
-                "timestamp": {
-                    "prefix": "[",
-                    "format": "%Y-%m-%d %H:%M:%S",
-                    "suffix": "] "
-                },
-                "author.badges": {
-                    "prefix": "(",
-                    "separator": ", ",
-                    "suffix": ") "
-                },
-                "amount": {
-                    "prefix": "*",
-                    "suffix": "* "
-                }
-            }
+            "inherit": "default"
         },
         {
             "matching": [
@@ -61,19 +37,30 @@
             ],
             "template": "{timestamp}{banned_user} was {ban_duration|ban_type}.",
             "keys": {
-                "timestamp": {
-                    "prefix": "[",
-                    "format": "%Y-%m-%d %H:%M:%S",
-                    "suffix": "] "
-                },
-                "ban_duration": {
-                    "prefix": "timed out for ",
-                    "suffix": " seconds"
-                },
-                "ban_type": {
-                    "suffix": "ly banned"
-                }
+                "ban_duration": "timed out for {} seconds",
+                "ban_type": "{}ly banned"
             }
+        },
+        {
+            "matching": [
+                "room_state"
+            ],
+            "template": "Room state | {channel_id}{emote_only}{follower_only}{minutes_to_follow_before_chatting}{slow_mode}{seconds_to_wait}{subscriber_only}{r9k_mode}{rituals_enabled}",
+            "keys": {
+                "channel_id": "Channel ID = {}",
+                "emote_only": ", emote only = {}",
+                "follower_only": ", follower only = {}",
+                "seconds_to_wait": " ({} seconds)",
+                "minutes_to_follow_before_chatting": " ({} minutes)",
+                "slow_mode": ", slow mode = {}",
+                "subscriber_only": ", subscriber only = {}",
+                "r9k_mode": ", r9k mode = {}",
+                "rituals_enabled": ", rituals enabled = {}"
+            }
+        },
+        {
+            "matching": "all",
+            "inherit": "default"
         }
     ]
 }

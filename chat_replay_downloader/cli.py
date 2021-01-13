@@ -81,6 +81,14 @@ def main():
     #                     help='force certain encoding\n(default: %(default)s)')
 
 
+    # formatting:
+    parser.add_argument('--format', default=default_params['format'],
+                        help='specify how messages should be formatted for printing\n(default: %(default)s)')
+    parser.add_argument('--format_file', default=default_params['format_file'],
+                        help='specify the format file to choose formats from\n(default: %(default)s)')
+
+
+
 
 
     # INIT PARAMS
@@ -167,42 +175,42 @@ def main():
     # python -m chat_replay_downloader https://www.youtube.com/watch?v=nlGllxnSfgA --output test.json --start_time 5:32 --end_time 5:40
     # print(sys.getdefaultencoding())
 
+    logging_level = program_params.get('logging')
+    format_name = program_params.get('format')
     video_is_live = False
     def test_callback(item):
-        formatted = formatter.format(item, format_name='default')
-        # print(formatted.encode())
-        safe_print(formatted)
-        return
-        if program_params.get('logging') != 'none':
+        if logging_level != 'none':
+            formatted = formatter.format(item, format_name=format_name)
+            safe_print(formatted)
 
-            try:
-                # time = multi_get(item, 'timestamp') if video_is_live else multi_get(item, 'time_text')
-                # author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
-                # message = (multi_get(item, 'message') or '').strip()
-                # amount = multi_get(item, 'amount')
+            # try:
+            #     # time = multi_get(item, 'timestamp') if video_is_live else multi_get(item, 'time_text')
+            #     # author = multi_get(item, 'author', 'display_name') or multi_get(item, 'author', 'name')
+            #     # message = (multi_get(item, 'message') or '').strip()
+            #     # amount = multi_get(item, 'amount')
 
-                # formatted = '[{}] {}{}: {}'.format(
-                #     time,
-                #     '*{}* '.format(amount) if amount else '',
-                #     author,
-                #     message
-                # )
+            #     # formatted = '[{}] {}{}: {}'.format(
+            #     #     time,
+            #     #     '*{}* '.format(amount) if amount else '',
+            #     #     author,
+            #     #     message
+            #     # )
 
-                formatted = formatter.format(item, format_name='default')
-                safe_print(item)
+            #     # formatted = formatter.format(item, format_name='24_hour')
+            #     # safe_print(item)
 
-                # print(author,':', message.encode(encoding, 'ignore').decode(encoding, 'ignore'))
-                #.encode(encoding).decode(encoding)
-                # print(sys.getdefaultencoding())
-                # printer.print(message)
-                # print()#.encode('utf-8')
-                # print(message.decode('utf-8'))
-                # print(message.encode('utf-16'))
-            except OSError as e:
-                print('PRINTING ERROR OCCURRED')
-                print('Cause of error:')
-                print(json.dumps(formatted))
-                raise e
+            #     # print(author,':', message.encode(encoding, 'ignore').decode(encoding, 'ignore'))
+            #     #.encode(encoding).decode(encoding)
+            #     # print(sys.getdefaultencoding())
+            #     # printer.print(message)
+            #     # print()#.encode('utf-8')
+            #     # print(message.decode('utf-8'))
+            #     # print(message.encode('utf-16'))
+            # except OSError as e:
+            #     print('PRINTING ERROR OCCURRED')
+            #     print('Cause of error:')
+            #     print(json.dumps(formatted))
+            #     raise e
                 # traceback.print_exc()
                 # exit()
 
@@ -318,7 +326,7 @@ def main():
         #     matching=('debug', 'errors')
         # )
 
-    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL) as e:
+    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL, NoContinuation) as e:
         log('error', e, program_params['logging']) # always show
 
     # ParsingError,

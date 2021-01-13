@@ -227,7 +227,13 @@ class ChatDownloader:
         # allows for keyboard interrupts to occur
         # 0.25, # try again after receiving no data after a certain time
         'message_receive_timeout': 0.1,
-        'buffer_size': 4096  # default buffer size for socket
+        'buffer_size': 4096,  # default buffer size for socket,
+
+
+
+        # formatting
+        'format':'default',
+        'format_file': None
     }
 
     def __str__(self):
