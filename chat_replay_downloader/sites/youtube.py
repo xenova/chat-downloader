@@ -857,7 +857,7 @@ class YouTubeChatDownloader(ChatDownloader):
         try:
             return json['response']['continuationContents']['liveChatContinuation']
         except:
-            raise NoContinuation
+            raise NoContinuation('No continuation')
 
     def _get_chat_messages(self, initial_continuation_info, is_live, params):
 
@@ -876,7 +876,11 @@ class YouTubeChatDownloader(ChatDownloader):
         if not is_live:
             continuation_title += ' replay'
 
-        continuation = initial_continuation_info[continuation_title]
+        continuation = initial_continuation_info.get(continuation_title)
+
+        if not continuation:
+            raise NoContinuation('Initial continuation information could not be found for {}.'.format(continuation_title))
+
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, int) else None
 
