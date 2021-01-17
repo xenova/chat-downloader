@@ -80,9 +80,9 @@ class ItemFormatter:
         return ''  # no match, return empty
 
     def format(self, item, format_name='default', format_object=None):
-        default_format_object = self.format_file.get(format_name, self.format_file.get('default'))
+        default_format_object = self.format_file.get('default')
         if format_object is None:
-            format_object = default_format_object
+            format_object = self.format_file.get(format_name, default_format_object)
 
         if isinstance(format_object, list):
             does_match = False
@@ -109,7 +109,6 @@ class ItemFormatter:
         if not format_object:
             return  # raise no format given
 
-        # print('before',format_object)
         inherit = format_object.get('inherit')
         if inherit:
             parent = self.format_file.get(inherit) or {}

@@ -15,6 +15,23 @@
             "message": ": {}"
         }
     },
+    "youtube":[
+        {
+            "matching":[
+                "viewer_engagement_message",
+                "deleted_message"
+            ],
+            "template":"{time_text|timestamp}{message}",
+            "keys": {
+                "time_text": "[{}] ",
+                "timestamp": {
+                    "template": "[{}] ",
+                    "format": "%Y-%m-%d %H:%M:%S"
+                },
+                "message": "{}"
+            }
+        }
+    ],
     "24_hour": {
         "inherit": "default",
         "keys": {
@@ -36,6 +53,7 @@
                 "ban_user"
             ],
             "template": "{timestamp}{banned_user} was {ban_duration|ban_type}.",
+            "inherit": "default",
             "keys": {
                 "ban_duration": "timed out for {} seconds",
                 "ban_type": "{}ly banned"
