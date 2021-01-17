@@ -47,10 +47,8 @@ class ChatReplayDownloader:
             return
 
         if params.get('verbose'):
-            params['logging'] = 'errors'
+            params['logging'] = 'debug'
 
-        logging_level = params.get('logging')
-        pause_on_debug = params.get('pause_on_debug')
 
         # self.LIST_OF_MESSAGES = [] # reset list of messages
         # TODO add a reset_messages() method?
@@ -71,13 +69,8 @@ class ChatReplayDownloader:
 
                     # TODO still need?
                     update_dict_without_overwrite(params, correct_site._DEFAULT_PARAMS)
-                    log('site', correct_site, logging_level)
-                    log(
-                        'debug',
-                        'Parameters: {}'.format(new_keys),
-                        logging_level,
-                        matching=('debug', 'errors')
-                    )
+                    log('info', 'Site: {}'.format(correct_site))
+                    log('debug','Parameters: {}'.format(new_keys))
 
                     return correct_site.get_chat(params)
 

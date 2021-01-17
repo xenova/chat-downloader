@@ -1,11 +1,11 @@
 import datetime
 import re
 import sys
-import emoji
 from colorama import Fore
 import os
 import locale
 import collections.abc
+import io
 
 def timestamp_to_microseconds(timestamp):
     """
@@ -178,44 +178,81 @@ def supports_colour():
         vt_codes_enabled_in_windows_registry()
     )
 
-LOG_COLOURS = {
-    'info': Fore.GREEN,
-    'debug': Fore.YELLOW,
-    'error': Fore.RED,
-}
+import colorlog
 
-LONGEST_KEY = len(max(LOG_COLOURS.keys(), key=len))
-LOG_FORMAT = '{:<'+str(LONGEST_KEY)+'}'
+handler = colorlog.StreamHandler()
+handler.setFormatter(colorlog.ColoredFormatter(
+    '  %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s'))
+#'%(log_color)s%(levelname)s:%(name)s:%(message)s'
+logger = colorlog.getLogger()#'root'
+logger.addHandler(handler)
+# logger.setLevel('INFO')
 
+# import logging
 
-def log(text, items, logging_level, matching='all', pause_on_debug=False):
+def pause(text='Press Enter to continue...'):
+    input(text)
 
-    # matching specifies which logging levels should display the text
+def set_log_level(level):
+    logger.setLevel(level.upper())
 
-    if logging_level in ('none', None):
-        return
+def log(level, items, pause_on_debug=False, pause_on_error=False):
+    l = getattr(logger, level, None)
+    if l:
+        if not isinstance(items, (tuple, list)):
+            items = [items]
+        for item in items:
+             l(item)
 
-    if matching != 'all':
-        if not isinstance(matching, (tuple, list)):
-            matching = [matching]
-
-        if logging_level not in matching:
-            return  # do nothing
-
-    if not isinstance(items, (tuple, list)):
-        items = [items]
-
-    if supports_colour():
-        to_print = LOG_COLOURS.get(text, Fore.GREEN)+LOG_FORMAT.format(text) + Fore.RESET
-    else:
-        to_print = LOG_FORMAT.format(text)
-
-    for item in items:
-        safe_print(to_print, '|', item, flush=True)
+        must_pause = False
+        if (pause_on_error and level == 'error') or (pause_on_debug and level == 'debug'):
+            pause()
 
 
-    if pause_on_debug:
-        input('Press Enter to continue...')
+# LOG_COLOURS = {
+#     'info': Fore.GREEN,
+#     'debug': Fore.YELLOW,
+#     'error': Fore.RED,
+# }
+
+# LONGEST_KEY = len(max(LOG_COLOURS.keys(), key=len))
+# LOG_FORMAT = '{:<'+str(LONGEST_KEY)+'}'
+
+# def log2(text, items, logging_level, matching='all', pause_level=None, pause_matching=None, pause_text='Press Enter to continue...'):
+
+#     # matching specifies which logging levels should display the text
+
+#     if logging_level in ('none', None):
+#         return
+
+#     if matching != 'all':
+#         if not isinstance(matching, (tuple, list)):
+#             matching = [matching]
+
+#         if logging_level not in matching:
+#             return  # do nothing
+
+#     if not isinstance(items, (tuple, list)):
+#         items = [items]
+
+#     if supports_colour():
+#         to_print = LOG_COLOURS.get(text, Fore.GREEN)+LOG_FORMAT.format(text) + Fore.RESET
+#     else:
+#         to_print = LOG_FORMAT.format(text)
+
+#     for item in items:
+#         safe_print(to_print, '|', item, flush=True)
+
+#     safe_print('pause_level',pause_level,'pause_matching', pause_matching)
+#     if pause_level is None:
+#         return
+
+#     if pause_matching is not None:
+#         if not isinstance(pause_matching, (tuple, list)):
+#             pause_matching = [pause_matching]
+
+#         if pause_level in pause_matching:
+#             input(pause_text)
 
 
 def replace_with_underscores(text, sep='-'):
@@ -236,11 +273,11 @@ def multi_get(dictionary, *keys, default=None):
 
 # \uD800-\uDFFF
 # \u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F\u0009-\u000D\u0085
-invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
+# invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
 
 
-def replace_invalid_unicode(text, replacement_char='\uFFFD'):
-    return invalid_unicode_re.sub(replacement_char, text)
+# def replace_invalid_unicode(text, replacement_char='\uFFFD'):
+#     return invalid_unicode_re.sub(replacement_char, text)
 
 def flatten_json(original_json):
     final = {}

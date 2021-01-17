@@ -117,8 +117,15 @@ class TwitchChatDownloader(ChatDownloader):
         # # print(TwitchChatDownloader._BADGE_INFO)
         #
 
+    _DEFAULT_FORMAT = 'twitch'
+
     def __str__(self):
         return 'Twitch.tv'
+
+    _TESTS = [
+        # Commenter is "None"
+        # https://www.twitch.tv/videos/873616984 --start_time 1:26:10
+    ]
 
     # clips
     # vod
@@ -648,7 +655,6 @@ class TwitchChatDownloader(ChatDownloader):
         #     params = {}
 
         info = {}
-
         for key in item:
             ChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
@@ -660,8 +666,11 @@ class TwitchChatDownloader(ChatDownloader):
         message_info = info.pop('message_info', None)
         if message_info:
             info['message'] = message_info.get('message')
-            info['author']['badges'] = message_info.get('badges')
             info['author']['colour'] = message_info.get('colour')
+
+            badges = message_info.get('badges')
+            if badges:
+                info['author']['badges'] = badges
 
         user_notice_params = message_info.pop('user_notice_params', {})
 
@@ -687,12 +696,12 @@ class TwitchChatDownloader(ChatDownloader):
         'ClipsCards__User': 'b73ad2bfaecfd30a9e6c28fada15bd97032c83ec77a0440766a56fe0bd632777',
         'VideoMetadata': '226edb3e692509f727fd56821f5653c05740242c82b0388883e0c0e75dcbf687',
 
-
-        'CollectionSideBar': '27111f1b382effad0b6def325caef1909c733fe6a4fbabf54f8d491ef2cf2f14',
-        'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
-        'ChannelCollectionsContent': '07e3691a1bad77a36aba590c351180439a40baefc1c275356f40fc7082419a84',
-        'ComscoreStreamingQuery': 'e1edae8122517d013405f237ffcc124515dc6ded82480a88daef69c83b53ac01',
-        'VideoPreviewOverlay': '3006e77e51b128d838fa4e835723ca4dc9a05c5efd4466c1085215c6e437e65c',
+        # Not used yet
+        # 'CollectionSideBar': '27111f1b382effad0b6def325caef1909c733fe6a4fbabf54f8d491ef2cf2f14',
+        # 'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
+        # 'ChannelCollectionsContent': '07e3691a1bad77a36aba590c351180439a40baefc1c275356f40fc7082419a84',
+        # 'ComscoreStreamingQuery': 'e1edae8122517d013405f237ffcc124515dc6ded82480a88daef69c83b53ac01',
+        # 'VideoPreviewOverlay': '3006e77e51b128d838fa4e835723ca4dc9a05c5efd4466c1085215c6e437e65c',
     }
 
     def _download_base_gql(self, ops):
@@ -830,14 +839,22 @@ class TwitchChatDownloader(ChatDownloader):
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         messages_groups_to_add = self.get_param_value(
             params, 'message_groups') or []
         messages_types_to_add = self.get_param_value(
             params, 'message_types') or []
 
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
+        def debug_log(*items):
+            log(
+                'debug',
+                items,
+                pause_on_debug,
+                # pause_on_error
+            )
         # TODO Remove this and make same as IRC
         # invalid_message_groups = all(
         #     key not in messages_groups_to_add for key in ('all', 'messages'))
@@ -861,8 +878,7 @@ class TwitchChatDownloader(ChatDownloader):
                     info = self._session_get_json(url)
                     break
                 except (UnexpectedHTML, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout * (2**attempt_number),
-                               logging_level, pause_on_debug, error=e)
+                    self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
             error = info.get('error')
 
@@ -878,18 +894,12 @@ class TwitchChatDownloader(ChatDownloader):
                 missing_keys = data.keys()-TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
                 if missing_keys:
-                    log(
-                        'debug',
-                        [
-                            'Missing keys found: {}'.format(missing_keys),
-                            'Original data: {}'.format(comment),
-                            'Parsed data: {}'.format(data),
-                            comment.keys(),
-                            TwitchChatDownloader._KNOWN_COMMENT_KEYS
-                        ],
-                        logging_level,
-                        matching=('debug', 'errors'),
-                        pause_on_debug=pause_on_debug
+                    debug_log(
+                        'Missing keys found: {}'.format(missing_keys),
+                        'Original data: {}'.format(comment),
+                        'Parsed data: {}'.format(data),
+                        comment.keys(),
+                        TwitchChatDownloader._KNOWN_COMMENT_KEYS
                     )
 
                 time_in_seconds = data.get('time_in_seconds', 0)
@@ -922,8 +932,7 @@ class TwitchChatDownloader(ChatDownloader):
     def get_chat_by_vod_id(self, vod_id, params):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
 
         query = [{
             'operationName': 'VideoMetadata',
@@ -932,18 +941,23 @@ class TwitchChatDownloader(ChatDownloader):
                 'videoID': vod_id
             }
         }]
+
+
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
         for attempt_number in attempts(max_attempts):
             try:
                 video = self._download_gql(query)[0]['data']['video']
                 break
             except (UnexpectedHTML, RequestException) as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
         title = video.get('title')
         duration = video.get('lengthSeconds')
 
         return Chat(
+            self,
             self._get_chat_messages_by_vod_id(
                 vod_id, params),
             title=title,
@@ -955,19 +969,20 @@ class TwitchChatDownloader(ChatDownloader):
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
 
         query = {
             'query': '{ clip(slug: "%s") { video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
         }
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
         for attempt_number in attempts(max_attempts):
             try:
                 clip = self._download_base_gql(query)['data']['clip']
                 break
             except (UnexpectedHTML, RequestException) as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
         vod_id = multi_get(clip, 'video', 'id')
         if vod_id is None:
@@ -980,6 +995,7 @@ class TwitchChatDownloader(ChatDownloader):
         title = '{} ({})'.format(clip.get('title'), clip_id)
 
         return Chat(
+            self,
             self._get_chat_messages_by_vod_id(
                 vod_id, params, offset, duration),
             title=title,
@@ -1065,7 +1081,7 @@ class TwitchChatDownloader(ChatDownloader):
     @staticmethod
     def parse_commenter(commenter):
         info = {}
-        for key in commenter:
+        for key in commenter or []:
             ChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
         return info
@@ -1113,10 +1129,7 @@ class TwitchChatDownloader(ChatDownloader):
         else:
             log(
                 'debug',
-                'Unknown message type:', original_message_type,
-                params.get('logging'),
-                matching=('debug', 'errors'),
-                pause_on_debug=params.get('pause_on_debug')
+                'Unknown message type:', original_message_type
             )
 
     @staticmethod
@@ -1210,13 +1223,14 @@ class TwitchChatDownloader(ChatDownloader):
             else:
                 info['slow_mode'] = False
 
+        # TODO
+        # :tmi.twitch.tv HOSTTARGET #gothamchess :anna_chess 6612
         return info
 
     def _get_chat_messages_by_stream_id(self, stream_id, params):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+
 
         message_receive_timeout = self.get_param_value(
             params, 'message_receive_timeout')
@@ -1229,11 +1243,26 @@ class TwitchChatDownloader(ChatDownloader):
         messages_types_to_add = self.get_param_value(
             params, 'message_types') or []
 
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
+        def debug_log(*items):
+            log(
+                'debug',
+                items,
+                pause_on_debug,
+                # pause_on_error
+            )
+
         def create_connection():
-            irc = TwitchChatIRC()
-            irc.set_timeout(message_receive_timeout)
-            irc.join_channel(stream_id)
-            return irc
+            for attempt_number in attempts(max_attempts):
+                try:
+                    irc = TwitchChatIRC()
+                    irc.set_timeout(message_receive_timeout)
+                    irc.join_channel(stream_id)
+                    return irc
+                except socket.gaierror as e:
+                    self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
         twitch_chat_irc = create_connection()
 
@@ -1248,7 +1277,7 @@ class TwitchChatDownloader(ChatDownloader):
 
         attempt_number = 0
 
-        test = 0
+        # test = 0
         while True:
             try:
                 new_info = twitch_chat_irc.recv(buffer_size)
@@ -1302,17 +1331,11 @@ class TwitchChatDownloader(ChatDownloader):
                         missing_keys = data.keys()-TwitchChatDownloader._KNOWN_IRC_KEYS
 
                         if missing_keys:
-                            log(
-                                'debug',
-                                [
-                                    'Missing keys found: {}'.format(
-                                        missing_keys),
-                                    'Original data: {}'.format(match.groups()),
-                                    'Parsed data: {}'.format(data)
-                                ],
-                                logging_level,
-                                matching=('debug', 'errors'),
-                                pause_on_debug=pause_on_debug
+                            debug_log(
+                                'Missing keys found: {}'.format(
+                                    missing_keys),
+                                'Original data: {}'.format(match.groups()),
+                                'Parsed data: {}'.format(data)
                             )
                         # check whether to skip this message or not, based on its type
 
@@ -1334,13 +1357,8 @@ class TwitchChatDownloader(ChatDownloader):
                     # This is used to periodically reset the readbuffer,
                     # to avoid a massive buffer from forming.
 
-                    log(
-                        'debug',
-                        'No matches found in "\n{}\n"'.format(
-                            readbuffer.strip()),
-                        logging_level,
-                        matching=('debug', 'errors')
-                    )
+                    # log('debug','No matches found in "\n{}\n"'.format(
+                    #         readbuffer.strip())) # never pause
                     readbuffer = ''
 
                 current_time = time.time()
@@ -1351,7 +1369,7 @@ class TwitchChatDownloader(ChatDownloader):
                     twitch_chat_irc.send_raw('PING')
                     last_ping_time = current_time
 
-                attempt_number = 0
+                # attempt_number = 0
 
             except socket.timeout:
                 # print('time_since_last_message',time_since_last_message)
@@ -1359,6 +1377,7 @@ class TwitchChatDownloader(ChatDownloader):
                     time_since_last_message += message_receive_timeout
 
                     if time_since_last_message >= timeout:
+                        # TODO change to log
                         print('No data received in', timeout,
                               'seconds. Timing out.')
                         break
@@ -1366,42 +1385,39 @@ class TwitchChatDownloader(ChatDownloader):
             except ConnectionError as e:
                 twitch_chat_irc = create_connection()
 
-                attempt_number += 1
-
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
-
     def get_chat_by_stream_id(self, stream_id, params):
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
         query = [{
             'operationName': 'StreamMetadata',
             'variables': {'channelLogin': stream_id.lower()}
         }]
 
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
         for attempt_number in attempts(max_attempts):
             try:
                 stream_info = self._download_gql(query)[0]['data']['user']
                 break
             except (UnexpectedHTML, RequestException) as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
-        title = multi_get(stream_info, 'lastBroadcast','title')
+        title = multi_get(stream_info, 'lastBroadcast',
+                          'title') if is_live else None
+
 
         return Chat(
+            self,
             self._get_chat_messages_by_stream_id(
                 stream_id, params),
             title=title,
             duration=None,
             is_live=is_live
         )
-
 
     def get_chat(self, params):
 

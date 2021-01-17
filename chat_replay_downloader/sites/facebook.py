@@ -9,7 +9,7 @@ import re
 from .common import (
     Chat,
     ChatDownloader
-    )
+)
 
 from requests.exceptions import RequestException
 
@@ -22,7 +22,8 @@ from ..utils import (
     camel_case_split,
     ensure_seconds,
     attempts,
-    get_title_of_webpage
+    get_title_of_webpage,
+    log
 )
 
 
@@ -102,48 +103,54 @@ class FacebookChatDownloader(ChatDownloader):
 
     ]
 
-    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE+'/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
+    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
+        '/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
     _STRIP_TEXT = 'for (;;);'
 
     def _parse_fb_json(self, response):
         text_to_parse = remove_prefixes(response.text, self._STRIP_TEXT)
         return json.loads(text_to_parse)
-        # try:
-
-        # except json.decoder.JSONDecodeError:
-        # print('Unable to parse JSON:')
-        # print(text_to_parse)
-        #     raise json.decoder.JSONDecodeError
-        # print()
-        # print(response.text)
 
     _VOD_COMMENTS_API = _FB_HOMEPAGE+'/videos/vodcomments/'
     _GRAPH_API = _FB_HOMEPAGE+'/api/graphql/'
     _VIDEO_URL_FORMAT = _FB_HOMEPAGE+'/video.php?v={}'
     # _VIDEO_TITLE_REGEX = r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']\s*/>'
 
+    def _attempt_fb_retrieve(self, url, max_attempts, pause_on_error, retry_timeout, fb_json=False, **post_kwargs):
+        for attempt_number in attempts(max_attempts):
+            try:
+                response = self._session_post(url, **post_kwargs)
+
+                if fb_json:
+                    return self._parse_fb_json(response)
+                else:
+                    return response.json()
+
+            except JSONDecodeError as e:
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error,
+                           text='Unable to parse JSON: `{}`'.format(response.text))
+
+            except RequestException as e:
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
+
+
     def _get_initial_info(self, video_id, params):
         info = {}
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging_level')
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
-        # TODO multi attempts
-        for attempt_number in attempts(max_attempts):
-            try:
-                response = self._session_post(self._VIDEO_PAGE_TAHOE_TEMPLATE.format(
-                    video_id), headers=self._FB_HEADERS, data=self.data)
-                json_data = self._parse_fb_json(response)
-                break
-            except JSONDecodeError as e:
-                self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
-                           text='Unable to parse JSON: `{}`'.format(
-                               response.text),
-                           error=e)
-            except RequestException as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
+        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
+        # TODO remove duplication - many similar methods
+        json_data = self._attempt_fb_retrieve(
+            self._VIDEO_PAGE_TAHOE_TEMPLATE.format(video_id),
+            max_attempts,
+            pause_on_error,
+            retry_timeout,
+            True,
+            headers=self._FB_HEADERS, data=self.data
+        )
 
         video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
 
@@ -154,13 +161,12 @@ class FacebookChatDownloader(ChatDownloader):
                 match = get_title_of_webpage(html)
                 if match:
                     title_info = match.split(' - ', 1)
-                    if len(title_info) ==2:
+                    if len(title_info) == 2:
                         info['username'] = title_info[0]
                         info['title'] = title_info[1]
                 break
             except RequestException as e:
-                self.retry(attempt_number, max_attempts, retry_timeout,
-                           logging_level, pause_on_debug, error=e)
+                self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
 
         # print(json_data)
         instances = multi_get(json_data, 'jsmods', 'instances')
@@ -499,13 +505,12 @@ class FacebookChatDownloader(ChatDownloader):
             ChatDownloader.remap(info, FacebookChatDownloader._REMAPPING,
                                  FacebookChatDownloader._REMAP_FUNCTIONS, key, node[key])
 
-
         author_info = info.pop('author', {})
         ChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
 
         for key in author_info:
             ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
-                                    FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
+                                 FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
 
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []
@@ -550,8 +555,17 @@ class FacebookChatDownloader(ChatDownloader):
         callback = self.get_param_value(params, 'callback')
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging_level')
+
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
+
+        def debug_log(*items):
+            log(
+                'debug',
+                items,
+                pause_on_debug,
+                pause_on_error
+            )
 
         buffer_size = 25  # max num comments returned by api call
         cursor = ''
@@ -567,25 +581,17 @@ class FacebookChatDownloader(ChatDownloader):
         data.update(self.data)
         #p = (), params=p
 
-
         first_try = True
 
         last_ids = []
         while True:
-            for attempt_number in attempts(max_attempts):
-                try:
-                    response = self._session_post(
-                        self._GRAPH_API, headers=self._FB_HEADERS, data=data)
-                    json_data = response.json()
-                    break
-                except JSONDecodeError as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
-                            text='Unable to parse JSON: `{}`'.format(
-                                response.text),
-                            error=e)
-                except RequestException as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout,
-                            logging_level, pause_on_debug, error=e)
+            json_data = self._attempt_fb_retrieve(
+                self._GRAPH_API,
+                max_attempts,
+                pause_on_error,
+                retry_timeout,
+                headers=self._FB_HEADERS, data=data
+            )
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback') or {}
             if not feedback:
@@ -639,12 +645,10 @@ class FacebookChatDownloader(ChatDownloader):
 
                 yield parsed_node
 
-
-
             # got 25 items, and this isn't the first one
             if num_to_add >= buffer_size and not first_try:
-                print(
-                    'debug:', 'messages may be coming in faster than requests are being made.')
+                debug_log(
+                    'Messages may be coming in faster than requests are being made.')
 
             if not top_level_comments:
                 print('err2')
@@ -658,8 +662,9 @@ class FacebookChatDownloader(ChatDownloader):
 
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
-        logging_level = self.get_param_value(params, 'logging_level')
+
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_error = self.get_param_value(params, 'pause_on_error')
 
         # useful tool (convert curl to python request)
         # https://curl.trillworks.com/
@@ -694,20 +699,14 @@ class FacebookChatDownloader(ChatDownloader):
 
             request_params = initial_request_params + times
 
-            for attempt_number in attempts(max_attempts):
-                try:
-                    response = self._session_post(self._VOD_COMMENTS_API, headers=self._FB_HEADERS,
-                                                  params=request_params, data=self.data)
-                    json_data = self._parse_fb_json(response)
-                    break
-                except JSONDecodeError as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug,
-                            text='Unable to parse JSON: `{}`'.format(
-                                response.text),
-                            error=e)
-                except RequestException as e:
-                    self.retry(attempt_number, max_attempts, retry_timeout,
-                            logging_level, pause_on_debug, error=e)
+            json_data = self._attempt_fb_retrieve(
+                self._VOD_COMMENTS_API,
+                max_attempts,
+                pause_on_error,
+                retry_timeout,
+                True,
+                headers=self._FB_HEADERS, params=request_params, data=self.data
+            )
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads')
             if not payloads:
@@ -758,7 +757,6 @@ class FacebookChatDownloader(ChatDownloader):
 
                 yield temp
 
-
     def get_chat_by_video_id(self, video_id, params):
 
         initial_info = self._get_initial_info(video_id, params)
@@ -773,17 +771,20 @@ class FacebookChatDownloader(ChatDownloader):
         # if start/end time are specified, vods will be prioritised
         # if is live stream and no start/end time specified
         if is_live and not start_time and not end_time:
-            generator = self._get_live_chat_messages_by_video_id(video_id, params)
+            generator = self._get_live_chat_messages_by_video_id(
+                video_id, params)
         else:
             max_duration = initial_info.get('duration', float('inf'))
-            generator = self._get_chat_replay_messages_by_video_id(video_id, max_duration, params)
+            generator = self._get_chat_replay_messages_by_video_id(
+                video_id, max_duration, params)
 
         return Chat(
+            self,
             generator,
-            title = initial_info.get('title'),
-            duration = initial_info.get('duration'),
-            is_live = is_live,
-            author = initial_info.get('author'),
+            title=initial_info.get('title'),
+            duration=initial_info.get('duration'),
+            is_live=is_live,
+            author=initial_info.get('author'),
         )
 
     def get_chat(self, params):

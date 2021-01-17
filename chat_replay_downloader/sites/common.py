@@ -18,14 +18,16 @@ from ..utils import (
     get_title_of_webpage,
     update_dict_without_overwrite,
     log,
-    remove_prefixes
+    remove_prefixes,
+    pause
 )
 
 
 from json import JSONDecodeError
 
 class Chat():
-    def __init__(self, chat, **kwargs):
+    def __init__(self, site, chat, **kwargs):
+        self.site = site
         self.chat = chat
 
         self.title = kwargs.get('title')
@@ -46,8 +48,9 @@ class Chat():
 
 class ChatDownloader:
     """
-    Subclasses of this should re-define the get_chat()
-    method and define a _VALID_URL regexp.
+    Subclasses of this should redefine the get_chat()
+    method and define a _VALID_URL regexp. The
+    _DEFAULT_FORMAT field may also be redefined.
 
     Each chat item is a dictionary and must contain the following fields:
 
@@ -193,16 +196,21 @@ class ChatDownloader:
         'end_time': None,  # get until end
         #'callback': None,  # do something for every message
 
-        'max_attempts': 30,
-        'retry_timeout': 1,  # 1 second
+        'max_attempts': 15, # ~ 2^15s ~ 9 hours
+        'retry_timeout': None,  # 1 second
         # TODO timeout between attempts
         'max_messages': None,
 
         'output': None,
-        'logging': 'normal',
+
+        'logging': 'info',
         'verbose': False,
-        'safe_print': False,
+
         'pause_on_debug': False,
+        'pause_on_error': False,
+
+
+        'safe_print': False,
 
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,
@@ -232,12 +240,14 @@ class ChatDownloader:
 
 
         # formatting
-        'format':'default',
+        'format': None, #'default',
         'format_file': None
     }
 
+    _DEFAULT_FORMAT = 'default'
     def __str__(self):
         return ''
+
 
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
@@ -299,6 +309,12 @@ class ChatDownloader:
     def update_session_headers(self, new_headers):
         self.session.headers.update(new_headers)
 
+    def reset_connection(self, keep_cookies):
+        pass # TODO
+
+    def clear_cookies(self):
+        self.session.cookies.clear()
+
     def get_cookies_dict(self):
         return requests.utils.dict_from_cookiejar(self.session.cookies)
 
@@ -342,7 +358,7 @@ class ChatDownloader:
             raise UnexpectedHTML(webpage_title, s.text)
 
     _VALID_URL = None
-    _CALLBACK = None
+    # _CALLBACK = None
 
 
 
@@ -374,21 +390,21 @@ class ChatDownloader:
         for t in tests:
             yield t
 
-    @staticmethod
-    def perform_callback(callback, data, params=None):
-        if params is None:
-            params = {}
-        if callable(callback):
-            try:
-                callback(data)
-            except TypeError:
-                raise CallbackFunction(
-                    'Incorrect number of parameters for function '+callback.__name__)
-        elif callback is None:
-            pass  # do not perform callback
-        else:
-            raise CallbackFunction(
-                'Unable to call callback function '+callback.__name__)
+    # @staticmethod
+    # def perform_callback(callback, data, params=None):
+    #     if params is None:
+    #         params = {}
+    #     if callable(callback):
+    #         try:
+    #             callback(data)
+    #         except TypeError:
+    #             raise CallbackFunction(
+    #                 'Incorrect number of parameters for function '+callback.__name__)
+    #     elif callback is None:
+    #         pass  # do not perform callback
+    #     else:
+    #         raise CallbackFunction(
+    #             'Unable to call callback function '+callback.__name__)
 
     # TODO make this a class with a __dict__ attribute
 
@@ -440,50 +456,57 @@ class ChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, retry_timeout, logging_level, pause_on_debug, text = None, error=''):
+    def retry(attempt_number, max_attempts, error, retry_timeout = None, exponential_backoff=True, text = None, pause_on_error=False):
+        if attempt_number >= max_attempts:
+            raise RetriesExceeded(
+                'Maximum number of retries has been reached ({}).'.format(max_attempts))
+
         if text is None:
             text = []
         elif not isinstance(text, (tuple, list)):
             text = [text]
 
-        text.append('Retry #{}. {}'.format(attempt_number, error))
+        retry_text = 'Retry #{}. '.format(attempt_number)
 
         is_unexpected_html = isinstance(error, UnexpectedHTML)
-        must_sleep = retry_timeout>=0
+
+        if exponential_backoff:
+            # exponential backoff
+            # attempt   1           2   3   4   5
+            # timeout   immediate   1s  2s  4s  8s
+            if attempt_number>1:
+                time_to_sleep = 2**(attempt_number-2)
+            else:
+                time_to_sleep = 0
+
+        elif isinstance(retry_timeout, (int, float)):
+            time_to_sleep = retry_timeout
+        else:
+            time_to_sleep = -1
+
+        must_sleep = time_to_sleep>=0 and not pause_on_error
+        if must_sleep:
+            retry_text += 'Sleeping for {}s. '.format(time_to_sleep)
+
+        retry_text += '{} ({})'.format(error, error.__class__.__name__)
+
+        text.append(retry_text)
+
         log(
             'error',
-            text,
-            logging_level,
-            matching=('debug', 'errors'),
-            pause_on_debug=(pause_on_debug and not is_unexpected_html and not must_sleep)
+            text
         )
+
         if is_unexpected_html:
             log(
                 'error',
-                error.html,
-                logging_level,
-                matching=('debug', 'errors'),
-                pause_on_debug=pause_on_debug and not must_sleep
+                error.html
             )
 
-
-
-        if attempt_number >= max_attempts:
-            raise RetriesExceeded(
-                'Maximum number of retries has been reached ({}).'.format(max_attempts))
-
-        if must_sleep:
-            # TODO add option for exponential retry...
-            log(
-                'error',
-                'Sleeping for {}s.'.format(retry_timeout),
-                logging_level,
-                matching=('debug', 'errors'),
-                pause_on_debug=pause_on_debug
-            )
-            time.sleep(retry_timeout)
-        else:
-            input('Press Enter to continue...')
+        if pause_on_error:
+            pause()
+        elif must_sleep:
+            time.sleep(time_to_sleep)
 
     @staticmethod
     def check_for_invalid_types(messages_types_to_add, allowed_message_types):
