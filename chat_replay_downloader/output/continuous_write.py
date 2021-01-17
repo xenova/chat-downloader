@@ -93,23 +93,13 @@ class JSONCW(CW):
             #print(self.file.closed)
             # seek to last character
             self.file.seek(-len(indent_padding)-1, os.SEEK_END)
-            self.file.truncate()
-            # _MAX_TRUNCATE_ATTEMPTS = 10
-
-            # for attempt_number in range(self._MAX_TRUNCATE_ATTEMPTS+1):
-            #     try:
-            #         self.file.truncate()  # Remove the last character (]) to open the array
-            #         break
-            #     except PermissionError:
-            #         print('PermissionError occurred ({}/{})'.format(attempt_number, self._MAX_TRUNCATE_ATTEMPTS))
-            #         if attempt_number == self._MAX_TRUNCATE_ATTEMPTS:
-            #             raise PermissionError
-            #         continue
-
             self.file.write(self.separator.encode())  # Write the separator
+
+            # self.file.truncate()
 
         self.file.write(to_write.encode())  # Dump the item
         self.file.write((indent_padding+']').encode())  # Close the array
+
         if flush:
             self.flush()
 
