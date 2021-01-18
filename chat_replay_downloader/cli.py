@@ -199,20 +199,29 @@ def main():
 
     # TODO DEBUGGING:
     # Temporary
-    program_params['pause_on_debug'] = True
-    # program_params['retry_timeout'] = 5
-    program_params['logging'] = 'debug'  # 'debug', 'info'
     program_params['verbose'] = True
+    program_params['pause_on_debug'] = True
     program_params['message_groups'] = 'all'
-    # program_params['timeout'] = 10
+    program_params['timeout'] = 120
+    # program_params['inactivity_timeout'] = 20
+    # program_params['retry_timeout'] = 5
+    # program_params['logging'] = 'debug'  # 'debug', 'info'
 
 
-    if program_params['logging'] == 'none':
-        f = open(os.devnull, 'w', encoding='utf-8')
-        sys.stdout = f
-        sys.stderr = f
-    else:
+
+    if program_params['verbose']:
+        program_params['logging'] = 'debug'
+
+    if program_params['logging'] != 'none':
         set_log_level(program_params['logging'])
+    else:
+        pass
+        # set_log_level('notset')
+    #     f = open(os.devnull, 'w', encoding='utf-8')
+    #     sys.stdout = f
+    #     sys.stderr = f
+    # else:
+    #     set_log_level(program_params['logging'])
     # program_params['retry_timeout'] = -1
 
     try:

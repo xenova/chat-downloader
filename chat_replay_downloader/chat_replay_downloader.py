@@ -46,8 +46,8 @@ class ChatReplayDownloader:
             # TODO raise error
             return
 
-        if params.get('verbose'):
-            params['logging'] = 'debug'
+        # if params.get('verbose'):
+        #     params['logging'] = 'debug'
 
 
         # self.LIST_OF_MESSAGES = [] # reset list of messages
