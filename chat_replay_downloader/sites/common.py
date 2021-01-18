@@ -26,16 +26,49 @@ from ..utils import (
 
 from json import JSONDecodeError
 
+from math import ceil
 class Timeout():
-    def __init__(self, timeout):
-        if isinstance(timeout, (int, float)):
-            self.end_time = time.time() + timeout
+
+    # Timeout types
+    NORMAL = 0
+    INACTIVITY = 1
+
+    _TIMEOUT_MESSAGES = {
+        NORMAL: 'Timeout occurred after {} seconds.',
+        INACTIVITY: 'No messages received after {}s. Timing out.'
+    }
+
+    def __init__(self, timeout, timeout_type=None):
+        self.timeout = timeout
+        self.reset()
+
+        self.error_message = Timeout._TIMEOUT_MESSAGES.get(
+            timeout_type, Timeout._TIMEOUT_MESSAGES[Timeout.NORMAL]).format(self.timeout)
+
+    def reset(self):
+        if isinstance(self.timeout, (int, float)):
+            self.end_time = time.time() + self.timeout
         else:
             self.end_time = None
 
     def check_for_timeout(self):
         if self.end_time is not None and time.time() > self.end_time:
-            raise TimeoutException('Timeout occurred.')
+            raise TimeoutException(self.error_message)
+
+    def _calculate_remaining(self):
+        return self.end_time - time.time()
+
+    def time_until_timeout(self):
+        if self.end_time is None:
+            return float('inf')
+        else:
+            return self._calculate_remaining()
+
+    def time_until_timeout_ms(self):
+        if self.end_time is None:
+            return float('inf')
+        else:
+            return ceil(self._calculate_remaining()*1000)
 
 
 class Chat():
@@ -47,16 +80,12 @@ class Chat():
         self.duration = kwargs.get('duration')
         self.is_live = kwargs.get('is_live')
 
-
         # TODO
         # author/user/uploader/creator
-
 
     def __iter__(self):
         for item in self.chat:
             yield item
-
-
 
 
 class ChatDownloader:
@@ -207,10 +236,10 @@ class ChatDownloader:
         'url': None,  # should be overridden
         'start_time': None,  # get from beginning (even before stream starts)
         'end_time': None,  # get until end
-        #'callback': None,  # do something for every message
+        # 'callback': None,  # do something for every message
 
 
-        'max_attempts': 15, # ~ 2^15s ~ 9 hours
+        'max_attempts': 15,  # ~ 2^15s ~ 9 hours
         'retry_timeout': None,  # 1 second
         'timeout': None,
 
@@ -231,7 +260,7 @@ class ChatDownloader:
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,
 
-        'force_encoding': None, # use default
+        'force_encoding': None,  # use default
 
 
         # stop getting messages after no messages have been sent for `timeout` seconds
@@ -256,18 +285,18 @@ class ChatDownloader:
 
 
         # formatting
-        'format': None, #'default',
+        'format': None,  # 'default',
         'format_file': None
     }
 
     _DEFAULT_FORMAT = 'default'
+
     def __str__(self):
         return ''
 
-
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
-        if 'all' in messages_groups_to_add: # user wants everything
+        if 'all' in messages_groups_to_add:  # user wants everything
             return True
 
         valid_message_types = []
@@ -284,7 +313,7 @@ class ChatDownloader:
         return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
     @staticmethod
-    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys = False, replace_char_with_underscores=None):
+    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
         remap = remapping_dict.get(remap_key)
 
         if remap:
@@ -296,7 +325,8 @@ class ChatDownloader:
                 info[remap] = remap_input
         elif keep_unknown_keys:
             if replace_char_with_underscores:
-                remap_key = remap_key.replace(replace_char_with_underscores, '_')
+                remap_key = remap_key.replace(
+                    replace_char_with_underscores, '_')
             info[remap_key] = remap_input
 
         # else:
@@ -326,7 +356,7 @@ class ChatDownloader:
         self.session.headers.update(new_headers)
 
     def reset_connection(self, keep_cookies):
-        pass # TODO
+        pass  # TODO
 
     def clear_cookies(self):
         self.session.cookies.clear()
@@ -376,8 +406,6 @@ class ChatDownloader:
 
     _VALID_URL = None
     # _CALLBACK = None
-
-
 
     #_LIST_OF_MESSAGES = []
     # def get_chat_messages(self, params=None):
@@ -446,7 +474,7 @@ class ChatDownloader:
         return image
 
     @staticmethod
-    def move_to_dict(info, dict_name, replace_key=None, create_when_empty = False, *info_keys):
+    def move_to_dict(info, dict_name, replace_key=None, create_when_empty=False, *info_keys):
         """
         Move all items with keys that contain some text to a separate dictionary.
 
@@ -473,7 +501,7 @@ class ChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, error, retry_timeout = None, text = None):
+    def retry(attempt_number, max_attempts, error, retry_timeout=None, text=None):
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
@@ -483,24 +511,25 @@ class ChatDownloader:
         elif not isinstance(text, (tuple, list)):
             text = [text]
 
-        if retry_timeout is None: # use exponential backoff
-            if attempt_number>1:
+        if retry_timeout is None:  # use exponential backoff
+            if attempt_number > 1:
                 time_to_sleep = 2**(attempt_number-2)
             else:
                 time_to_sleep = 0
 
-        elif isinstance(retry_timeout, (int, float)): # valid timeout value
+        elif isinstance(retry_timeout, (int, float)):  # valid timeout value
             time_to_sleep = retry_timeout
         else:
-            time_to_sleep = -1 # wait for user input
+            time_to_sleep = -1  # wait for user input
 
-        must_sleep = time_to_sleep>=0
+        must_sleep = time_to_sleep >= 0
         if must_sleep:
             sleep_text = '(sleep for {}s)'.format(time_to_sleep)
         else:
-            sleep_text =''
+            sleep_text = ''
 
-        retry_text = 'Retry #{} {}. {} ({})'.format(attempt_number, sleep_text, error, error.__class__.__name__)
+        retry_text = 'Retry #{} {}. {} ({})'.format(
+            attempt_number, sleep_text, error, error.__class__.__name__)
 
         if isinstance(error, UnexpectedHTML):
             retry_text += '\n'+error.html
@@ -509,7 +538,6 @@ class ChatDownloader:
             'warning',
             text + [retry_text]
         )
-
 
         if must_sleep:
             time.sleep(time_to_sleep)
@@ -522,7 +550,6 @@ class ChatDownloader:
         if invalid_types:
             raise InvalidParameter(
                 'Invalid types specified: {}'.format(invalid_types))
-
 
     @staticmethod
     def get_mapped_keys(remapping):

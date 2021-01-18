@@ -21,6 +21,7 @@ from urllib import parse
 import json
 import time
 import re
+import math
 
 from ..utils import (
     try_get,
@@ -940,8 +941,6 @@ class YouTubeChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-
-
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
         messages_types_to_add = self.get_param_value(
             params, 'message_types') or []
@@ -965,6 +964,8 @@ class YouTubeChatDownloader(ChatDownloader):
             )
 
         timeout = Timeout(self.get_param_value(params, 'timeout'))
+        inactivity_timeout = Timeout(self.get_param_value(
+            params, 'inactivity_timeout'), Timeout.INACTIVITY)
 
         first_time = True
         while True:
@@ -1181,6 +1182,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
                     # valid timing, add
 
+                    inactivity_timeout.reset()
                     yield data
 
             elif not is_live:
@@ -1189,6 +1191,8 @@ class YouTubeChatDownloader(ChatDownloader):
             else:
                 # otherwise, is live, so keep trying
                 log('debug', 'No actions to process.')
+
+            inactivity_timeout.check_for_timeout()
 
             # assume there are no more chat continuations
             no_continuation = True
@@ -1226,7 +1230,13 @@ class YouTubeChatDownloader(ChatDownloader):
                     # This is useful for streams with varying number of messages
                     # being sent per second. Timeouts help prevent 429 errors
                     # (caused by too many requests)
-                    log('debug', 'Sleeping for {}ms'.format(sleep_duration))
+                    sleep_duration = min(sleep_duration,
+                                         timeout.time_until_timeout_ms(),
+                                         inactivity_timeout.time_until_timeout_ms()
+                                         )
+
+                    log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
+                    # print('time_until_timeout',timeout.time_until_timeout())
                     time.sleep(sleep_duration/1000)
 
             if no_continuation:  # no continuation, end

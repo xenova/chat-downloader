@@ -986,7 +986,7 @@ class TwitchChatDownloader(ChatDownloader):
         vod_id = multi_get(clip, 'video', 'id')
         if vod_id is None:
             raise NoChatReplay(
-                'Video does not have a chat replay. This is because the original VOD has been deleted.')
+                'Video does not have a chat replay, because the original VOD has been deleted.')
 
         offset = clip.get('videoOffsetSeconds')
 
@@ -1234,7 +1234,8 @@ class TwitchChatDownloader(ChatDownloader):
 
         message_receive_timeout = self.get_param_value(
             params, 'message_receive_timeout')
-        timeout = self.get_param_value(params, 'timeout')
+
+
 
         buffer_size = self.get_param_value(params, 'buffer_size')
 
@@ -1275,8 +1276,8 @@ class TwitchChatDownloader(ChatDownloader):
 
         attempt_number = 0
 
-        # test = 0
         timeout = Timeout(self.get_param_value(params, 'timeout'))
+        inactivity_timeout = Timeout(self.get_param_value(params, 'inactivity_timeout'), Timeout.INACTIVITY)
         while True:
             timeout.check_for_timeout()
 
@@ -1322,7 +1323,7 @@ class TwitchChatDownloader(ChatDownloader):
                         # reset the readbuffer
                         readbuffer = ''
 
-                    time_since_last_message = 0
+
 
                     for match in matches:
 
@@ -1350,6 +1351,7 @@ class TwitchChatDownloader(ChatDownloader):
                         if not to_add:
                             continue
 
+                        inactivity_timeout.reset()
                         yield data
 
                 elif full_readbuffer:
@@ -1370,18 +1372,8 @@ class TwitchChatDownloader(ChatDownloader):
                     twitch_chat_irc.send_raw('PING')
                     last_ping_time = current_time
 
-                # attempt_number = 0
-
             except socket.timeout:
-                # print('time_since_last_message',time_since_last_message)
-                if timeout is not None:
-                    time_since_last_message += message_receive_timeout
-
-                    if time_since_last_message >= timeout:
-                        # TODO change to log
-                        print('No data received in', timeout,
-                              'seconds. Timing out.')
-                        break
+                inactivity_timeout.check_for_timeout()
 
             except ConnectionError as e:
                 twitch_chat_irc = create_connection()
