@@ -3,12 +3,16 @@ import codecs
 import json
 import requests
 import re
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from chat_replay_downloader.utils import multi_get
 
 
 
-
-sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+# sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+# sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
 session = requests.Session()
 session.headers = {
@@ -31,7 +35,6 @@ def get_initial_info(url):
 live_url = _YT_HOME+'/channel/UC4R8DWoMoI7CAwX8_LjQHig'
 
 
-
 # print(ytInitialData)
 
 ytInitialData = get_initial_info(live_url)
@@ -52,17 +55,37 @@ for s in sections:
 
     playlist_url = _YT_HOME+section_info['endpoint']['commandMetadata']['webCommandMetadata']['url']
     # print(playlist_url)
-
+    # playlist_url = 'https://www.youtube.com/playlist?list=PLErukX1W1OYjFx2pG8zjWiMuPMG0F-LbI'
+    # playlist_url = 'https://www.youtube.com/playlist?list=PLiZwe6-ujEU0vx0RU8QUw5EoRTNA3zV9M'
     print(section_title)
 
     playlist_info = get_initial_info(playlist_url)
+    # print(playlist_info)
 
     items = playlist_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]['playlistVideoListRenderer']['contents']
 
     for item in items:
-        video_id = item['playlistVideoRenderer']['videoId']
-        print(cmd_template.format(video_id))
+        video_id = multi_get(item, 'playlistVideoRenderer', 'videoId')
+        if video_id:
+            print(cmd_template.format(video_id))
 
+            # "continuationItemRenderer":{
+            #     "trigger":"CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
+            #     "continuationEndpoint":{
+            #         "clickTrackingParams":"CCgQ7zsYACITCNT0zMKim-4CFU-V1QodgR4KyA==",
+            #         "commandMetadata":{
+            #             "webCommandMetadata":{
+            #             "sendPost":true,
+            #             "apiUrl":"/youtubei/v1/browse"
+            #             }
+            #         },
+            #         "continuationCommand":{
+            #             "token":"4qmFsgJhEiRWTFBMRXJ1a1gxVzFPWWpGeDJwRzh6aldpTXVQTUcwRi1MYkkaFENBRjZCbEJVT2tOSFVRJTNEJTNEmgIiUExFcnVrWDFXMU9ZakZ4MnBHOHpqV2lNdVBNRzBGLUxiSQ%3D%3D",
+            #             "request":"CONTINUATION_REQUEST_TYPE_BROWSE"
+            #         }
+            #     }
+            # }
+    # exit()
     print()
     # print(playlist_info)
     # exit()

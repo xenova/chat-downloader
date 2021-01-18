@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from chat_replay_downloader.sites.twitch import TwitchChatDownloader
 
 cmd1_template = 'python -m chat_replay_downloader {}'
-cmd2_template = 'python -m chat_replay_downloader --max_messages {} {}'
+# cmd2_template = 'python -m chat_replay_downloader --max_messages {} {}'
 
 
 
@@ -16,8 +16,8 @@ _TWITCH_CLIPS_URL = 'https://clips.twitch.tv/'
 
 a = TwitchChatDownloader()
 
-username = 'tommyinnit'
-clips = a.get_user_clips(username, 200, 'ALL_TIME')
+username = 'xqcow'
+clips = a.get_user_clips(username, 200, 'LAST_DAY') # ALL_TIME
 
 # print(clips)
 # print('got',len(clips),'clips')
@@ -54,6 +54,6 @@ for stream in streams:
 
     viewer_count = node['viewersCount']
 
-    print(cmd2_template.format(viewer_count // 100, _TWITCH_URL+node['broadcaster']['login']))
+    print(cmd1_template.format(_TWITCH_URL+node['broadcaster']['login']))
 
 
