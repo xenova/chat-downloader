@@ -16,7 +16,6 @@ requirements = [
     'isodate',
     'regex',
     'argparse',
-    'emoji',
     'colorama'
 ]
 
