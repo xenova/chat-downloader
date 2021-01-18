@@ -11,7 +11,8 @@ from ..errors import (
     CallbackFunction,
     RetriesExceeded,
     InvalidParameter,
-    UnexpectedHTML
+    UnexpectedHTML,
+    TimeoutException
 )
 
 from ..utils import (
@@ -24,6 +25,18 @@ from ..utils import (
 
 
 from json import JSONDecodeError
+
+class Timeout():
+    def __init__(self, timeout):
+        if isinstance(timeout, (int, float)):
+            self.end_time = time.time() + timeout
+        else:
+            self.end_time = None
+
+    def check_for_timeout(self):
+        if self.end_time is not None and time.time() > self.end_time:
+            raise TimeoutException('Timeout occurred.')
+
 
 class Chat():
     def __init__(self, site, chat, **kwargs):
@@ -186,7 +199,7 @@ class ChatDownloader:
         },
 
         'cookies': None,  # cookies file (optional),
-        'timeout': 10
+        # 'timeout': 10
     }
     _INIT_PARAMS = _DEFAULT_INIT_PARAMS
 
@@ -196,8 +209,12 @@ class ChatDownloader:
         'end_time': None,  # get until end
         #'callback': None,  # do something for every message
 
+
         'max_attempts': 15, # ~ 2^15s ~ 9 hours
         'retry_timeout': None,  # 1 second
+        'timeout': None,
+
+
         # TODO timeout between attempts
         'max_messages': None,
 
@@ -207,7 +224,6 @@ class ChatDownloader:
         'verbose': False,
 
         'pause_on_debug': False,
-        'pause_on_error': False,
 
 
         'safe_print': False,
@@ -219,7 +235,7 @@ class ChatDownloader:
 
 
         # stop getting messages after no messages have been sent for `timeout` seconds
-        'timeout': None,
+        'inactivity_timeout': None,
 
 
         'message_groups': ['messages'],  # 'all' can be chosen here
@@ -353,6 +369,7 @@ class ChatDownloader:
         try:
             return s.json()
         except JSONDecodeError:
+            # print(s.content)
             # TODO determine if html
             webpage_title = get_title_of_webpage(s.text)
             raise UnexpectedHTML(webpage_title, s.text)
@@ -456,7 +473,7 @@ class ChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, error, retry_timeout = None, exponential_backoff=True, text = None, pause_on_error=False):
+    def retry(attempt_number, max_attempts, error, retry_timeout = None, text = None):
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
@@ -466,47 +483,38 @@ class ChatDownloader:
         elif not isinstance(text, (tuple, list)):
             text = [text]
 
-        retry_text = 'Retry #{}. '.format(attempt_number)
-
-        is_unexpected_html = isinstance(error, UnexpectedHTML)
-
-        if exponential_backoff:
-            # exponential backoff
-            # attempt   1           2   3   4   5
-            # timeout   immediate   1s  2s  4s  8s
+        if retry_timeout is None: # use exponential backoff
             if attempt_number>1:
                 time_to_sleep = 2**(attempt_number-2)
             else:
                 time_to_sleep = 0
 
-        elif isinstance(retry_timeout, (int, float)):
+        elif isinstance(retry_timeout, (int, float)): # valid timeout value
             time_to_sleep = retry_timeout
         else:
-            time_to_sleep = -1
+            time_to_sleep = -1 # wait for user input
 
-        must_sleep = time_to_sleep>=0 and not pause_on_error
+        must_sleep = time_to_sleep>=0
         if must_sleep:
-            retry_text += 'Sleeping for {}s. '.format(time_to_sleep)
+            sleep_text = '(sleep for {}s)'.format(time_to_sleep)
+        else:
+            sleep_text =''
 
-        retry_text += '{} ({})'.format(error, error.__class__.__name__)
+        retry_text = 'Retry #{} {}. {} ({})'.format(attempt_number, sleep_text, error, error.__class__.__name__)
 
-        text.append(retry_text)
+        if isinstance(error, UnexpectedHTML):
+            retry_text += '\n'+error.html
 
         log(
-            'error',
-            text
+            'warning',
+            text + [retry_text]
         )
 
-        if is_unexpected_html:
-            log(
-                'error',
-                error.html
-            )
 
-        if pause_on_error:
-            pause()
-        elif must_sleep:
+        if must_sleep:
             time.sleep(time_to_sleep)
+        else:
+            pause()
 
     @staticmethod
     def check_for_invalid_types(messages_types_to_add, allowed_message_types):

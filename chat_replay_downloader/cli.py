@@ -58,8 +58,8 @@ def main():
 
     parser.add_argument('--pause_on_debug', default=default_params['pause_on_debug'],
                         help='whether to pause on certain debug messages.\n(default: %(default)s)')
-    parser.add_argument('--pause_on_error', default=default_params['pause_on_error'],
-                        help='whether to pause on certain error messages.\n(default: %(default)s)')
+
+
 
     debug_group = parser.add_mutually_exclusive_group()
 
@@ -69,23 +69,32 @@ def main():
     debug_group.add_argument('--verbose', '-v', action='store_true', default=default_params['verbose'],
                              help='print various debugging information\n(default: %(default)s)')
 
+
+
     parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
                         help='level of logging to show\n(default: %(default)s)')
 
     parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to retrieve chat messages. \n(default: %(default)s)')
 
-    parser.add_argument('--retry_timeout', type=int, default=default_params['retry_timeout'],
-                        help='number of seconds to wait before retrying. Setting this to -1 will wait for user input.\n(default: %(default)s)')
+
+    parser.add_argument('--retry_timeout', type=float, default=default_params['retry_timeout'],
+                        help='number of seconds to wait before retrying. Setting this to a negative number will wait for user input.\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
+
 
     parser.add_argument('--max_messages', type=int, default=default_params['max_messages'],
                         help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
 
-    parser.add_argument('--timeout', type=float, default=default_params['timeout'],
-                        help='stop getting messages after not receiving anything for a certain amount of time\n(default: %(default)s)')
+    parser.add_argument('--inactivity_timeout', type=float, default=default_params['inactivity_timeout'],
+                        help='stop getting messages after not receiving anything for a certain duration (in seconds).\n(default: %(default)s)')
 
     parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
                         help='force no timeout between subsequent requests\n(default: %(default)s)')
+
+    parser.add_argument('--timeout', type=float, default=default_params['timeout'],
+                        help='stop retrieving chat after a certain duration (in seconds).\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
+    # TODO request_timeout
+    # specify how long to spend on any single http request
 
     # TODO
     # parser.add_argument('--force_encoding', default=default_params['force_encoding'],
@@ -162,6 +171,8 @@ def main():
         else:  # neither
             pass
 
+# def run_main(init_params, program_params):
+
     # if program_params.get('logging') == 'none':
         # f = open(os.devnull, 'w', encoding='utf-8')
         # sys.stdout = f
@@ -173,15 +184,6 @@ def main():
 
     downloader = ChatReplayDownloader(init_params)
 
-    # printer = safeprint.Printer()
-
-    # set PYTHONIOENCODING=utf-8
-    # sys.setdefaultencoding('utf-8')
-
-    # python -m chat_replay_downloader https://www.youtube.com/watch?v=nlGllxnSfgA --output test.json --start_time 5:32 --end_time 5:40
-    # print(sys.getdefaultencoding())
-
-    # TODO set logging level based on program_params.get('logging')
 
     video_is_live = False
 
@@ -195,15 +197,15 @@ def main():
         # 'format': 'something'  # TODO
     }
 
-    #program_params['callback'] = callback
-
     # TODO DEBUGGING:
     # Temporary
     program_params['pause_on_debug'] = True
-    # program_params['pause_on_error'] = True
-    program_params['logging'] = 'info'  # 'debug'
+    # program_params['retry_timeout'] = 5
+    program_params['logging'] = 'debug'  # 'debug', 'info'
     program_params['verbose'] = True
     program_params['message_groups'] = 'all'
+    # program_params['timeout'] = 10
+
 
     if program_params['logging'] == 'none':
         f = open(os.devnull, 'w', encoding='utf-8')
@@ -212,20 +214,10 @@ def main():
     else:
         set_log_level(program_params['logging'])
     # program_params['retry_timeout'] = -1
-    # import logging
-    # LOG_LEVEL = logging.DEBUG
-
-    # logger.debug("A quirky message only developers care about")
-    # logger.info("Curious users might want to know this")
-    # logger.warn("Something is wrong and any user should be informed")
-    # logger.error("Serious stuff, this is red for a reason")
-    # logger.critical("OH NO everything is on fire")
 
     try:
-
         # TODO print program version
         log('debug', 'Python version: {}'.format(sys.version))
-        # logger.debug()
 
         chat = downloader.get_chat(program_params)
 
@@ -255,10 +247,9 @@ def main():
                 formatted = formatter.format(item, format_name=format_name)
                 safe_print(formatted)
 
-        # callback = None  # test_callback
 
-        if args.output:
-            output_file = ContinuousWriter(args.output, **other_params)
+        if program_params['output']:
+            output_file = ContinuousWriter(program_params['output'], **other_params)
 
             def write_to_file(item):
                 print_formatted(item)
@@ -300,11 +291,13 @@ def main():
         # log('error', e, logging_level)  # always show
         # '{} ({})'.format(, e.__class__.__name__)
 
-    # ParsingError,
     except RequestException as e:
         log('error', 'Unable to establish a connection. Please check your internet connection.')
         log('error', e)  # traceback.format_exc()
         # TODO if e instance of (no internet connection)...
+    except TimeoutException as e:
+        log('info', e)
+
     except PermissionError as e:
         print('PermissionError', e)
         raise e
@@ -312,12 +305,11 @@ def main():
         print('keyboard interrupt')
 
     except Exception as e:
-
         print('unknown exception', type(e))
         print(e)
         traceback.print_exc()
         raise e
 
     finally:
-        if args.output:
+        if program_params['output']:
             output_file.close()

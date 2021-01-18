@@ -1,6 +1,6 @@
 
 from .common import (
-    ChatDownloader, Chat
+    ChatDownloader, Chat, Timeout
 )
 
 from requests.exceptions import RequestException
@@ -47,7 +47,7 @@ class YouTubeChatDownloader(ChatDownloader):
         super().__init__(updated_init_params or {})
 
     def __str__(self):
-        return 'YouTube.com'
+        return 'youtube.com'
 
     _DEFAULT_FORMAT = 'youtube'
 
@@ -182,7 +182,7 @@ class YouTubeChatDownloader(ChatDownloader):
             }
         },
         {
-            # 131:25:50 current test
+            # 333:00:00 current test
             'name': 'Get chat messages from an unplayable stream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=V2Afni3S-ok',
@@ -940,7 +940,7 @@ class YouTubeChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-        callback = self.get_param_value(params, 'callback')
+
 
         messages_groups_to_add = self.get_param_value(params, 'message_groups')
         messages_types_to_add = self.get_param_value(
@@ -956,20 +956,22 @@ class YouTubeChatDownloader(ChatDownloader):
             messages_types_to_add, self._MESSAGE_TYPES)
 
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
-        pause_on_error = self.get_param_value(params, 'pause_on_error')
 
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                pause_on_debug,
-                pause_on_error
+                pause_on_debug
             )
+
+        timeout = Timeout(self.get_param_value(params, 'timeout'))
 
         first_time = True
         while True:
             info = None
             for attempt_number in attempts(max_attempts):
+                timeout.check_for_timeout()
+
                 try:
                     # the following can raise NoContinuation error or UnexpectedHTML
                     if is_live:
@@ -981,7 +983,7 @@ class YouTubeChatDownloader(ChatDownloader):
                     break
 
                 except (UnexpectedHTML, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, e, retry_timeout, pause_on_error=pause_on_error)
+                    self.retry(attempt_number, max_attempts, e, retry_timeout)
                     self.clear_cookies()
 
                     continue
@@ -1186,7 +1188,7 @@ class YouTubeChatDownloader(ChatDownloader):
                 break
             else:
                 # otherwise, is live, so keep trying
-                debug_log('No actions to process.')
+                log('debug', 'No actions to process.')
 
             # assume there are no more chat continuations
             no_continuation = True
@@ -1217,15 +1219,15 @@ class YouTubeChatDownloader(ChatDownloader):
                     )
 
                 # sometimes continuation contains timeout info
-                timeout = continuation_info.get('timeoutMs')
-                if timeout and not actions and not force_no_timeout:
+                sleep_duration = continuation_info.get('timeoutMs')
+                if sleep_duration and not actions and not force_no_timeout:
                     # if there is timeout info, there were no actions and the user
                     # has not chosen to force no timeouts, then sleep.
                     # This is useful for streams with varying number of messages
                     # being sent per second. Timeouts help prevent 429 errors
                     # (caused by too many requests)
-                    debug_log('Sleeping for {}ms'.format(timeout))
-                    time.sleep(timeout/1000)
+                    log('debug', 'Sleeping for {}ms'.format(sleep_duration))
+                    time.sleep(sleep_duration/1000)
 
             if no_continuation:  # no continuation, end
                 break

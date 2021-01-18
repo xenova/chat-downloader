@@ -1,11 +1,12 @@
+import colorlog
 import datetime
 import re
 import sys
-from colorama import Fore
 import os
 import locale
 import collections.abc
 import io
+
 
 def timestamp_to_microseconds(timestamp):
     """
@@ -141,6 +142,7 @@ def update_dict_without_overwrite(original, new):
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
+
 def supports_colour():
     """
     Return True if the running system's terminal supports colour,
@@ -159,7 +161,8 @@ def supports_colour():
         else:
             reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Console')
             try:
-                reg_key_value, _ = winreg.QueryValueEx(reg_key, 'VirtualTerminalLevel')
+                reg_key_value, _ = winreg.QueryValueEx(
+                    reg_key, 'VirtualTerminalLevel')
             except FileNotFoundError:
                 return False
             else:
@@ -178,34 +181,51 @@ def supports_colour():
         vt_codes_enabled_in_windows_registry()
     )
 
-import colorlog
+s_colour = supports_colour()
 
-handler = colorlog.StreamHandler()
-handler.setFormatter(colorlog.ColoredFormatter(
-    '  %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s'))
-#'%(log_color)s%(levelname)s:%(name)s:%(message)s'
-logger = colorlog.getLogger()#'root'
+
+if s_colour:
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(colorlog.ColoredFormatter(
+        '[%(log_color)s%(levelname)s%(reset)s] %(message)s',
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'bold_red',
+        })
+    )
+    logger = colorlog.getLogger()  # 'root'
+else: # fallback support
+    import logging
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+    logger = logging.getLogger()
+
+
 logger.addHandler(handler)
-# logger.setLevel('INFO')
 
-# import logging
+from colorama import Fore
+
 
 def pause(text='Press Enter to continue...'):
     input(text)
 
+
 def set_log_level(level):
     logger.setLevel(level.upper())
 
-def log(level, items, pause_on_debug=False, pause_on_error=False):
+
+def log(level, items, to_pause=False):
     l = getattr(logger, level, None)
     if l:
         if not isinstance(items, (tuple, list)):
             items = [items]
         for item in items:
-             l(item)
+            l(item)
 
-        must_pause = False
-        if (pause_on_error and level == 'error') or (pause_on_debug and level == 'debug'):
+        if to_pause:
             pause()
 
 
@@ -269,8 +289,6 @@ def multi_get(dictionary, *keys, default=None):
     return current
 
 
-
-
 # \uD800-\uDFFF
 # \u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F\u0009-\u000D\u0085
 # invalid_unicode_re = re.compile('[\U000e0000\U000e0002-\U000e001f]', re.UNICODE)
@@ -294,6 +312,7 @@ def flatten_json(original_json):
     flatten(original_json)
 
     return final
+
 
 def attempts(max_attempts):
     return range(1, max_attempts+1)
@@ -348,7 +367,8 @@ def _windows_write_string(s, out, skip_errors=True):
         ctypes.wintypes.LPVOID)(('WriteConsoleW', ctypes.windll.kernel32))
     written = ctypes.wintypes.DWORD(0)
 
-    GetFileType = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)(('GetFileType', ctypes.windll.kernel32))
+    GetFileType = ctypes.WINFUNCTYPE(ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)(
+        ('GetFileType', ctypes.windll.kernel32))
     FILE_TYPE_CHAR = 0x0002
     FILE_TYPE_REMOTE = 0x8000
     GetConsoleMode = ctypes.WINFUNCTYPE(
@@ -415,6 +435,7 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
 
     if flush and hasattr(out, 'flush'):
         out.flush()
+
 
 def nested_update(d, u):
     for k, v in u.items():

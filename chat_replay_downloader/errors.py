@@ -1,5 +1,8 @@
 """File for defining errors"""
 
+class TimeoutException(Exception):
+    """Raised after a timeout occurs."""
+    pass
 
 class InvalidParameter(Exception):
     """Raised if an invalid parameter is specified."""
