@@ -7,6 +7,7 @@ from ..utils import (
     nested_update,
     multi_get
 )
+from copy import deepcopy
 
 # TODO remove and use utils
 
@@ -112,8 +113,7 @@ class ItemFormatter:
         inherit = format_object.get('inherit')
         if inherit:
             parent = self.format_file.get(inherit) or {}
-            # print('parent',parent)
-            format_object = nested_update(parent, format_object)
+            format_object = nested_update(deepcopy(parent), format_object)
 
 
         # print('after',format_object)
@@ -124,109 +124,3 @@ class ItemFormatter:
             result, item, keys), template)
 
         return substitution
-        # empty_substitution = re.sub(self._INDEX_REGEX, '', template)
-        # #print(substitution, empty_substitution)
-        # # returns (new, num_modifications)
-        # if substitution != empty_substitution:  # some substitution made
-        #     return substitution
-        # else:
-        #     return None
-
-
-# TODO make formatting e.g. author.name
-
-item1 = {
-    "action_type": "text_message",
-    "author_badges": [
-        {
-            "badge_id": "5d9f2208-5dd8-11e7-8513-2ff4adfae661",
-            "click_action": "subscribe_to_channel",
-            "click_url": "",
-            "description": "1-Month Subscriber",
-            "icons": [
-                {
-                        "height": 18,
-                        "id": "18x18",
-                        "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/1",
-                        "width": 18
-                },
-                {
-                    "height": 36,
-                    "id": "36x36",
-                    "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/2",
-                    "width": 36
-                },
-                {
-                    "height": 72,
-                    "id": "72x72",
-                    "url": "https://static-cdn.jtvnw.net/badges/v1/5d9f2208-5dd8-11e7-8513-2ff4adfae661/3",
-                    "width": 72
-                }
-            ],
-            "months": 1,
-            "title": "1-Month Subscriber",
-            "type": "subscriber",
-            "version": 0
-        }
-    ],
-    "author_display_name": "pr0faka",
-    "author_id": "545470622",
-    "author_name": "pr0faka",
-    "channel_id": "151283108",
-    "colour": "#008000",
-    "is_moderator": False,
-    "message": "people born in 1988 have a bad time picking user names",
-    "message_id": "ac48cdd8-af9b-4d4a-be5a-7eaaacbd212a",
-    "message_type": "text_message",
-    "timestamp": 1608220470845000
-}
-item2 = {
-    "action_type": "add_chat_item",
-    "author_badges": [
-        {
-            "icons": [
-                {
-                    "height": 16,
-                    "id": "16x16",
-                    "url": "https://yt3.ggpht.com/7Y0B8yW1lfXCmMR5JR5pmney6UxJPBdL--4QgVqVKlPcMr-i0IF2Y74ghx3lhIkDzuybfRTQWA=s16-c-k",
-                    "width": 16
-                },
-                {
-                    "height": 32,
-                    "id": "32x32",
-                    "url": "https://yt3.ggpht.com/7Y0B8yW1lfXCmMR5JR5pmney6UxJPBdL--4QgVqVKlPcMr-i0IF2Y74ghx3lhIkDzuybfRTQWA=s32-c-k",
-                    "width": 32
-                },
-                {
-                    "id": "source",
-                    "url": "https://yt3.ggpht.com/7Y0B8yW1lfXCmMR5JR5pmney6UxJPBdL--4QgVqVKlPcMr-i0IF2Y74ghx3lhIkDzuybfRTQWA"
-                }
-            ],
-            "title": "Member (2 months)"
-        }
-    ],
-    "author_id": "UCjGX7N9LQNwTYvXFGyxwS2w",
-    "author_images": [
-        {
-            "height": 32,
-            "url": "https://yt3.ggpht.com/ytc/AAUvwnjuAJvUDBEYFogGefU7LcpeQvih0KAXamHdj35hBw=s32-c-k-c0xffffffff-no-rj-mo",
-            "width": 32
-        },
-        {
-            "height": 64,
-            "url": "https://yt3.ggpht.com/ytc/AAUvwnjuAJvUDBEYFogGefU7LcpeQvih0KAXamHdj35hBw=s64-c-k-c0xffffffff-no-rj-mo",
-            "width": 64
-        }
-    ],
-    "author_name": "Sophia Sokolova",
-    "message": "6 minutes :_raeHype:",
-    "message_id": "CjkKGkNKeVd6SnJleS0wQ0ZiSGtnZ29kWWJ3T29nEhtDSmpCaDdIY3ktMENGUnJmVlFvZGRBOEFpdzc%3D",
-    "message_type": "text_message",
-    "time_in_seconds": -76,
-    "time_text": "-1:16",
-    "timestamp": 1607889245637404
-}
-# formatter = ItemFormatter()
-
-# formatted = formatter.format(item2)
-# print(formatted)

@@ -2,9 +2,9 @@
     "default": {
         "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}{message}",
         "keys": {
-            "time_text": "[{}] ",
+            "time_text": "{} | ",
             "timestamp": {
-                "template": "[{}] ",
+                "template": "{} | ",
                 "format": "%Y-%m-%d %H:%M:%S"
             },
             "author.badges": {
@@ -19,15 +19,12 @@
         {
             "matching":[
                 "viewer_engagement_message",
-                "deleted_message"
+                "deleted_message",
+                "ban_user"
             ],
             "template":"{time_text|timestamp}{message}",
+            "inherit": "default",
             "keys": {
-                "time_text": "[{}] ",
-                "timestamp": {
-                    "template": "[{}] ",
-                    "format": "%Y-%m-%d %H:%M:%S"
-                },
                 "message": "{}"
             }
         }
@@ -36,7 +33,6 @@
         "inherit": "default",
         "keys": {
             "timestamp": {
-                "template": "[{}] ",
                 "format": "%H:%M"
             }
         }
