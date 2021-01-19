@@ -652,9 +652,6 @@ class TwitchChatDownloader(ChatDownloader):
 
     @ staticmethod
     def _parse_item(item, offset):
-        # if params is None:
-        #     params = {}
-
         info = {}
         for key in item:
             ChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
@@ -673,7 +670,7 @@ class TwitchChatDownloader(ChatDownloader):
             if badges:
                 info['author']['badges'] = badges
 
-        user_notice_params = message_info.pop('user_notice_params', {})
+        user_notice_params = message_info.pop('user_notice_params', {}) or {}
 
         for key in user_notice_params:
             ChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
@@ -880,10 +877,14 @@ class TwitchChatDownloader(ChatDownloader):
                     break
                 except (UnexpectedHTML, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
-
+                except TwitchError as e:
+                    raise TwitchError
+                    # TODO
+                    # chat_replay_downloader.errors.TwitchError: InvalidContentOffsetError: Content offset 9m0s is not within supported range: 0 to 6m13s
             error = info.get('error')
 
             if error:
+                print(info)
                 # TODO make parse error and raise more general errors
                 raise TwitchError(info.get('message'))
 
