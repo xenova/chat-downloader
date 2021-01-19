@@ -1,8 +1,3 @@
-* Custom formatting for printing
-
-* max num retries for getting json/ continuation (30 default?)
-
-* Logging levels
 
 * Chat replay download progress bar
     - calculate based on current time vs. video duration
@@ -17,7 +12,7 @@
 * YouTube
 - make list of all possible actions for testing along with dummy data
 
-
+- CLI param to specify fields
 
 Possible params:
     - shorten URL or not
@@ -29,3 +24,5 @@ Possible params:
 - dlive.tv
 - instagib.tv
 - dailymotion.com
+- reddit live
+- younow.com/

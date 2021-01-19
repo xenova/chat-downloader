@@ -28,6 +28,9 @@ Features
 
 * TODO
 
+* Extension for cookies:
+https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid/related?hl=en
+
 Credits
 -------
 
