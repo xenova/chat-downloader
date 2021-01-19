@@ -22,9 +22,18 @@ def time_to_seconds(time):
     return int(sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1))
 
 
+# def seconds_to_time(seconds):
+#     """Convert seconds to timestamp."""
+#     t = datetime.timedelta(0, abs(seconds))
+#     # time_string = t.days()
+#     return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', str(t))
+
 def seconds_to_time(seconds):
     """Convert seconds to timestamp."""
-    return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', str(datetime.timedelta(0, abs(seconds))))
+    h, remainder = divmod(abs(seconds), 3600)
+    m, s = divmod(remainder, 60)
+    time_string = '{}:{:02}:{:02}'.format(int(h), int(m), int(s))
+    return ('-' if s < 0 else '') + re.sub(r'^0:0?', '', str(time_string))
 
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
