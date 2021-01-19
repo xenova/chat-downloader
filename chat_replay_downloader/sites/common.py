@@ -79,6 +79,7 @@ class Chat():
         self.title = kwargs.get('title')
         self.duration = kwargs.get('duration')
         self.is_live = kwargs.get('is_live')
+        self.start_time = kwargs.get('start_time')
 
         # TODO
         # author/user/uploader/creator

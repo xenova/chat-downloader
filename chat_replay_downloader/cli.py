@@ -34,6 +34,18 @@ from .formatting.format import ItemFormatter
 
 # import safeprint
 
+class ProgressBar():
+    def __init__(self, duration):
+        self.duration = duration
+        pass
+
+    def update(self, time):
+        if isinstance(time, (int, float)):
+            self.current_time = time
+        pass
+
+    def print(self):
+        safe_print('test', self.current_time/self.duration, end='\r')
 
 def main():
     """Console script for chat_replay_downloader."""
@@ -202,7 +214,7 @@ def main():
     program_params['verbose'] = True
     program_params['pause_on_debug'] = True
     program_params['message_groups'] = 'all'
-    program_params['timeout'] = 120
+    program_params['timeout'] = 180
     # program_params['inactivity_timeout'] = 20
     # program_params['retry_timeout'] = 5
     # program_params['logging'] = 'debug'  # 'debug', 'info'
@@ -223,7 +235,7 @@ def main():
     # else:
     #     set_log_level(program_params['logging'])
     # program_params['retry_timeout'] = -1
-
+    output_file = None
     try:
         # TODO print program version
         log('debug', 'Python version: {}'.format(sys.version))
@@ -270,8 +282,86 @@ def main():
 
         # message_count = 0
         #     message_count+=1
+        # from alive_progress import alive_bar
+
+        # with alive_bar(1000) as bar:
+        #     bar()
+
+        # progress = ProgressBar(chat.duration)
+        clear_line = '\033[2K\r'
+        # n_bar = 50
+        # i = 1
+        # n_iter = 100
+
+        # if data.get('time_in_seconds') is None and data.get('timestamp') is not None:
+        #     data['time_in_seconds'] = (data['timestamp'] - stream_start_time)/1e6
+        #     data['time_text'] = seconds_to_time(int(data['time_in_seconds']))
+
+        #     pass
+
+        stream_start_time = chat.start_time
+        # stream_end_time = stream_start_time + chat.duration
+
+        # safe_print(time.time(), start_time)
+        # safe_print(time.time()*1e6 - start_time)
+        safe_print('chat.duration',chat.duration)
+        safe_print('chat.start_time',chat.start_time)
+
+
+        # has enough information to print progress
+        to_print_progress = isinstance(chat.start_time, (float, int)) and isinstance(chat.duration, (float, int))
+        #(chat.duration is not None and chat.duration > 0) and chat.start_time
+
         for message in chat:
+            # message['time_in_seconds']
+            # print(chat.duration)
             callback(message)
+            continue
+
+            timestamp = message.get('timestamp')
+            if isinstance(timestamp, (float, int)) and isinstance(timestamp, (float, int)):
+                (timestamp - chat.start_time) / chat.duration
+
+            j = message.get('timestamp') / (chat.duration or 1)
+            m = message.get('message') or ''
+
+            # clear line and return to beginning
+            # '\033[2K\033[1G'
+            sys.stdout.write(clear_line)
+            callback(message)
+            sys.stdout.write(f"[{'=' * int(n_bar * j):{n_bar}s}] {int(100 * j)}%\r")
+
+            sys.stdout.flush()
+
+            i += 1
+
+
+            # safe_print('\033[2K\033[1G', end='\r')
+            # safe_print('test ' + str(i)+'\n', end='')
+            # safe_print(f"[{'=' * int(n_bar * j):{n_bar}s}] {int(100 * j)}%", end='')
+            # sys.stdout.flush()
+            # time.sleep(0.1)
+
+            # i += 1
+            # j = i/n_bar
+            # sys.stdout.write('\033[2K\033[1G')
+            # print(message.get('message'))
+            # # sys.stdout.write('test ' + str(i)+'\n')
+
+            # # sys.stdout.write("\033[K")
+            # # sys.stdout.write('\r')
+            # sys.stdout.write(f"[{'=' * int(n_bar * j):{n_bar}s}] {int(100 * j)}%")
+            # sys.stdout.flush()
+            # print()
+            # # callback(message)
+            # progress.update(message.get('time_in_seconds'))
+            # progress.print()
+
+        print()
+        sys.stdout.write(clear_line)
+        finish_text = 'Finished retrieving chat{}.'.format('' if video_is_live else ' replay')
+
+        log('info', finish_text)
 
             # log(
             #     'debug',
@@ -320,5 +410,5 @@ def main():
         raise e
 
     finally:
-        if program_params['output']:
+        if program_params['output'] and output_file:
             output_file.close()

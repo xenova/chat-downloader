@@ -805,13 +805,20 @@ class YouTubeChatDownloader(ChatDownloader):
         playability_status = player_response_info.get('playabilityStatus')
         status = playability_status.get('status')
 
+        adaptive_formats = multi_get(player_response_info, 'streamingData', 'adaptiveFormats')
+        last_modified = try_get(adaptive_formats, lambda x: float(x[0]['lastModified']))
+        # TODO check if premiere... if so, subtract 2 mins
+        # print(adaptive_formats)
+
         video_details = player_response_info.get('videoDetails')
 
-        # print(video_details)
+        duration = int(video_details.get('lengthSeconds'))
+
         details = {
             'title': video_details.get('title'),
-            'duration': int(video_details.get('lengthSeconds'))
+            'start_time': last_modified
         }
+
 
         contents = yt_initial_data.get('contents')
         if not contents:
@@ -838,6 +845,12 @@ class YouTubeChatDownloader(ChatDownloader):
             x['title']: x['continuation']['reloadContinuationData']['continuation']
             for x in viewselector_submenuitems
         }
+        details['is_live'] = 'Live chat' in details['continuation_info']
+
+        if details['is_live']:
+            details['duration'] = None
+        else:
+            details['duration'] = duration
 
         error_screen = playability_status.get('errorScreen')
 
@@ -911,7 +924,13 @@ class YouTubeChatDownloader(ChatDownloader):
         except:
             raise NoContinuation('No continuation')
 
-    def _get_chat_messages(self, initial_continuation_info, is_live, params):
+    def _get_chat_messages(self, initial_info, params):
+
+
+        initial_continuation_info = initial_info.get('continuation_info')
+        stream_start_time = initial_info.get('start_time')
+        is_live = initial_info.get('is_live')
+
 
         start_time = ensure_seconds(
             self.get_param_value(params, 'start_time'))
@@ -990,7 +1009,7 @@ class YouTubeChatDownloader(ChatDownloader):
                     continue
 
                 except NoContinuation as e:
-                    debug_log(e)
+                    # debug_log(e)
                     # Live stream ended
                     return
 
@@ -1010,6 +1029,7 @@ class YouTubeChatDownloader(ChatDownloader):
                             data['time_in_seconds'] = float(offset_time)/1000
 
                         action = replay_chat_item_action['actions'][0]
+
 
                     action.pop('clickTrackingParams', None)
                     original_action_type = try_get_first_key(action)
@@ -1105,7 +1125,7 @@ class YouTubeChatDownloader(ChatDownloader):
                         original_message_type, {}).keys()
                     missing_keys = test_for_missing_keys-self._KNOWN_KEYS
 
-                    # print(original_item)
+                    # print(action)
                     if not data:  # TODO debug
                         debug_log(
                             'Parse of action returned empty results: {}'.format(
@@ -1180,6 +1200,12 @@ class YouTubeChatDownloader(ChatDownloader):
                         elif before_start or after_end:
                             return  # while actually searching, if time is invalid
 
+                    # try to reconstruct time in seconds from timestamp and stream start
+                    # if data.get('time_in_seconds') is None and data.get('timestamp') is not None:
+                    #     data['time_in_seconds'] = (data['timestamp'] - stream_start_time)/1e6
+                    #     data['time_text'] = seconds_to_time(int(data['time_in_seconds']))
+
+                    #     pass
                     # valid timing, add
 
                     inactivity_timeout.reset()
@@ -1252,16 +1278,16 @@ class YouTubeChatDownloader(ChatDownloader):
 
         title = initial_info.get('title')
         duration = initial_info.get('duration')
-        continuation_info = initial_info.get('continuation_info')
-
-        is_live = 'Live chat' in continuation_info
+        start_time = initial_info.get('start_time')
+        is_live = initial_info.get('is_live')
 
         return Chat(
             self,
-            self._get_chat_messages(continuation_info, is_live, params),
+            self._get_chat_messages(initial_info, params),
             title=title,
             duration=duration,
-            is_live=is_live
+            is_live=is_live,
+            start_time=start_time
         )
 
     def get_chat(self, params):
