@@ -106,6 +106,9 @@ class TwitchChatDownloader(ChatDownloader):
     _BADGE_INFO_URL = 'https://badges.twitch.tv/v1/badges/global/display'
     # TODO add local version of badge list?
 
+    _SUBSCRIBER_BADGE_INFO = {}  # local cache for subscriber badge info
+    _SUBSCRIBER_BADGE_URL = 'https://badges.twitch.tv/v1/badges/channels/{}/display'
+
     def __init__(self, updated_init_params=None):
         super().__init__(updated_init_params or {})
         # self._name = None
@@ -121,7 +124,7 @@ class TwitchChatDownloader(ChatDownloader):
     _DEFAULT_FORMAT = 'twitch'
 
     def __str__(self):
-        return 'Twitch.tv'
+        return 'twitch.tv'
 
     _TESTS = [
         # Commenter is "None"
@@ -182,8 +185,6 @@ class TwitchChatDownloader(ChatDownloader):
     _REMAP_FUNCTIONS = {
         'parse_timestamp': timestamp_to_microseconds,  # lambda x :  * 1000,
         'parse_author_images': lambda x: TwitchChatDownloader.parse_author_images(x),
-
-        'parse_badges': lambda x: TwitchChatDownloader.parse_badges(x),
 
         'multiply_by_1000': lambda x: int_or_none(x) * 1000,
         'parse_int': int_or_none,
@@ -248,7 +249,7 @@ class TwitchChatDownloader(ChatDownloader):
         'msg-param-should-share-streak': ('user_wants_to_share_streaks', 'parse_bool'),
         'msg-param-streak-months': ('number_of_consecutive_months_subscribed', 'parse_int'),
         'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
-        'msg-param-sub-plan-name': 'subscription_plan_name',
+        'msg-param-sub-plan-name': ('subscription_plan_name', 'decode_pseudo_BNF'),
 
         'msg-param-ritual-name': 'ritual_name',
 
@@ -276,7 +277,7 @@ class TwitchChatDownloader(ChatDownloader):
         'msg-param-trigger-amount': ('trigger_amount', 'parse_int'),
 
         # submysterygift
-        'msg-param-origin-id': 'origin_id',
+        'msg-param-origin-id': ('origin_id', 'decode_pseudo_BNF'),
         'msg-param-sender-count': ('sender_count', 'parse_int'),
         'msg-param-mass-gift-count': ('mass_gift_count', 'parse_int'),
 
@@ -354,8 +355,8 @@ class TwitchChatDownloader(ChatDownloader):
 
 
         # PRIVMSG
-        'badge-info': ('author_badge_metadata', 'parse_badges'),
-        'badges': ('author_badges', 'parse_badges'),
+        'badge-info': 'author_badge_metadata',
+        'badges': 'author_badges',
 
         'bits': ('bits', 'parse_int'),
 
@@ -402,7 +403,7 @@ class TwitchChatDownloader(ChatDownloader):
         'rituals': ('rituals_enabled', 'parse_bool'),
 
         # USERNOTICE
-        'system-msg': 'system_message',
+        'system-msg': ('system_message', 'decode_pseudo_BNF'),
 
         # (Commands)
         # HOSTTARGET
@@ -642,6 +643,19 @@ class TwitchChatDownloader(ChatDownloader):
             _MESSAGE_GROUPS[message_group] = []
         _MESSAGE_GROUPS[message_group] += list(value.values())
 
+    def _update_subscriber_badge_info(self, channel_id):
+        # print('updated sub badges')
+        url = self._SUBSCRIBER_BADGE_URL.format(channel_id)
+
+        # only get if not in dict
+        channel_id = int(channel_id)  # ensure integer
+        if channel_id not in self._SUBSCRIBER_BADGE_INFO:
+            self._SUBSCRIBER_BADGE_INFO[channel_id] = self._session_get_json(
+                url).get('badge_sets') or {}
+
+        # print(self._SUBSCRIBER_BADGE_INFO)
+        # print(self._SUBSCRIBER_BADGE_INFO.keys())
+
     @staticmethod
     def parse_author_images(original_url):
         smaller_icon = original_url.replace('300x300', '70x70')
@@ -661,14 +675,17 @@ class TwitchChatDownloader(ChatDownloader):
             info['time_in_seconds'] -= offset
             info['time_text'] = seconds_to_time(int(info['time_in_seconds']))
 
+        channel_id = item.get('channel_id')
+
         message_info = info.pop('message_info', None)
         if message_info:
             info['message'] = message_info.get('message')
             info['author']['colour'] = message_info.get('colour')
 
-            badges = message_info.get('badges')
+            badges = message_info.get('badges') or []
             if badges:
-                info['author']['badges'] = badges
+                info['author']['badges'] = list(map(lambda x: TwitchChatDownloader.parse_badge_info(
+                    x.get('_id'), x.get('version'), channel_id), badges))
 
         user_notice_params = message_info.pop('user_notice_params', {}) or {}
 
@@ -835,6 +852,9 @@ class TwitchChatDownloader(ChatDownloader):
         end_time = ensure_seconds(
             self.get_param_value(params, 'end_time'), max_duration)
 
+        # print('start', start_time)
+        # print('end', end_time)
+
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
@@ -851,20 +871,14 @@ class TwitchChatDownloader(ChatDownloader):
                 items,
                 pause_on_debug
             )
-        # TODO Remove this and make same as IRC
-        # invalid_message_groups = all(
-        #     key not in messages_groups_to_add for key in ('all', 'messages'))
-        # invalid_message_types = messages_types_to_add and 'text_message' not in messages_types_to_add
-
-        # if invalid_message_groups or invalid_message_types:
-        #     raise InvalidParameter(
-        #         'Custom method types/groups are not supported for Twitch VODs/clips')
 
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
         content_offset_seconds = (start_time or 0) + offset
 
+        message_count = 0
         timeout = Timeout(self.get_param_value(params, 'timeout'))
+        # do not need inactivity timeout (not live)
         cursor = ''
         while True:
             url = '{}&cursor={}&content_offset_seconds={}'.format(
@@ -877,8 +891,8 @@ class TwitchChatDownloader(ChatDownloader):
                     break
                 except (UnexpectedHTML, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
-                except TwitchError as e:
-                    raise TwitchError
+                # except TwitchError as e:
+                #     raise TwitchError
                     # TODO
                     # chat_replay_downloader.errors.TwitchError: InvalidContentOffsetError: Content offset 9m0s is not within supported range: 0 to 6m13s
             error = info.get('error')
@@ -924,7 +938,10 @@ class TwitchChatDownloader(ChatDownloader):
                 if not to_add:
                     continue
 
+                message_count += 1
                 yield data
+
+            log('debug', 'Total number of messages: {}'.format(message_count))
 
             cursor = info.get('_next')
 
@@ -935,7 +952,6 @@ class TwitchChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-
         query = [{
             'operationName': 'VideoMetadata',
             'variables': {
@@ -943,7 +959,6 @@ class TwitchChatDownloader(ChatDownloader):
                 'videoID': vod_id
             }
         }]
-
 
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
@@ -957,10 +972,15 @@ class TwitchChatDownloader(ChatDownloader):
         title = video.get('title')
         duration = video.get('lengthSeconds')
 
+        print('duration', duration)
+
+        channel_id = multi_get(video, 'owner', 'id')
+        self._update_subscriber_badge_info(channel_id)
+
         return Chat(
             self,
             self._get_chat_messages_by_vod_id(
-                vod_id, params),
+                vod_id, params, max_duration=duration),
             title=title,
             duration=duration,
             is_live=False
@@ -971,9 +991,8 @@ class TwitchChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-
         query = {
-            'query': '{ clip(slug: "%s") { video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
+            'query': '{ clip(slug: "%s") { broadcaster { id } video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
         }
         pause_on_debug = self.get_param_value(params, 'pause_on_debug')
 
@@ -993,6 +1012,9 @@ class TwitchChatDownloader(ChatDownloader):
 
         duration = clip.get('durationSeconds')
         title = '{} ({})'.format(clip.get('title'), clip_id)
+
+        channel_id = multi_get(clip, 'broadcaster', 'id')
+        self._update_subscriber_badge_info(channel_id)
 
         return Chat(
             self,
@@ -1016,45 +1038,46 @@ class TwitchChatDownloader(ChatDownloader):
 
     _BADGE_KEYS = ('title', 'description', 'image_url_1x',
                    'image_url_2x', 'image_url_4x', 'click_action', 'click_url')
-    _BADGE_ID_REGEX = r'v1/(.+)/'
+    _BADGE_ID_REGEX = r'v1/([^/]+)/'
 
     @staticmethod
-    def parse_badge_info(name, version, set_subscriber_badge_info=False):
+    def parse_badge_info(name, version, channel_id):
         new_badge = {
             'name': replace_with_underscores(name),
             'version': int_or_none(version, version)
         }
-        if name == 'subscriber':
-            if set_subscriber_badge_info:
-                TwitchChatDownloader._set_subscriber_badge_info(
-                    new_badge, version)
-        else:  # is global emote
-            new_badge_info = multi_get(
-                TwitchChatDownloader._BADGE_INFO, name, 'versions', version) or {}
 
-            if new_badge_info:
-                for key in TwitchChatDownloader._BADGE_KEYS:
-                    new_badge[key] = new_badge_info.get(key)
+        # prioritise custom emotes (e.g. subscriber and bits)
+        channel_id = int(channel_id)
+        new_badge_info = try_get(TwitchChatDownloader._SUBSCRIBER_BADGE_INFO,
+                                 lambda x: x[channel_id][name]['versions'][version]
+                                 ) or try_get(
+                                     TwitchChatDownloader._BADGE_INFO, lambda x: x[name]['versions'][version])
 
-                image_urls = [
-                    (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
-                if image_urls:
-                    new_badge['icons'] = []
 
-                for image_url, size in image_urls:
-                    new_badge['icons'].append(
-                        ChatDownloader.create_image(image_url, size, size))
+        if new_badge_info:
+            for key in TwitchChatDownloader._BADGE_KEYS:
+                new_badge[key] = new_badge_info.get(key)
 
-                if image_urls:
-                    badge_id = re.search(
-                        TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
-                    if badge_id:
-                        new_badge['id'] = badge_id.group(1)
+            image_urls = [
+                (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
+            if image_urls:
+                new_badge['icons'] = []
+
+            for image_url, size in image_urls:
+                new_badge['icons'].append(
+                    ChatDownloader.create_image(image_url, size, size))
+
+            if image_urls:
+                badge_id = re.search(
+                    TwitchChatDownloader._BADGE_ID_REGEX, image_urls[0][0] or '')
+                if badge_id:
+                    new_badge['id'] = badge_id.group(1)
 
         return new_badge
 
     @staticmethod
-    def parse_badges(badges):
+    def parse_irc_badges(badges, channel_id):
         info = []
         if not badges:
             return info
@@ -1068,14 +1091,14 @@ class TwitchChatDownloader(ChatDownloader):
             elif key_length == 2:
                 pass
             else:
-                print('INVALID BADGE FOUND')
-                print(badge)
-                print(badges)
-                input()
+                log('debug', [
+                    'Invalid badge found: {}.'.format(badge),
+                    'Badge information: {}.'.format(badges),
+                ])
                 continue  # TODO debug
 
             info.append(TwitchChatDownloader.parse_badge_info(
-                split[0], split[1]))
+                split[0], split[1], channel_id))
         return info
 
     @staticmethod
@@ -1091,9 +1114,7 @@ class TwitchChatDownloader(ChatDownloader):
         return {
             'message': message.get('body'),
             'colour': message.get('user_color'),
-            'badges': list(map(
-                lambda x: TwitchChatDownloader.parse_badge_info(
-                    x.get('_id'), x.get('version'), True), message.get('user_badges') or [])),
+            'badges': message.get('user_badges') or [],
             'user_notice_params': message.get('user_notice_params')
         }
 
@@ -1103,17 +1124,6 @@ class TwitchChatDownloader(ChatDownloader):
         Decode text according to https://ircv3.net/specs/extensions/message-tags.html
         """
         return text.replace('\:', ';').replace('\s', ' ')
-
-    # print(_MESSAGE_TYPE_REMAPPING)
-    @staticmethod
-    def _set_subscriber_badge_info(badge, months):
-        num_months = int(months)
-        title = 'Subscriber'
-        if num_months:
-            badge['months'] = num_months
-            title = '{}-Month {}'.format(months, title)
-
-        badge['title'] = badge['description'] = title
 
     @staticmethod
     def _set_message_type(info, original_message_type, params=None):
@@ -1148,9 +1158,10 @@ class TwitchChatDownloader(ChatDownloader):
             elif key_length == 2:
                 pass
             else:
-                print('INVALID ITEM FOUND')
-                print(split_info)
-                input()  # TODO debug
+                log('debug', [
+                    'Invalid item found: {}.'.format(item),
+                    'All items: {}.'.format(split_info),
+                ])
                 continue
 
             ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
@@ -1162,16 +1173,22 @@ class TwitchChatDownloader(ChatDownloader):
         if message_match:
             info['message'] = remove_prefixes(message_match, '\u0001ACTION ')
 
-        badge_metadata = info.pop('author_badge_metadata', [])
-        badge_info = info.get('author_badges', [])
+        author_badge_metadata = info.pop('author_badge_metadata', [])
+        author_badges = info.pop('author_badges', [])
+
+
+        info['author_badges'] = TwitchChatDownloader.parse_irc_badges(
+            author_badges, info.get('channel_id'))
+
+        badge_metadata = TwitchChatDownloader.parse_irc_badges(
+            author_badge_metadata, info.get('channel_id'))
 
         subscriber_badge = next(
-            (x for x in badge_info if x.get('name') == 'subscriber'), None)
+            (x for x in info['author_badges'] if x.get('name') == 'subscriber'), None)
         subscriber_badge_metadata = next(
             (x for x in badge_metadata if x.get('name') == 'subscriber'), None)
         if subscriber_badge and subscriber_badge_metadata:
-            TwitchChatDownloader._set_subscriber_badge_info(subscriber_badge,
-                                                            subscriber_badge_metadata['version'])
+            subscriber_badge['months'] = int_or_none(subscriber_badge_metadata['version'], 0)
 
         author_display_name = info.get('author_display_name')
         if author_display_name:
@@ -1180,7 +1197,6 @@ class TwitchChatDownloader(ChatDownloader):
         in_reply_to = ChatDownloader.move_to_dict(info, 'in_reply_to')
 
         ChatDownloader.move_to_dict(in_reply_to, 'author')
-        # ChatDownloader.move_to_dict(info['in_reply_to'], 'author')
         ChatDownloader.move_to_dict(info, 'author')
 
         original_action_type = match.group(2)
@@ -1232,11 +1248,8 @@ class TwitchChatDownloader(ChatDownloader):
         max_attempts = self.get_param_value(params, 'max_attempts')
         retry_timeout = self.get_param_value(params, 'retry_timeout')
 
-
         message_receive_timeout = self.get_param_value(
             params, 'message_receive_timeout')
-
-
 
         buffer_size = self.get_param_value(params, 'buffer_size')
 
@@ -1277,8 +1290,11 @@ class TwitchChatDownloader(ChatDownloader):
 
         attempt_number = 0
 
+        message_count = 0
+
         timeout = Timeout(self.get_param_value(params, 'timeout'))
-        inactivity_timeout = Timeout(self.get_param_value(params, 'inactivity_timeout'), Timeout.INACTIVITY)
+        inactivity_timeout = Timeout(self.get_param_value(
+            params, 'inactivity_timeout'), Timeout.INACTIVITY)
         while True:
             timeout.check_for_timeout()
 
@@ -1324,8 +1340,6 @@ class TwitchChatDownloader(ChatDownloader):
                         # reset the readbuffer
                         readbuffer = ''
 
-
-
                     for match in matches:
 
                         data = self._parse_irc_item(match)
@@ -1353,7 +1367,10 @@ class TwitchChatDownloader(ChatDownloader):
                             continue
 
                         inactivity_timeout.reset()
+                        message_count += 1
                         yield data
+
+                    log('debug', 'Total number of messages: {}'.format(message_count))
 
                 elif full_readbuffer:
                     # No matches, but data has been read successfully.
@@ -1361,8 +1378,8 @@ class TwitchChatDownloader(ChatDownloader):
                     # This is used to periodically reset the readbuffer,
                     # to avoid a massive buffer from forming.
 
-                    log('debug','No matches found in "\n{}\n"'.format(
-                            readbuffer.strip())) # never pause
+                    log('debug', 'No matches found in "\n{}\n"'.format(
+                        readbuffer.strip()))  # never pause
                     readbuffer = ''
 
                 current_time = time.time()
@@ -1401,7 +1418,8 @@ class TwitchChatDownloader(ChatDownloader):
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
         title = multi_get(stream_info, 'lastBroadcast',
                           'title') if is_live else None
-
+        channel_id = multi_get(stream_info, 'channel', 'id')
+        self._update_subscriber_badge_info(channel_id)
 
         return Chat(
             self,
