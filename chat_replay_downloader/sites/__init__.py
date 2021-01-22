@@ -6,7 +6,7 @@ from .facebook import FacebookChatDownloader
 
 from .common import ChatDownloader
 
-def GET_ALL_SITES():
+def get_all_sites():
     return [
         value
         for value in globals().values()

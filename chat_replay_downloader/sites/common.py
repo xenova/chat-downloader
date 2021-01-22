@@ -72,14 +72,15 @@ class Timeout():
 
 
 class Chat():
-    def __init__(self, site, chat, **kwargs):
-        self.site = site
+    def __init__(self, chat, **kwargs):
         self.chat = chat
 
-        self.title = kwargs.get('title')
-        self.duration = kwargs.get('duration')
-        self.is_live = kwargs.get('is_live')
-        self.start_time = kwargs.get('start_time')
+        for key in ('title', 'duration', 'is_live', 'start_time'):
+            setattr(self, key, kwargs.get(key))
+        # self.title = kwargs.get('title')
+        # self.duration = kwargs.get('duration')
+        # self.is_live = kwargs.get('is_live')
+        # self.start_time = kwargs.get('start_time')
 
         # TODO
         # author/user/uploader/creator
@@ -251,12 +252,10 @@ class ChatDownloader:
         'output': None,
 
         'logging': 'info',
-        'verbose': False,
-
         'pause_on_debug': False,
+        'testing': False, #sets logging->debug, pause_on_debug->True
 
-
-        'safe_print': False,
+        # 'safe_print': False,
 
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,
@@ -272,22 +271,21 @@ class ChatDownloader:
         'message_types': None,  # ['text_message'], # messages
 
 
-        # YouTube only
+
+        # Formatting
+        'format': None,  # Use default
+        'format_file': None,
+
+
+        # Site specific parameters:
+        # [YouTube]
         'chat_type': 'live',  # live or top
 
 
-        # Twitch only
-
-        # allows for keyboard interrupts to occur
-        # 0.25, # try again after receiving no data after a certain time
-        'message_receive_timeout': 0.1,
+        # [Twitch]
+        'message_receive_timeout': 0.1, # allows for keyboard interrupts to occur
         'buffer_size': 4096,  # default buffer size for socket,
 
-
-
-        # formatting
-        'format': None,  # 'default',
-        'format_file': None
     }
 
     _DEFAULT_FORMAT = 'default'
@@ -330,12 +328,9 @@ class ChatDownloader:
                     replace_char_with_underscores, '_')
             info[remap_key] = remap_input
 
-        # else:
-        #     pass # do nothing
 
     def __init__(self, updated_init_params=None):
         """Initialise a new session for making requests."""
-        # self._name = None
         self._INIT_PARAMS.update(updated_init_params or {})
 
         self.session = requests.Session()
@@ -355,9 +350,6 @@ class ChatDownloader:
 
     def update_session_headers(self, new_headers):
         self.session.headers.update(new_headers)
-
-    def reset_connection(self, keep_cookies):
-        pass  # TODO
 
     def clear_cookies(self):
         self.session.cookies.clear()
@@ -379,14 +371,6 @@ class ChatDownloader:
 
     def _session_post(self, url, **kwargs):
         """Make a request using the current session."""
-        #print('_session_post', url, data, headers)
-
-        # update_dict_without_overwrite
-        # print('BEFORE',kwargs)
-        # #new_headers = {**self.session.headers, **kwargs.get('headers',{})}
-        # kwargs['headers'] = {**self.session.headers, **kwargs.get('headers',{})}
-        # print('AFTER',kwargs)
-        # , data=data, headers=new_headers, params=1
         return self.session.post(url, **kwargs)
 
     def _session_get(self, url, **kwargs):
@@ -406,24 +390,9 @@ class ChatDownloader:
             raise UnexpectedHTML(webpage_title, s.text)
 
     _VALID_URL = None
-    # _CALLBACK = None
 
-    #_LIST_OF_MESSAGES = []
-    # def get_chat_messages(self, params=None):
-    #     pass
-
-    def get_chat(self, params=None):
-        # pass
+    def get_chat(self, params):
         raise NotImplementedError
-
-        # if params is None:
-        #     params = {}
-
-        # update_dict_without_overwrite(params, self._DEFAULT_PARAMS)
-        # TODO must override
-        # m = self.get_chat_messages(params)
-
-        # return Chat(m)
 
     def get_tests(self):
         t = getattr(self, '_TEST', None)
@@ -561,52 +530,3 @@ class ChatDownloader:
                 value = value[0]
             mapped_keys.add(value)
         return mapped_keys
-    # def _format_item(self, result, item):
-    #     # TODO fix this method
-
-    #     # split by | not enclosed in []
-    #     split = re.split(
-    #         self._MESSAGE_FORMATTING_INDEXES_REGEX, result.group(2))
-    #     for s in split:
-
-    #         # check if optional formatting is there
-    #         parse = re.search(self._MESSAGE_FORMATTING_FORMATTING_REGEX, s)
-    #         formatting = None
-    #         if(parse):
-    #             index = parse.group(1)
-    #             formatting = parse.group(2)
-    #         else:
-    #             index = s
-
-    #         if(index in item):
-    #             value = item[index]
-    #             if(formatting):
-    #                 if(index == 'timestamp'):
-    #                     value = microseconds_to_timestamp(
-    #                         item[index], format=formatting)
-    #                 # possibility for more formatting options
-
-    #                 # return value if index matches, otherwise keep searching
-    #             return '{}{}{}'.format(result.group(1), value, result.group(3))
-
-    #     return ''  # no match, return empty
-
-    # def message_to_string(self, item, format_string='{[{time_text|timestamp[%Y-%m-%d %H:%M:%S]}]}{ ({badges})}{ *{amount}*}{ {author_name}}:{ {message}}'):
-    #     """
-    #     Format item for printing to standard output. The default format_string will print out as:
-    #     [time] (badges) *amount* author: message\n
-    #     where (badges) and *amount* are optional.
-    #     """
-
-    #     return re.sub(self._MESSAGE_FORMATTING_GROUPS_REGEX, lambda result: self._format_item(result, item), format_string)
-    #     # return '[{}] {}{}{}: {}'.format(
-    #     # 	item['time_text'] if 'time_text' in item else (
-    #     # 		self.__microseconds_to_timestamp(item['timestamp']) if 'timestamp' in item else ''),
-    #     # 	'({}) '.format(item['badges']) if 'badges' in item else '',
-    #     # 	'*{}* '.format(item['amount']) if 'amount' in item else '',
-    #     # 	item['author'],
-    #     # 	item['message'] or ''
-    #     # )
-
-    # def print_item(self, item):
-    #     print(self.message_to_string(item), flush=True)

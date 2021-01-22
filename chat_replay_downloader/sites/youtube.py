@@ -183,7 +183,7 @@ class YouTubeChatDownloader(ChatDownloader):
             }
         },
         {
-            # 333:00:00 current test
+            # 734:46:24 current test
             'name': 'Get chat messages from an unplayable stream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=V2Afni3S-ok',
@@ -931,6 +931,8 @@ class YouTubeChatDownloader(ChatDownloader):
         stream_start_time = initial_info.get('start_time')
         is_live = initial_info.get('is_live')
 
+        duration = initial_info.get('duration')
+
 
         start_time = ensure_seconds(
             self.get_param_value(params, 'start_time'))
@@ -986,6 +988,7 @@ class YouTubeChatDownloader(ChatDownloader):
         inactivity_timeout = Timeout(self.get_param_value(
             params, 'inactivity_timeout'), Timeout.INACTIVITY)
 
+        message_count = 0
         first_time = True
         while True:
             info = None
@@ -1209,8 +1212,9 @@ class YouTubeChatDownloader(ChatDownloader):
                     # valid timing, add
 
                     inactivity_timeout.reset()
+                    message_count += 1
                     yield data
-
+                log('debug', 'Total number of messages: {}'.format(message_count))
             elif not is_live:
                 # no more actions to process in a chat replay
                 break
@@ -1282,7 +1286,6 @@ class YouTubeChatDownloader(ChatDownloader):
         is_live = initial_info.get('is_live')
 
         return Chat(
-            self,
             self._get_chat_messages(initial_info, params),
             title=title,
             duration=duration,

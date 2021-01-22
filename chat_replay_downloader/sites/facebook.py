@@ -775,7 +775,7 @@ class FacebookChatDownloader(ChatDownloader):
 
         is_live = initial_info.get('is_live')
 
-        # TODO if start or end time specified, use chat replay...
+        # if start or end time specified, use chat replay...
         # The tool works for both active and finished live streams.
         # if start/end time are specified, vods will be prioritised
         # if is live stream and no start/end time specified
@@ -788,7 +788,6 @@ class FacebookChatDownloader(ChatDownloader):
                 video_id, max_duration, params)
 
         return Chat(
-            self,
             generator,
             title=initial_info.get('title'),
             duration=initial_info.get('duration'),

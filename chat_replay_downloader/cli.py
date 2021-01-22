@@ -12,6 +12,7 @@ from requests.exceptions import RequestException
 
 from .chat_replay_downloader import *
 
+
 from .sites.common import ChatDownloader
 from .output.continuous_write import ContinuousWriter
 
@@ -25,23 +26,14 @@ from .utils import (
 
 from .formatting.format import ItemFormatter
 
-# import logging
-
-
-# logging.NOTSET
-
-#from .chat_replay_downloader import char
-
-# import safeprint
 
 def main():
-    """Console script for chat_replay_downloader."""
 
     default_init_params = ChatDownloader._DEFAULT_INIT_PARAMS
     default_params = ChatDownloader._DEFAULT_PARAMS
 
     parser = argparse.ArgumentParser(
-        description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
+        description='A simple tool used to retrieve chat messages from streams, clips and past broadcasts. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
 
     # PROGRAM PARAMS
@@ -58,28 +50,22 @@ def main():
     parser.add_argument('--pause_on_debug', default=default_params['pause_on_debug'],
                         help='whether to pause on certain debug messages.\n(default: %(default)s)')
 
-
-
     debug_group = parser.add_mutually_exclusive_group()
 
     debug_group.add_argument('--logging', choices=['none', 'debug', 'info', 'warning', 'error', 'critical'], default=default_params['logging'],
                              help='level of logging to show\n(default: %(default)s)')
 
-    debug_group.add_argument('--verbose', '-v', action='store_true', default=default_params['verbose'],
+    debug_group.add_argument('--testing', action='store_true', default=default_params['testing'],
                              help='print various debugging information\n(default: %(default)s)')
 
-
-
-    parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
-                        help='level of logging to show\n(default: %(default)s)')
+    # parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
+    #                     help='level of logging to show\n(default: %(default)s)')
 
     parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
                         help='maximum number of attempts to retrieve chat messages. \n(default: %(default)s)')
 
-
     parser.add_argument('--retry_timeout', type=float, default=default_params['retry_timeout'],
                         help='number of seconds to wait before retrying. Setting this to a negative number will wait for user input.\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
-
 
     parser.add_argument('--max_messages', type=int, default=default_params['max_messages'],
                         help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
@@ -99,7 +85,7 @@ def main():
     # parser.add_argument('--force_encoding', default=default_params['force_encoding'],
     #                     help='force certain encoding\n(default: %(default)s)')
 
-    # formatting:
+    # Formatting
     parser.add_argument('--format', default=default_params['format'],
                         help='specify how messages should be formatted for printing\n(default: %(default)s = use site default)')
     parser.add_argument('--format_file', default=default_params['format_file'],
@@ -109,18 +95,10 @@ def main():
     parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
                         help='name of cookies file\n(default: %(default)s)')
 
-    # TODO
-    # add --calculate_start_time as a tag?
-
-    # Additional params [Site Specific]
-
-# choices=['messages', 'superchat', 'all']
-# TODO message groups and message types?
     def splitter(s):
         return [item.strip() for item in re.split('[\s,;]+', s)]
-    # joiner = lambda s: str(s)[1:-1] if isinstance(s, (list,tuple)) else s
-    #', '.join(s) if s else s
 
+    # Specify message types/groups
     group = parser.add_mutually_exclusive_group()
 
     group.add_argument('--message_groups', type=splitter, default=default_params['message_groups'],
@@ -148,15 +126,6 @@ def main():
 
     args = parser.parse_args()
 
-    # print(args.message_type)
-    # exit()
-    # TODO temp:
-    #args.logging = 'debug'
-
-    # def print_error(message):
-    #     print(message)
-    #     if(args.logging in ('debug', '')):
-
     program_params = {}  # default_params.copy()
     init_params = {}  # default_init_params.copy()
 
@@ -170,21 +139,7 @@ def main():
         else:  # neither
             pass
 
-# def run_main(init_params, program_params):
-
-    # if program_params.get('logging') == 'none':
-        # f = open(os.devnull, 'w', encoding='utf-8')
-        # sys.stdout = f
-        # sys.stderr = f
-    # else:
-    #     # set encoding of standard output and standard error
-    #     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-    #     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
-
     downloader = ChatReplayDownloader(init_params)
-
-
-    video_is_live = False
 
     # TODO make command line args for these:
     other_params = {
@@ -197,31 +152,17 @@ def main():
     }
 
     # TODO DEBUGGING:
-    # Temporary
-    program_params['verbose'] = True
-    program_params['pause_on_debug'] = True
-    program_params['message_groups'] = 'all'
-    # program_params['timeout'] = 180
-    # program_params['inactivity_timeout'] = 20
-    # program_params['retry_timeout'] = 5
-    # program_params['logging'] = 'debug'  # 'debug', 'info'
+    program_params['testing'] = True
 
-
-
-    if program_params['verbose']:
+    if program_params['testing']:
         program_params['logging'] = 'debug'
+        program_params['pause_on_debug'] = True
+        program_params['message_groups'] = 'all'
+        # program_params['timeout'] = 180
 
     if program_params['logging'] != 'none':
         set_log_level(program_params['logging'])
-    else:
-        pass
-        # set_log_level('notset')
-    #     f = open(os.devnull, 'w', encoding='utf-8')
-    #     sys.stdout = f
-    #     sys.stderr = f
-    # else:
-    #     set_log_level(program_params['logging'])
-    # program_params['retry_timeout'] = -1
+
     output_file = None
     try:
         # TODO print program version
@@ -229,17 +170,12 @@ def main():
 
         chat = downloader.get_chat(program_params)
 
-        video_is_live = chat.is_live
-
-        # print(messages)
-        # print(messages.duration)
-        # print(messages.chat)
+        log('debug', 'Chat information: {}'.format(chat.__dict__))
 
         if isinstance(program_params['max_messages'], int):
             chat.chat = itertools.islice(
                 chat.chat, program_params['max_messages'])
 
-        # log the title
         log('info', 'Retrieving chat for "{}".'.format(chat.title))
 
         format_file = program_params.get('format_file')
@@ -255,9 +191,9 @@ def main():
                 formatted = formatter.format(item, format_name=format_name)
                 safe_print(formatted)
 
-
         if program_params['output']:
-            output_file = ContinuousWriter(program_params['output'], **other_params)
+            output_file = ContinuousWriter(
+                program_params['output'], **other_params)
 
             def write_to_file(item):
                 print_formatted(item)
@@ -270,37 +206,10 @@ def main():
         for message in chat:
             callback(message)
 
+        log('info', 'Finished retrieving chat{}.'.format(
+            '' if chat.is_live else ' replay'))
 
-        finish_text = 'Finished retrieving chat{}.'.format('' if video_is_live else ' replay')
-
-        log('info', finish_text)
-
-
-
-
-            # log(
-            #     'debug',
-            #     'Total number of messages: {}'.format(message_count),
-            #     program_params['logging'],
-            #     matching=('debug', 'errors')
-            # )
-
-            # percentage = round(100*message.get('time_in_seconds')/chat.duration, 2)
-            # print(percentage, end='\r')
-
-        # for i in messages:
-        #     print(i, flush=True)
-        #     time.sleep(1)
-        # messages = downloader.get_chat_messages(program_params)
-
-        # log(
-        #     'debug',
-        #     'Finished retrieving chat replay.',
-        #     program_params['logging'],
-        #     matching=('debug', 'errors')
-        # )
-
-    except (LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL, NoContinuation) as e:
+    except (URLNotProvided, SiteNotSupported, LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL, NoContinuation) as e:
         log('error', e)
         # log('error', e, logging_level)  # always show
         # '{} ({})'.format(, e.__class__.__name__)
@@ -312,17 +221,8 @@ def main():
     except TimeoutException as e:
         log('info', e)
 
-    except PermissionError as e:
-        print('PermissionError', e)
-        raise e
-    except KeyboardInterrupt:
-        print('keyboard interrupt')
-
-    except Exception as e:
-        print('unknown exception', type(e))
-        print(e)
-        traceback.print_exc()
-        raise e
+    except KeyboardInterrupt as e:
+        log('error', 'Keyboard Interrupt')
 
     finally:
         if program_params['output'] and output_file:

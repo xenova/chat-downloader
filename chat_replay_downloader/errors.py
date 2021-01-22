@@ -62,8 +62,16 @@ class NoChatReplay(Exception):
     pass
 
 
+class URLNotProvided(Exception):
+    """Raised when no url is provided."""
+    pass
+
 class InvalidURL(Exception):
-    """Raised when the url given is invalid."""
+    """Raised when the url is invalid."""
+    pass
+
+class SiteNotSupported(Exception):
+    """Raised when the url is valid, but the site is not supported."""
     pass
 
 
