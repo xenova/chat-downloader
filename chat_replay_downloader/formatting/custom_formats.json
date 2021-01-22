@@ -57,6 +57,20 @@
         },
         {
             "matching": [
+                "subscription_gift",
+                "resubscription"
+            ],
+            "template": "{time_text|timestamp}{system_message}{message}",
+            "inherit": "default",
+            "keys": {
+                "system_message": "{} ",
+                "message": "{}"
+            }
+        },
+
+
+        {
+            "matching": [
                 "room_state"
             ],
             "template": "Room state | {channel_id}{emote_only}{follower_only}{minutes_to_follow_before_chatting}{slow_mode}{seconds_to_wait}{subscriber_only}{r9k_mode}{rituals_enabled}",
