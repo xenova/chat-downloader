@@ -5,7 +5,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_replay_downloader.sites import GET_ALL_SITES
+from chat_replay_downloader.sites import get_all_sites
 from chat_replay_downloader.sites.common import ChatDownloader
 
 from chat_replay_downloader import ChatReplayDownloader
@@ -67,7 +67,7 @@ class TestChatReplayDownloader(unittest.TestCase):
 
     def test_all_sites(self):
 
-        all_sites = GET_ALL_SITES()
+        all_sites = get_all_sites()
 
         for site in all_sites:
             site_object = site()

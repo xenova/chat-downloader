@@ -41,7 +41,7 @@ ytInitialData = get_initial_info(live_url)
 
 sections = ytInitialData['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents']
 
-cmd_template = 'python -m chat_replay_downloader https://www.youtube.com/watch?v={}'
+cmd_template = 'python -m chat_replay_downloader https://www.youtube.com/watch?v={} --timeout 180'
 # --max_messages 100
 for s in sections:
     section_info = s['itemSectionRenderer']['contents'][0]['shelfRenderer']
