@@ -843,14 +843,24 @@ class TwitchChatDownloader(ChatDownloader):
     ]
 
     # offset and max_duration are used by clips
-    def _get_chat_messages_by_vod_id(self, vod_id, params, offset=0, max_duration=None):
+    def _get_chat_messages_by_vod_id(self, vod_id, params, max_duration, offset=None):
 
         # twitch does not provide messages before the stream starts,
         # so we default to a start time of 0
         start_time = ensure_seconds(
             self.get_param_value(params, 'start_time'), 0)
-        end_time = ensure_seconds(
-            self.get_param_value(params, 'end_time'), max_duration)
+
+        e_time = self.get_param_value(params, 'end_time')
+        if offset is None: # is a vod
+            offset = 0
+            end_time = ensure_seconds(e_time)
+            content_offset_seconds = min(start_time, max_duration)
+
+        else: # is a clip
+            # do not allow for end_time to be None
+            end_time = ensure_seconds(e_time, max_duration)
+            content_offset_seconds = (start_time or 0) + offset
+
 
         # print('start', start_time)
         # print('end', end_time)
@@ -874,7 +884,8 @@ class TwitchChatDownloader(ChatDownloader):
 
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
-        content_offset_seconds = (start_time or 0) + offset
+
+
 
         message_count = 0
         timeout = Timeout(self.get_param_value(params, 'timeout'))
@@ -891,16 +902,11 @@ class TwitchChatDownloader(ChatDownloader):
                     break
                 except (UnexpectedHTML, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
-                # except TwitchError as e:
-                #     raise TwitchError
-                    # TODO
-                    # chat_replay_downloader.errors.TwitchError: InvalidContentOffsetError: Content offset 9m0s is not within supported range: 0 to 6m13s
-            error = info.get('error')
 
-            if error:
-                print(info)
-                # TODO make parse error and raise more general errors
-                raise TwitchError(info.get('message'))
+            error_message = multi_get(info, 'error', 'message')
+
+            if error_message:
+                raise TwitchError(error_message)
 
             comments = info.get('comments') or []
             for comment in comments:
@@ -978,9 +984,8 @@ class TwitchChatDownloader(ChatDownloader):
         self._update_subscriber_badge_info(channel_id)
 
         return Chat(
-            self,
             self._get_chat_messages_by_vod_id(
-                vod_id, params, max_duration=duration),
+                vod_id, params, duration),
             title=title,
             duration=duration,
             is_live=False
@@ -1017,9 +1022,8 @@ class TwitchChatDownloader(ChatDownloader):
         self._update_subscriber_badge_info(channel_id)
 
         return Chat(
-            self,
             self._get_chat_messages_by_vod_id(
-                vod_id, params, offset, duration),
+                vod_id, params, duration, offset),
             title=title,
             duration=duration,
             is_live=False
@@ -1422,7 +1426,6 @@ class TwitchChatDownloader(ChatDownloader):
         self._update_subscriber_badge_info(channel_id)
 
         return Chat(
-            self,
             self._get_chat_messages_by_stream_id(
                 stream_id, params),
             title=title,
