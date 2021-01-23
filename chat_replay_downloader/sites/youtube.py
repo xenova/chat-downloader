@@ -183,7 +183,7 @@ class YouTubeChatDownloader(ChatDownloader):
             }
         },
         {
-            # 734:46:24 current test
+            # 865:55:42 current test
             'name': 'Get chat messages from an unplayable stream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=V2Afni3S-ok',
@@ -255,22 +255,14 @@ class YouTubeChatDownloader(ChatDownloader):
         }
     ]
 
-    # 'messages_condition': lambda messages: messages == [],
-
     _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
     _YT_INITIAL_PLAYER_RESPONSE_RE = r'ytInitialPlayerResponse\s*=\s*({.+?})\s*;'
 
     _YT_HOME = 'https://www.youtube.com'
-    # __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
     _YOUTUBE_API_BASE_TEMPLATE = '{}/{}/{}?continuation={}&pbj=1&hidden=false'
     _YOUTUBE_API_PARAMETERS_TEMPLATE = '&playerOffsetMs={}'
 
-    # CLI argument allows users to specify a list of messages groups/types they want
-    # TODO let each site specify default message groups
     _MESSAGE_GROUPS = {
-        # 'group_name':[
-        #     'message_types'
-        # ]
         'messages': [
             'text_message'  # normal message
         ],
@@ -366,10 +358,6 @@ class YouTubeChatDownloader(ChatDownloader):
 
         return message_text
 
-    # @staticmethod
-    # def strip_live_chat_renderer(index):
-
-    #     return index
 
     @ staticmethod
     def _parse_item(item, info=None):
@@ -379,42 +367,19 @@ class YouTubeChatDownloader(ChatDownloader):
         item_index = try_get_first_key(item)
         item_info = item.get(item_index)
 
-        # if item_index not in YouTubeChatDownloader._KNOWN_MESSAGE_TYPES:
-        #     print('Unknown message:',item_index)
-        #     print(item)
-        #     input()
-        # TODO maybe move check for types here?
-        # item indexes
 
         if not item_info:
-            return info  # invalid # TODO log this
+            return info
 
-        # print(item_info.keys())
-        # all messages should have the following
         for key in item_info:
             ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
                                  YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
-
-            # original_info = item_info[key]
-            # remap = YouTubeChatDownloader._REMAPPING.get(key)
-            # if(remap):
-            #     index, mapping_function = remap
-            #     info[index] = YouTubeChatDownloader._REMAP_FUNCTIONS[mapping_function](
-            #         original_info)
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
             if colour_key in item_info:  # if item has colour information
                 info[camel_case_split(colour_key.replace('Color', 'Colour'))] = get_colours(
                     item_info[colour_key]).get('hex')
-        # OLD: dict of colours
-        # for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
-        #     if(colour_key in item_info):  # if item has colour information
-        #         if('colours' not in info):  # create colour dict if not set
-        #             info['colours'] = {}
-
-        #         info['colours'][camel_case_split(
-        #             remove_suffixes(colour_key, 'Color'))] = get_colours(item_info.get(colour_key)).get('hex')
 
         item_endpoint = item_info.get('showItemEndpoint')
         if item_endpoint:  # has additional information
@@ -423,10 +388,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
             if renderer:
                 info.update(YouTubeChatDownloader._parse_item(renderer))
-                # return info
 
-            # update without overwriting ? TODO decide which to use
-            # update_dict_without_overwrite
 
         # amount is money with currency
         amount = info.get('amount')

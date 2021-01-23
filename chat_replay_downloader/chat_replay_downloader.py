@@ -8,8 +8,7 @@ from .errors import *
 from .sites import get_all_sites
 
 from .utils import (
-    log,
-    update_dict_without_overwrite
+    log
 )
 
 

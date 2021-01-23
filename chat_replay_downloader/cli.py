@@ -209,7 +209,18 @@ def main():
         log('info', 'Finished retrieving chat{}.'.format(
             '' if chat.is_live else ' replay'))
 
-    except (URLNotProvided, SiteNotSupported, LoginRequired, VideoUnavailable, NoChatReplay, VideoUnplayable, InvalidParameter, InvalidURL, NoContinuation) as e:
+    except (
+        URLNotProvided,
+        SiteNotSupported,
+        LoginRequired,
+        VideoUnavailable,
+        NoChatReplay,
+        VideoUnplayable,
+        InvalidParameter,
+        InvalidURL,
+        NoContinuation,
+        RetriesExceeded
+        ) as e:
         log('error', e)
         # log('error', e, logging_level)  # always show
         # '{} ({})'.format(, e.__class__.__name__)
