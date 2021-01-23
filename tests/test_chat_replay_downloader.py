@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from chat_replay_downloader.sites import get_all_sites
-from chat_replay_downloader.sites.common import ChatDownloader
+from chat_replay_downloader.sites.common import BaseChatDownloader
 
 from chat_replay_downloader import ChatReplayDownloader
 
@@ -73,7 +73,7 @@ class TestChatReplayDownloader(unittest.TestCase):
             site_object = site()
             print('Running tests for site "{}":'.format(site_object))
 
-            tests = ChatDownloader.get_tests(site)
+            tests = BaseChatDownloader.get_tests(site)
 
             test_number = 1
             for test in tests:

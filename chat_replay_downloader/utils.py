@@ -224,6 +224,8 @@ def pause(text='Press Enter to continue...'):
 def set_log_level(level):
     logger.setLevel(level.upper())
 
+def get_logger():
+    return logger
 
 def log(level, items, to_pause=False):
     l = getattr(logger, level, None)

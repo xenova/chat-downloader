@@ -6,7 +6,7 @@ import base64
 
 from .common import (
     Chat,
-    ChatDownloader,
+    BaseChatDownloader,
     Timeout
 )
 
@@ -101,7 +101,7 @@ class TwitchChatIRC():
         # return messages
 
 
-class TwitchChatDownloader(ChatDownloader):
+class TwitchChatDownloader(BaseChatDownloader):
     _BADGE_INFO = {}
     _BADGE_INFO_URL = 'https://badges.twitch.tv/v1/badges/global/display'
     # TODO add local version of badge list?
@@ -293,8 +293,7 @@ class TwitchChatDownloader(ChatDownloader):
         # 'msg-param-charity':'charity',
         # 'msg-param-bits-amount':'bits_amount',
         # 'msg-param-total':'total',
-        # 'msg-param-streak-tenure-months':'streak_tenure_months',
-        # 'msg-param-sub-benefit-end-month':'sub_benefit_end_month',
+        # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase# 'msg-param-sub-benefit-end-month':'sub_benefit_end_month',
         # 'msg-param-userID':'user_id',
         #
         # 'msg-param-cumulative-tenure-months':'cumulative_tenure_months',
@@ -319,7 +318,7 @@ class TwitchChatDownloader(ChatDownloader):
         'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type'
     }
 
-    _KNOWN_COMMENT_KEYS.update(ChatDownloader.get_mapped_keys({
+    _KNOWN_COMMENT_KEYS.update(BaseChatDownloader.get_mapped_keys({
         **_COMMENT_REMAPPING, **_MESSAGE_PARAM_REMAPPING
     }))
     # print('_KNOWN_COMMENT_KEYS',_KNOWN_COMMENT_KEYS)
@@ -432,7 +431,7 @@ class TwitchChatDownloader(ChatDownloader):
         'in_reply_to',
         'message'
     }
-    _KNOWN_IRC_KEYS.update(ChatDownloader.get_mapped_keys(_IRC_REMAPPING))
+    _KNOWN_IRC_KEYS.update(BaseChatDownloader.get_mapped_keys(_IRC_REMAPPING))
 
     _ACTION_TYPE_REMAPPING = {
         # tags
@@ -660,15 +659,15 @@ class TwitchChatDownloader(ChatDownloader):
     def parse_author_images(original_url):
         smaller_icon = original_url.replace('300x300', '70x70')
         return [
-            ChatDownloader.create_image(original_url, 300, 300),
-            ChatDownloader.create_image(smaller_icon, 70, 70),
+            BaseChatDownloader.create_image(original_url, 300, 300),
+            BaseChatDownloader.create_image(smaller_icon, 70, 70),
         ]
 
     @ staticmethod
     def _parse_item(item, offset):
         info = {}
         for key in item:
-            ChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
+            BaseChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
 
         if 'time_in_seconds' in info:
@@ -690,7 +689,7 @@ class TwitchChatDownloader(ChatDownloader):
         user_notice_params = message_info.pop('user_notice_params', {}) or {}
 
         for key in user_notice_params:
-            ChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
+            BaseChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, key, user_notice_params[key], True)
 
         original_message_type = info.get('message_type')
@@ -1070,7 +1069,7 @@ class TwitchChatDownloader(ChatDownloader):
 
             for image_url, size in image_urls:
                 new_badge['icons'].append(
-                    ChatDownloader.create_image(image_url, size, size))
+                    BaseChatDownloader.create_image(image_url, size, size))
 
             if image_urls:
                 badge_id = re.search(
@@ -1109,7 +1108,7 @@ class TwitchChatDownloader(ChatDownloader):
     def parse_commenter(commenter):
         info = {}
         for key in commenter or []:
-            ChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
+            BaseChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
         return info
 
@@ -1168,7 +1167,7 @@ class TwitchChatDownloader(ChatDownloader):
                 ])
                 continue
 
-            ChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
+            BaseChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
                                  TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1],
                                  keep_unknown_keys=True,
                                  replace_char_with_underscores='-')
@@ -1198,10 +1197,10 @@ class TwitchChatDownloader(ChatDownloader):
         if author_display_name:
             info['author_name'] = author_display_name.lower()
 
-        in_reply_to = ChatDownloader.move_to_dict(info, 'in_reply_to')
+        in_reply_to = BaseChatDownloader.move_to_dict(info, 'in_reply_to')
 
-        ChatDownloader.move_to_dict(in_reply_to, 'author')
-        ChatDownloader.move_to_dict(info, 'author')
+        BaseChatDownloader.move_to_dict(in_reply_to, 'author')
+        BaseChatDownloader.move_to_dict(info, 'author')
 
         original_action_type = match.group(2)
 

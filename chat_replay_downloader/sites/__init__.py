@@ -4,12 +4,13 @@ from .youtube import YouTubeChatDownloader
 from .twitch import TwitchChatDownloader
 from .facebook import FacebookChatDownloader
 
-from .common import ChatDownloader
+from .common import BaseChatDownloader
+
 
 def get_all_sites():
     return [
         value
         for value in globals().values()
-        if isinstance(value, type) and issubclass(value,ChatDownloader)
-        and value != ChatDownloader # not the base class
+        if isinstance(value, type) and issubclass(value, BaseChatDownloader)
+        and value != BaseChatDownloader  # not the base class
     ]

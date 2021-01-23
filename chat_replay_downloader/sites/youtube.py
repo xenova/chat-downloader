@@ -1,6 +1,6 @@
 
 from .common import (
-    ChatDownloader, Chat, Timeout
+    BaseChatDownloader, Chat, Timeout
 )
 
 from requests.exceptions import RequestException
@@ -43,7 +43,7 @@ from ..utils import (
 )
 
 
-class YouTubeChatDownloader(ChatDownloader):
+class YouTubeChatDownloader(BaseChatDownloader):
     def __init__(self, updated_init_params=None):
         super().__init__(updated_init_params or {})
 
@@ -183,7 +183,7 @@ class YouTubeChatDownloader(ChatDownloader):
             }
         },
         {
-            # 865:55:42 current test
+            # 874:24:05 current test
             'name': 'Get chat messages from an unplayable stream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=V2Afni3S-ok',
@@ -372,7 +372,7 @@ class YouTubeChatDownloader(ChatDownloader):
             return info
 
         for key in item_info:
-            ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
+            BaseChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
                                  YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
 
         # check for colour information
@@ -398,7 +398,7 @@ class YouTubeChatDownloader(ChatDownloader):
             # currency type
             # amount (float)
 
-        ChatDownloader.move_to_dict(info, 'author')
+        BaseChatDownloader.move_to_dict(info, 'author')
 
         # TODO determine if youtube glitch has occurred
         # round(time_in_seconds/timestamp) == 1
@@ -457,9 +457,9 @@ class YouTubeChatDownloader(ChatDownloader):
                         if matches:
                             size = int(matches.group(1))
                             to_add['icons'].append(
-                                ChatDownloader.create_image(url, size, size))
+                                BaseChatDownloader.create_image(url, size, size))
                 if url:
-                    to_add['icons'].append(ChatDownloader.create_image(
+                    to_add['icons'].append(BaseChatDownloader.create_image(
                         url[0:url.index('=')], image_id='source'))
 
             badges.append(to_add)
@@ -482,7 +482,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         thumbnails = item.get('thumbnails') or []
 
-        return list(map(lambda x: ChatDownloader.create_image(
+        return list(map(lambda x: BaseChatDownloader.create_image(
             x.get('url'),
             x.get('width'),
             x.get('height'),

@@ -91,7 +91,7 @@ class Chat():
             yield item
 
 
-class ChatDownloader:
+class BaseChatDownloader:
     """
     Subclasses of this should redefine the get_chat()
     method and define a _VALID_URL regexp. The
@@ -310,7 +310,7 @@ class ChatDownloader:
 
     @staticmethod
     def get_param_value(params, key):
-        return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
+        return params.get(key, BaseChatDownloader._DEFAULT_PARAMS.get(key))
 
     @staticmethod
     def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):

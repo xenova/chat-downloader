@@ -13,13 +13,12 @@ from requests.exceptions import RequestException
 from .chat_replay_downloader import *
 
 
-from .sites.common import ChatDownloader
+from .sites.common import BaseChatDownloader
 from .output.continuous_write import ContinuousWriter
 
 from .utils import (
-    update_dict_without_overwrite,
-    multi_get,
     log,
+    get_logger,
     safe_print,
     set_log_level
 )
@@ -29,8 +28,8 @@ from .formatting.format import ItemFormatter
 
 def main():
 
-    default_init_params = ChatDownloader._DEFAULT_INIT_PARAMS
-    default_params = ChatDownloader._DEFAULT_PARAMS
+    default_init_params = BaseChatDownloader._DEFAULT_INIT_PARAMS
+    default_params = BaseChatDownloader._DEFAULT_PARAMS
 
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve chat messages from streams, clips and past broadcasts. No authentication needed!',
@@ -153,6 +152,8 @@ def main():
 
     # TODO DEBUGGING:
     program_params['testing'] = True
+    # program_params['logging'] = 'none'
+
 
     if program_params['testing']:
         program_params['logging'] = 'debug'
@@ -160,7 +161,9 @@ def main():
         program_params['message_groups'] = 'all'
         # program_params['timeout'] = 180
 
-    if program_params['logging'] != 'none':
+    if program_params['logging'] == 'none':
+        get_logger().disabled = True
+    else:
         set_log_level(program_params['logging'])
 
     output_file = None
