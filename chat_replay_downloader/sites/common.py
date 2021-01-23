@@ -20,7 +20,8 @@ from ..utils import (
     update_dict_without_overwrite,
     log,
     remove_prefixes,
-    pause
+    pause,
+    timed_input
 )
 
 
@@ -494,23 +495,29 @@ class ChatDownloader:
 
         must_sleep = time_to_sleep >= 0
         if must_sleep:
-            sleep_text = '(sleep for {}s)'.format(time_to_sleep)
+            sleep_text = '(sleep for {}s or press Enter)'.format(time_to_sleep)
         else:
             sleep_text = ''
 
         retry_text = 'Retry #{} {}. {} ({})'.format(
             attempt_number, sleep_text, error, error.__class__.__name__)
 
-        if isinstance(error, UnexpectedHTML):
-            retry_text += '\n'+error.html
 
         log(
             'warning',
             text + [retry_text]
         )
 
+        if isinstance(error, UnexpectedHTML):
+            log(
+                'debug',
+                error.html
+            )
+
+
         if must_sleep:
-            time.sleep(time_to_sleep)
+            # time.sleep(time_to_sleep)
+            timed_input(time_to_sleep)
         else:
             pause()
 

@@ -1,3 +1,4 @@
+import threading
 import colorlog
 import datetime
 import re
@@ -190,10 +191,8 @@ def supports_colour():
         vt_codes_enabled_in_windows_registry()
     )
 
-s_colour = supports_colour()
 
-
-if s_colour:
+if supports_colour():
     handler = colorlog.StreamHandler()
     handler.setFormatter(colorlog.ColoredFormatter(
         '[%(log_color)s%(levelname)s%(reset)s] %(message)s',
@@ -206,7 +205,7 @@ if s_colour:
         })
     )
     logger = colorlog.getLogger()  # 'root'
-else: # fallback support
+else:  # fallback support
     import logging
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
@@ -215,7 +214,7 @@ else: # fallback support
 
 logger.addHandler(handler)
 
-from colorama import Fore
+# from colorama import Fore
 
 
 def pause(text='Press Enter to continue...'):
@@ -456,4 +455,53 @@ def nested_update(d, u):
             d[k] = v
     return d
 
-# def nested_get()
+
+# Inspired by https://github.com/hero24/TimedInput/
+from threading import Thread
+
+
+class TimedInput(Thread):
+    """ Timed input reader """
+
+    def get_input(self):
+        """ Actual function for reading the input """
+        try:
+            print(self.prompt, end='', flush=True)
+            self.input = input()
+        except EOFError:
+            pass
+
+    def __init__(self, timeout, prompt='', default=None, *args, **kwargs):
+        """
+        TimedInput(
+            timeout -> amount of seconds to wait for the input,
+            prompt -> optionl prompt to display while asking for input,
+            default -> string to return in case of timeout,
+            *args/**kwargs -> any additional arguments are passed down to Thread
+                            constructor
+        )
+        Creates an object for reading input, that times out after `timeout` amount
+                of seconds.
+        """
+        self.timeout = timeout
+        self.prompt = prompt
+        self.input = default
+        super().__init__(target=self.get_input, *args, **kwargs)
+        self.daemon = True
+
+    def join(self):
+        """ The actual timeout happens here """
+        super().join(self.timeout)
+        return self.input
+
+    def read(self):
+        """ Reads the input from the reader """
+        self.start()
+        return self.join()
+
+
+def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
+    if timeout is None:
+        return input(prompt)
+    else:
+        return TimedInput(timeout, prompt, default, *args, **kwargs).read()
