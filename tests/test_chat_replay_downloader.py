@@ -8,10 +8,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from chat_replay_downloader.sites import get_all_sites
 from chat_replay_downloader.sites.common import BaseChatDownloader
 
-from chat_replay_downloader import ChatReplayDownloader
+from chat_replay_downloader import ChatDownloader
 
 # python tests/test_chat_replay_downloader.py
-class TestChatReplayDownloader(unittest.TestCase):
+class TestChatDownloader(unittest.TestCase):
 
     def perform_test(self, site_object, test):
         test['params']['messages'] = []

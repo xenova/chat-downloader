@@ -12,7 +12,7 @@ from .utils import (
 )
 
 
-class ChatReplayDownloader:
+class ChatDownloader:
 
     def __init__(self, init_params=None):
         self._INIT_PARAMS = init_params or {}

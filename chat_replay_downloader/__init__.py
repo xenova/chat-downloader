@@ -7,4 +7,4 @@ __version__ = '0.0.1'
 #from .chat_replay_downloader import *
 from .cli import main
 
-from .chat_replay_downloader import ChatReplayDownloader
+from .chat_replay_downloader import ChatDownloader
