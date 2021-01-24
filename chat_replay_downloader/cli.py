@@ -12,7 +12,6 @@ from requests.exceptions import RequestException
 
 from .chat_replay_downloader import *
 
-
 from .sites.common import BaseChatDownloader
 from .output.continuous_write import ContinuousWriter
 
@@ -32,51 +31,73 @@ def main():
     default_params = BaseChatDownloader._DEFAULT_PARAMS
 
     parser = argparse.ArgumentParser(
-        description='A simple tool used to retrieve chat messages from streams, clips and past broadcasts. No authentication needed!',
+        description='A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
 
     # PROGRAM PARAMS
-    parser.add_argument('url', help='YouTube/Twitch video URL')
+    parser.add_argument('url', help='The URL of the livestream, video, clip or past broadcast')
 
-    parser.add_argument('--start_time', '-s', default=default_params['start_time'],
-                        help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
-    parser.add_argument('--end_time', '-e', default=default_params['end_time'],
-                        help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
+    time_group = parser.add_argument_group('Timing Arguments')
+    time_group.add_argument('--start_time', '-s', default=default_params['start_time'],
+                            help='Set start time in seconds or hh:mm:ss\n(default: %(default)s)')
+    time_group.add_argument('--end_time', '-e', default=default_params['end_time'],
+                            help='Set end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-    parser.add_argument('--output', '-o', default=default_params['output'],
-                        help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('--pause_on_debug', default=default_params['pause_on_debug'],
-                        help='whether to pause on certain debug messages.\n(default: %(default)s)')
+    def splitter(s):
+        return [item.strip() for item in re.split('[\s,;]+', s)]
 
-    debug_group = parser.add_mutually_exclusive_group()
+    # Specify message types/groups
+    type_group = parser.add_argument_group('Message Type Arguments')
+    type_options = type_group.add_mutually_exclusive_group()
 
-    debug_group.add_argument('--logging', choices=['none', 'debug', 'info', 'warning', 'error', 'critical'], default=default_params['logging'],
-                             help='level of logging to show\n(default: %(default)s)')
+    type_options.add_argument('--message_types', type=splitter, default=default_params['message_types'],
+                       help='Specify a comma-separated list of messages types to include\n(default: %(default)s)')
+    type_options.add_argument('--message_groups', type=splitter, default=default_params['message_groups'],
+                       help='Specify a comma-separated list of messages groups (a predefined, site-specific collection of message types) to include\n(default: %(default)s)')
 
-    debug_group.add_argument('--testing', action='store_true', default=default_params['testing'],
-                             help='print various debugging information\n(default: %(default)s)')
+
+    output_group = parser.add_argument_group('Output Arguments')
+    output_group.add_argument('--output', '-o', default=default_params['output'],
+                              help='Path of the output file\n(default: %(default)s = print to standard output)')
+
+    debug_group = parser.add_argument_group('Debug Arguments')
+    debug_group.add_argument('--pause_on_debug', default=default_params['pause_on_debug'],
+                             help='Pause on certain debug messages\n(default: %(default)s)')
+
+    debug_options = debug_group.add_mutually_exclusive_group()
+
+    debug_options.add_argument('--logging', choices=['none', 'debug', 'info', 'warning', 'error', 'critical'], default=default_params['logging'],
+                               help='Level of logging to show\n(default: %(default)s)')
+
+    debug_options.add_argument('--testing', action='store_true', default=default_params['testing'],
+                               help='Enable testing mode\n(default: %(default)s)')
+
+    debug_options.add_argument('--verbose', '-v', action='store_true', default=default_params['verbose'],
+                               help='Print various debugging information. This is equivalent to setting logging to debug\n(default: %(default)s)')
 
     # parser.add_argument('--safe_print', action='store_true', default=default_params['safe_print'],
     #                     help='level of logging to show\n(default: %(default)s)')
 
-    parser.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
-                        help='maximum number of attempts to retrieve chat messages. \n(default: %(default)s)')
+    retry_group = parser.add_argument_group('Retry Arguments') # what to do when an error occurs
+    retry_group.add_argument('--max_attempts', type=int, default=default_params['max_attempts'],
+                        help='Maximum number of attempts to retrieve chat messages\n(default: %(default)s)')
 
-    parser.add_argument('--retry_timeout', type=float, default=default_params['retry_timeout'],
-                        help='number of seconds to wait before retrying. Setting this to a negative number will wait for user input.\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
+    retry_group.add_argument('--retry_timeout', type=float, default=default_params['retry_timeout'],
+                        help='Number of seconds to wait before retrying. Setting this to a negative number will wait for user input\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
 
-    parser.add_argument('--max_messages', type=int, default=default_params['max_messages'],
-                        help='maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
+    termination_group = parser.add_argument_group('Termination Arguments')
 
-    parser.add_argument('--inactivity_timeout', type=float, default=default_params['inactivity_timeout'],
-                        help='stop getting messages after not receiving anything for a certain duration (in seconds).\n(default: %(default)s)')
+    termination_group.add_argument('--max_messages', type=int, default=default_params['max_messages'],
+                        help='Maximum number of messages to retrieve\n(default: %(default)s = unlimited)')
 
-    parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
-                        help='force no timeout between subsequent requests\n(default: %(default)s)')
+    termination_group.add_argument('--inactivity_timeout', type=float, default=default_params['inactivity_timeout'],
+                        help='Stop getting messages after not receiving anything for a certain duration (in seconds)\n(default: %(default)s)')
 
-    parser.add_argument('--timeout', type=float, default=default_params['timeout'],
-                        help='stop retrieving chat after a certain duration (in seconds).\n(default: %(default)s = use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)')
+    termination_group.add_argument('--timeout', type=float, default=default_params['timeout'],
+                        help='Stop retrieving chat after a certain duration (in seconds)\n(default: %(default)s)')
+
+
     # TODO request_timeout
     # specify how long to spend on any single http request
 
@@ -85,35 +106,43 @@ def main():
     #                     help='force certain encoding\n(default: %(default)s)')
 
     # Formatting
-    parser.add_argument('--format', default=default_params['format'],
-                        help='specify how messages should be formatted for printing\n(default: %(default)s = use site default)')
-    parser.add_argument('--format_file', default=default_params['format_file'],
-                        help='specify the format file to choose formats from\n(default: %(default)s)')
+    format_group = parser.add_argument_group('Format Arguments')
+    format_group.add_argument('--format', default=default_params['format'],
+                              help='Specify how messages should be formatted for printing\n(default: %(default)s = use site default)')
+    format_group.add_argument('--format_file', default=default_params['format_file'],
+                              help='Specify the format file to choose formats from\n(default: %(default)s)')
 
-    # INIT PARAMS
-    parser.add_argument('--cookies', '-c', default=default_init_params['cookies'],
-                        help='name of cookies file\n(default: %(default)s)')
 
-    def splitter(s):
-        return [item.strip() for item in re.split('[\s,;]+', s)]
+    # parent_group = parser.add_argument_group('parent')
+    # # child_group = parent_group.add_argument_group('child')
+    # parent_group.add_argument('--test', default=1,
+    #                     help='wy]\n(default: %(default)s)')
 
-    # Specify message types/groups
-    group = parser.add_mutually_exclusive_group()
 
-    group.add_argument('--message_groups', type=splitter, default=default_params['message_groups'],
-                       help='comma separated list of groups of messages to include\n(default: %(default)s)')
-
-    group.add_argument('--message_types', type=splitter, default=default_params['message_types'],
-                       help='comma separated list of types of messages to include\n(default: %(default)s)')
 
     parser.add_argument('--chat_type', choices=['live', 'top'], default=default_params['chat_type'],
-                        help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
+                        help='Specify chat type [YouTube only]\n(default: %(default)s)')
 
     parser.add_argument('--message_receive_timeout', type=float, default=default_params['message_receive_timeout'],
-                        help='time before requesting for new messages [Twitch only]\n(default: %(default)s)')
+                        help='Time before requesting for new messages [Twitch only]\n(default: %(default)s)')
 
     parser.add_argument('--buffer_size', type=int, default=default_params['buffer_size'],
-                        help='specify a buffer size for retrieving messages [Twitch only]\n(default: %(default)s)')
+                        help='Specify a buffer size for retrieving messages [Twitch only]\n(default: %(default)s)')
+
+
+    parser.add_argument('--force_no_timeout', action='store_true', default=default_params['force_no_timeout'],
+                        help='Force no timeout between subsequent requests\n(default: %(default)s)')
+
+
+
+    # INIT PARAMS
+    init_group = parser.add_argument_group('Initialisation Arguments')
+    init_group.add_argument('--cookies', '-c', default=default_init_params['cookies'],
+                            help='Name of cookies file\n(default: %(default)s)')
+
+
+    parser._positionals.title = 'Mandatory Arguments'
+    parser._optionals.title = 'General Arguments'
 
     # TODO add fields argument
     # only retrieve data asked for
@@ -138,7 +167,7 @@ def main():
         else:  # neither
             pass
 
-    downloader = ChatReplayDownloader(init_params)
+    downloader = ChatDownloader(init_params)
 
     # TODO make command line args for these:
     other_params = {
@@ -154,12 +183,14 @@ def main():
     program_params['testing'] = True
     # program_params['logging'] = 'none'
 
-
     if program_params['testing']:
         program_params['logging'] = 'debug'
         program_params['pause_on_debug'] = True
         program_params['message_groups'] = 'all'
         # program_params['timeout'] = 180
+
+    if program_params['verbose']:
+        program_params['logging'] = 'debug'
 
     if program_params['logging'] == 'none':
         get_logger().disabled = True
@@ -223,7 +254,7 @@ def main():
         InvalidURL,
         NoContinuation,
         RetriesExceeded
-        ) as e:
+    ) as e:
         log('error', e)
         # log('error', e, logging_level)  # always show
         # '{} ({})'.format(, e.__class__.__name__)

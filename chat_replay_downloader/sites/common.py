@@ -3,7 +3,7 @@ import requests
 from http.cookiejar import MozillaCookieJar, LoadError
 import os
 import time
-
+from copy import deepcopy
 
 from ..errors import (
     CookieError,
@@ -28,6 +28,7 @@ from ..utils import (
 from json import JSONDecodeError
 
 from math import ceil
+
 class Timeout():
 
     # Timeout types
@@ -231,15 +232,13 @@ class BaseChatDownloader:
         },
 
         'cookies': None,  # cookies file (optional),
-        # 'timeout': 10
     }
-    _INIT_PARAMS = _DEFAULT_INIT_PARAMS
+    _INIT_PARAMS = deepcopy(_DEFAULT_INIT_PARAMS)
 
     _DEFAULT_PARAMS = {
         'url': None,  # should be overridden
         'start_time': None,  # get from beginning (even before stream starts)
         'end_time': None,  # get until end
-        # 'callback': None,  # do something for every message
 
 
         'max_attempts': 15,  # ~ 2^15s ~ 9 hours
@@ -247,20 +246,17 @@ class BaseChatDownloader:
         'timeout': None,
 
 
-        # TODO timeout between attempts
         'max_messages': None,
 
         'output': None,
 
         'logging': 'info',
+        'verbose': False,
         'pause_on_debug': False,
         'testing': False, #sets logging->debug, pause_on_debug->True
 
-        # 'safe_print': False,
-
         # If True, program will not sleep when a timeout instruction is given
         'force_no_timeout': False,
-
         'force_encoding': None,  # use default
 
 
@@ -270,7 +266,6 @@ class BaseChatDownloader:
 
         'message_groups': ['messages'],  # 'all' can be chosen here
         'message_types': None,  # ['text_message'], # messages
-
 
 
         # Formatting
