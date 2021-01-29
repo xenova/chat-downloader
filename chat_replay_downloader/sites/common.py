@@ -3,17 +3,17 @@ import requests
 from http.cookiejar import MozillaCookieJar, LoadError
 import os
 import time
+from urllib.parse import urlparse
+
+import itertools
+
+import inspect
 from copy import deepcopy
 
-from ..errors import (
-    CookieError,
-    ParsingError,
-    CallbackFunction,
-    RetriesExceeded,
-    InvalidParameter,
-    UnexpectedHTML,
-    TimeoutException
-)
+
+
+from ..formatting.format import ItemFormatter
+from ..errors import *
 
 from ..utils import (
     get_title_of_webpage,
@@ -21,13 +21,33 @@ from ..utils import (
     log,
     remove_prefixes,
     pause,
-    timed_input
+    timed_input,
+    set_log_level,
+    get_logger,
+    get_default_args
 )
 
+import chat_replay_downloader.sites as sites
+
+# from chat_replay_downloader.sites.youtube import YouTubeChatDownloader
+
+
+# from ..sites import [get_all_sites] #get_all_sites
+
+# get_all_sites
+
+# print(locals())
 
 from json import JSONDecodeError
 
 from math import ceil
+
+import datetime
+import re
+
+# class SiteDefault(type):
+#     pass
+
 
 class Timeout():
 
@@ -73,6 +93,13 @@ class Timeout():
             return ceil(self._calculate_remaining()*1000)
 
 
+class SiteDefault:  # (type):
+    # Used for site-default parameters
+    # pass
+    def __init__(self, name):
+        self.name = name
+
+
 class Chat():
     def __init__(self, chat, **kwargs):
         self.chat = chat
@@ -92,7 +119,12 @@ class Chat():
             yield item
 
 
-class BaseChatDownloader:
+# Used as a base class for all chat downloaders
+# If `get_chat` is called directly, it will
+# search all subclasses for complete and matching
+# (based on URL) implementation
+
+class ChatDownloader:
     """
     Subclasses of this should redefine the get_chat()
     method and define a _VALID_URL regexp. The
@@ -225,6 +257,12 @@ class BaseChatDownloader:
     # is_stackable
     # sub_message
 
+    _SITE_DEFAULT_PARAMS = {
+        # 'message_types': ['text_message'],
+        'message_groups': ['messages'],
+        'format': 'default',
+    }
+
     _DEFAULT_INIT_PARAMS = {
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
@@ -233,58 +271,22 @@ class BaseChatDownloader:
 
         'cookies': None,  # cookies file (optional),
     }
-    _INIT_PARAMS = deepcopy(_DEFAULT_INIT_PARAMS)
 
     _DEFAULT_PARAMS = {
-        'url': None,  # should be overridden
-        'start_time': None,  # get from beginning (even before stream starts)
-        'end_time': None,  # get until end
+
+        # # Site specific parameters:
+        # # [YouTube]
+        # 'chat_type': 'live',  # live or top
 
 
-        'max_attempts': 15,  # ~ 2^15s ~ 9 hours
-        'retry_timeout': None,  # 1 second
-        'timeout': None,
-
-
-        'max_messages': None,
-
-        'output': None,
-
-        'logging': 'info',
-        'verbose': False,
-        'pause_on_debug': False,
-        'testing': False, #sets logging->debug, pause_on_debug->True
-
-        # If True, program will not sleep when a timeout instruction is given
-        'force_no_timeout': False,
-        'force_encoding': None,  # use default
-
-
-        # stop getting messages after no messages have been sent for `timeout` seconds
-        'inactivity_timeout': None,
-
-
-        'message_groups': ['messages'],  # 'all' can be chosen here
-        'message_types': None,  # ['text_message'], # messages
-
-
-        # Formatting
-        'format': None,  # Use default
-        'format_file': None,
-
-
-        # Site specific parameters:
-        # [YouTube]
-        'chat_type': 'live',  # live or top
-
-
-        # [Twitch]
-        'message_receive_timeout': 0.1, # allows for keyboard interrupts to occur
-        'buffer_size': 4096,  # default buffer size for socket,
+        # # [Twitch]
+        # 'message_receive_timeout': 0.1,  # allows for keyboard interrupts to occur
+        # 'buffer_size': 4096,  # default buffer size for socket,
 
     }
 
-    _DEFAULT_FORMAT = 'default'
+    # _DEFAULT_FORMAT = 'default'
+    _NAME = None
 
     def __str__(self):
         return ''
@@ -305,7 +307,7 @@ class BaseChatDownloader:
 
     @staticmethod
     def get_param_value(params, key):
-        return params.get(key, BaseChatDownloader._DEFAULT_PARAMS.get(key))
+        return params.get(key, ChatDownloader._DEFAULT_PARAMS.get(key))
 
     @staticmethod
     def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
@@ -324,15 +326,35 @@ class BaseChatDownloader:
                     replace_char_with_underscores, '_')
             info[remap_key] = remap_input
 
+    def __init__(self,
+                 #  format='default',
+                 headers=None,
+                 cookies=None,
+                 **kwargs
+                 ):
+        """
+        Initialise a new session for making requests.
 
-    def __init__(self, updated_init_params=None):
-        """Initialise a new session for making requests."""
-        self._INIT_PARAMS.update(updated_init_params or {})
+        :param headers: Test headers
+        :param cookies: Path of cookies file
 
+        """
+
+        if headers is None:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
+                'Accept-Language': 'en-US, en'
+            }
+
+        # Set params for use later on
+        self.params = self.get_init_params(locals())
+
+
+        # Begin session
         self.session = requests.Session()
-        self.session.headers = self._INIT_PARAMS.get('headers')
+        self.session.headers = headers
 
-        cookies = self._INIT_PARAMS.get('cookies')
+        # Set cookies if present
         cj = MozillaCookieJar(cookies)
 
         if cookies:  # is not None
@@ -343,6 +365,9 @@ class BaseChatDownloader:
                 raise CookieError(
                     'The file "{}" could not be found.'.format(cookies))
         self.session.cookies = cj
+
+    def get_session_headers(self, key):
+        return self.session.headers.get(key)
 
     def update_session_headers(self, new_headers):
         self.session.headers.update(new_headers)
@@ -387,8 +412,210 @@ class BaseChatDownloader:
 
     _VALID_URL = None
 
-    def get_chat(self, params):
-        raise NotImplementedError
+    # def get_default_args(func):
+    # signature = inspect.signature(func)
+    # return {
+    #     k: v.default
+    #     for k, v in signature.parameters.items()
+    #     if v.default is not inspect.Parameter.empty
+    # }
+
+    # def get_chat(self, **kwargs):
+
+    # from typing import Optional, Union
+
+    def get_program_params(self, local_vars):
+        return self._get_params_passed(local_vars, 'get_chat')
+        # get_default_args
+
+    def get_init_params(self, local_vars):
+        return self._get_params_passed(local_vars, '__init__')
+
+    def _get_params_passed(self, local_vars, function_name):
+
+        child_class = self.__class__
+        parent_function = getattr(ChatDownloader, function_name)
+        child_function = getattr(child_class, function_name)
+
+        valid_params = {
+            **inspect.signature(parent_function).parameters, **inspect.signature(child_function).parameters}
+
+        local_vars.update(local_vars.pop('kwargs', {}))
+
+        params = {}
+        for k, v in local_vars.items():
+            value = valid_params.get(k)
+            if value and value.default is not inspect.Parameter.empty:
+                params[k] = self.get_site_value(v)
+        return params
+
+
+    def get_site_value(self, v):
+        if isinstance(v, SiteDefault):
+            return self._SITE_DEFAULT_PARAMS.get(
+                        v.name, ChatDownloader._SITE_DEFAULT_PARAMS.get(v.name))
+        else:
+            return v
+
+        # # Get valid parent parameters
+        # valid_params = inspect.signature(ChatDownloader.get_chat).parameters
+
+        # child_class = self.__class__
+
+        # if child_class != ChatDownloader: # is a subclass
+        #     # Get valid child parameters
+        #     valid_params = {**valid_params, **inspect.signature(child_class.get_chat).parameters}
+
+        # params = {
+        #     k: v
+        #     for k, v in local_vars.items()
+        #     if k not in ('self', 'url') and k in valid_params
+        # }
+        # params.update(params.pop('kwargs', {}))
+
+        # for k,v in params.items():
+        #     if isinstance(v, Default):
+
+        #         print(k,v.default, self._SITE_DEFAULT_PARAMS.get(k))
+        #     else:
+        #         print(k,v)
+
+        # return params
+
+
+    # THIS METHOD IS USED FOR PYTHON USERS
+
+    def get_chat(self, url=None,
+                 # get from beginning (even before stream starts)
+                 #  start_time : Union[int, float, None] = None,
+
+                 start_time=None,
+                 end_time=None,  # get until end
+                 max_attempts=15,  # ~ 2^15s ~ 9 hours
+                 retry_timeout=None,
+                 timeout=None,
+                 max_messages=None,
+
+                 logging='info',
+                 pause_on_debug=False,
+
+                 # If True, program will not sleep when a timeout instruction is given
+                 force_no_timeout=False,
+                 #  force_encoding=None, # use default
+
+                 # stop getting messages after no messages have been sent for `timeout` seconds
+                 inactivity_timeout=None,
+
+                 # TODO change to none? i.e. site default
+                 # ['messages'],  # 'all' can be chosen here
+                 message_groups=SiteDefault('message_groups'),
+                 # None,  # ['text_message'], # messages
+                 message_types=SiteDefault('message_types'),
+
+
+                 # Formatting
+                 format=SiteDefault('format'),  # Use default
+                 format_file=None,
+
+
+                 **kwargs  # other
+                 ):
+
+        # , defaults to None
+        """
+        Short description
+
+        Long description spanning multiple lines
+        - First line
+        - Second line
+        - Third line
+
+        :param url: The URL of the livestream, video, clip or past broadcast
+        :param start_time: Start time in seconds or hh:mm:ss
+        :param end_time: End time in seconds or hh:mm:ss
+
+        :param message_types: List of messages types to include
+        :param message_groups: List of messages groups (a predefined, site-specific collection of message types) to include
+
+
+        :param force_no_timeout: Force no timeout between subsequent requests
+        :param max_attempts: Maximum number of attempts to retrieve chat messages
+        :param retry_timeout: Number of seconds to wait before retrying. Setting this to a negative number will wait for user input.
+        Default is None (use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)
+
+        :param max_messages: Maximum number of messages to retrieve, default is None (unlimited)
+        :param inactivity_timeout: Stop getting messages after not receiving anything for a certain duration (in seconds)
+        :param timeout: Stop retrieving chat after a certain duration (in seconds)
+
+        :param format: Specify how messages should be formatted for printing, default uses site default
+        :param format_file: Specify the format file to choose formats from
+
+        :param pause_on_debug: Pause on certain debug messages
+        :param logging: Level of logging to display
+
+        """
+        # :raises ValueError: if name is invalid
+
+        if not url:
+            raise URLNotProvided('No URL provided.')
+
+        # Save params
+
+        # loop through all websites and
+        # get corresponding website parser
+        # based on matching url with predefined regex
+        for site in sites.get_all_sites():
+            regex = getattr(site, '_VALID_URL')
+            if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
+                with site(**self.params) as correct_site:
+
+                    params = correct_site.get_program_params(locals())
+
+
+
+
+                    # default_args = get_default_args(correct_site.get_chat)
+
+                    # # print(params)
+                    # # print(default_args)
+                    # new_keys = {key: params[key]
+                    #             for key in params if default_args.get(key) != params.get(key)}
+
+
+                    log('info', 'Site: {}'.format(correct_site))
+                    # log('debug', 'Parameters: {}'.format(new_keys))
+                    # log('debug', 'Parameters: {}'.format(params))
+                    log('debug', 'Parameters: {}'.format(params))
+                    info = correct_site.get_chat(**params)
+                    if isinstance(max_messages, int):
+                        info.chat = itertools.islice(info.chat, max_messages)
+                    setattr(info, 'site', correct_site)
+
+
+                    formatter = ItemFormatter(params['format_file'])
+                    setattr(info, 'format', lambda x:  formatter.format(x, format_name=params['format']))
+
+                    return info
+
+        parsed = urlparse(url)
+
+        if parsed.scheme:
+            log('debug', str(parsed))
+            raise SiteNotSupported(
+                'Site not supported: {}'.format(parsed.netloc))
+        else:
+            params['url'] = 'https://'+params['url']  # try to correct
+            chat = self.get_chat(params)
+            if chat:
+                return chat
+
+            log('debug', parsed)
+            raise InvalidURL('Invalid URL: "{}"'.format(url))
+
+        # 'url': None,  # should be overridden
+        # 'start_time': None,  # get from beginning (even before stream starts)
+        # 'end_time': None,  # get until end
+        # raise NotImplementedError
 
     def get_tests(self):
         t = getattr(self, '_TEST', None)
@@ -497,7 +724,6 @@ class BaseChatDownloader:
         retry_text = 'Retry #{} {}. {} ({})'.format(
             attempt_number, sleep_text, error, error.__class__.__name__)
 
-
         log(
             'warning',
             text + [retry_text]
@@ -508,7 +734,6 @@ class BaseChatDownloader:
                 'debug',
                 error.html
             )
-
 
         if must_sleep:
             # time.sleep(time_to_sleep)

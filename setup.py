@@ -16,7 +16,7 @@ requirements = [
     'isodate',
     'regex',
     'argparse',
-    'colorama'
+    'docstring-parser'
 ]
 
 setup_requirements = ['pytest-runner', ]

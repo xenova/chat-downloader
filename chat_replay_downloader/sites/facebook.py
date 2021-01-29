@@ -8,7 +8,7 @@ import re
 
 from .common import (
     Chat,
-    BaseChatDownloader,
+    ChatDownloader,
     Timeout
 )
 
@@ -28,7 +28,7 @@ from ..utils import (
 )
 
 
-class FacebookChatDownloader(BaseChatDownloader):
+class FacebookChatDownloader(ChatDownloader):
     _FB_HOMEPAGE = 'https://www.facebook.com'
     _FB_HEADERS = {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -39,8 +39,8 @@ class FacebookChatDownloader(BaseChatDownloader):
     _INITIAL_DATR_REGEX = r'_js_datr\",\"([^\"]+)'
     _INITIAL_LSD_REGEX = r'<input.*?name=\"lsd\".*?value=\"([^\"]+)[^>]*>'
 
-    def __init__(self, updated_init_params=None):
-        super().__init__(updated_init_params or {})
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # update headers for all subsequent FB requests
         self.update_session_headers(self._FB_HEADERS)
@@ -137,10 +137,10 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     def _get_initial_info(self, video_id, params):
         info = {}
-        max_attempts = self.get_param_value(params, 'max_attempts')
-        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        max_attempts = params.get('max_attempts')
+        retry_timeout = params.get('retry_timeout')
 
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_debug = params.get('pause_on_debug')
 
         # TODO remove duplication - many similar methods
         json_data = self._attempt_fb_retrieve(
@@ -259,7 +259,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         # set texts:
         for key in attachment:
-            BaseChatDownloader.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
+            ChatDownloader.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
                                      FacebookChatDownloader._REMAP_FUNCTIONS, key, attachment[key])
 
         for key in ('target', 'media', 'style_infos'):
@@ -320,8 +320,8 @@ class FacebookChatDownloader(BaseChatDownloader):
     _KNOWN_ATTACHMENT_TYPES = [
         'Sticker',
         'VideoTipJarPayment',
-
         'Page',
+
         'Group',
         'ProfilePicAttachmentMedia',
         'User',
@@ -347,7 +347,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             return item
 
         for key in original_item:
-            BaseChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
+            ChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
                                      FacebookChatDownloader._REMAP_FUNCTIONS, key, original_item[key])
 
         # VideoTipJarPayment
@@ -361,7 +361,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         massive_image = item.pop('massive_image', None)
 
         if blurred_image and massive_image:
-            item['text'] = BaseChatDownloader.create_image(
+            item['text'] = ChatDownloader.create_image(
                 blurred_image,
                 massive_image.get('width'),
                 massive_image.get('height')
@@ -374,7 +374,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                              lambda x: x['ranges'][0]['entity']) or {}
 
             for key in entity:
-                BaseChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
+                ChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
                                          FacebookChatDownloader._REMAP_FUNCTIONS, key, entity[key])
             item['text'] = donation_comment_text.get('text')
 
@@ -399,9 +399,9 @@ class FacebookChatDownloader(BaseChatDownloader):
     def _parse_author_badges(item):
 
         keys = (('badge_asset', 'small'), ('information_asset', 'colour'))
-        icons = list(map(lambda x: BaseChatDownloader.create_image(
+        icons = list(map(lambda x: ChatDownloader.create_image(
             FacebookChatDownloader._FB_HOMEPAGE+item.get(x[0]), 24, 24, x[1]), keys))
-        icons.append(BaseChatDownloader.create_image(
+        icons.append(ChatDownloader.create_image(
             item.get('multiple_badge_asset'), 36, 36, 'large'))
 
         return {
@@ -436,7 +436,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         'parse_attachment_info': lambda x: FacebookChatDownloader._parse_attachment_info(x),
 
-        'parse_image': lambda x: BaseChatDownloader.create_image(x.get('uri'), x.get('width'), x.get('height')),
+        'parse_image': lambda x: ChatDownloader.create_image(x.get('uri'), x.get('width'), x.get('height')),
         'camel_case_split': camel_case_split,
 
         'get_uri': lambda x: x.get('uri')
@@ -508,14 +508,14 @@ class FacebookChatDownloader(BaseChatDownloader):
         info = {}
 
         for key in node:
-            BaseChatDownloader.remap(info, FacebookChatDownloader._REMAPPING,
+            ChatDownloader.remap(info, FacebookChatDownloader._REMAPPING,
                                      FacebookChatDownloader._REMAP_FUNCTIONS, key, node[key])
 
         author_info = info.pop('author', {})
-        BaseChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
+        ChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
 
         for key in author_info:
-            BaseChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
+            ChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
                                      FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
 
         if 'profile_picture_depth_0' in author_info:
@@ -524,7 +524,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 url = multi_get(
                     author_info, 'profile_picture_depth_{}'.format(size[0]), 'uri')
                 info['author']['images'].append(
-                    BaseChatDownloader.create_image(url, size[1], size[1]))
+                    ChatDownloader.create_image(url, size[1], size[1]))
 
         # author_badges = info.pop('author_badges', None)
         # if author_badges:
@@ -558,11 +558,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         return info
 
     def _get_live_chat_messages_by_video_id(self, video_id, params):
-        callback = self.get_param_value(params, 'callback')
-        max_attempts = self.get_param_value(params, 'max_attempts')
-        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        callback = params.get('callback')
+        max_attempts = params.get('max_attempts')
+        retry_timeout = params.get('retry_timeout')
 
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_debug = params.get('pause_on_debug')
 
         # def debug_log(*items):
         #     log(
@@ -587,7 +587,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         first_try = True
 
-        timeout = Timeout(self.get_param_value(params, 'timeout'))
+        timeout = Timeout(params.get('timeout'))
         last_ids = []
         while True:
             timeout.check_for_timeout()
@@ -666,12 +666,12 @@ class FacebookChatDownloader(BaseChatDownloader):
                 first_try = False
 
     def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, params):
-        callback = self.get_param_value(params, 'callback')
+        callback = params.get('callback')
 
-        max_attempts = self.get_param_value(params, 'max_attempts')
-        retry_timeout = self.get_param_value(params, 'retry_timeout')
+        max_attempts = params.get('max_attempts')
+        retry_timeout = params.get('retry_timeout')
 
-        pause_on_debug = self.get_param_value(params, 'pause_on_debug')
+        pause_on_debug = params.get('pause_on_debug')
 
         # useful tool (convert curl to python request)
         # https://curl.trillworks.com/
@@ -687,9 +687,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         # TODO make this modifiable
 
         start_time = ensure_seconds(
-            self.get_param_value(params, 'start_time'), 0)
+            params.get('start_time'), 0)
         end_time = ensure_seconds(
-            self.get_param_value(params, 'end_time'), float('inf'))
+            params.get('end_time'), float('inf'))
 
         next_start_time = max(start_time, 0)
         end_time = min(end_time, max_duration)
@@ -697,7 +697,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         #print(next_start_time, end_time, type(next_start_time), type(end_time))
         # return
         #total = []
-        timeout = Timeout(self.get_param_value(params, 'timeout'))
+        timeout = Timeout(params.get('timeout'))
         while True:
             timeout.check_for_timeout()
             next_end_time = min(next_start_time + time_increment, end_time)
@@ -769,8 +769,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         initial_info = self._get_initial_info(video_id, params)
 
-        start_time = self.get_param_value(params, 'start_time')
-        end_time = self.get_param_value(params, 'end_time')
+        start_time = params.get('start_time')
+        end_time = params.get('end_time')
 
         is_live = initial_info.get('is_live')
 
@@ -794,9 +794,10 @@ class FacebookChatDownloader(BaseChatDownloader):
             author=initial_info.get('author'),
         )
 
-    def get_chat(self, params):
+    def get_chat(self, **kwargs):
+        params = self.get_program_params(locals())
 
-        url = self.get_param_value(params, 'url')
+        url = params.get('url')
         match = re.search(self._VALID_URL, url)
 
         if match:
