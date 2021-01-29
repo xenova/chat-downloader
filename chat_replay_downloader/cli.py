@@ -14,11 +14,9 @@ from .sites import (
     YouTubeChatDownloader,
     TwitchChatDownloader,
     FacebookChatDownloader,
-    ChatDownloader
+    ChatDownloader,
+    get_all_sites
     )
-
-from .sites import get_all_sites
-
 
 from .output.continuous_write import ContinuousWriter
 

@@ -1,4 +1,4 @@
 """Main module."""
 
 # Specify all "endpoints"/usable methods here
-from .sites.common import ChatDownloader
+from .sites import ChatDownloader

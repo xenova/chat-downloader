@@ -29,25 +29,12 @@ from ..utils import (
 
 import chat_replay_downloader.sites as sites
 
-# from chat_replay_downloader.sites.youtube import YouTubeChatDownloader
-
-
-# from ..sites import [get_all_sites] #get_all_sites
-
-# get_all_sites
-
-# print(locals())
-
 from json import JSONDecodeError
 
 from math import ceil
 
 import datetime
 import re
-
-# class SiteDefault(type):
-#     pass
-
 
 class Timeout():
 
@@ -556,10 +543,10 @@ class ChatDownloader:
         """
         # :raises ValueError: if name is invalid
 
+        original_params = locals()
+
         if not url:
             raise URLNotProvided('No URL provided.')
-
-        # Save params
 
         # loop through all websites and
         # get corresponding website parser
@@ -569,10 +556,7 @@ class ChatDownloader:
             if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
                 with site(**self.params) as correct_site:
 
-                    params = correct_site.get_program_params(locals())
-
-
-
+                    params = correct_site.get_program_params(original_params)
 
                     # default_args = get_default_args(correct_site.get_chat)
 
@@ -583,8 +567,6 @@ class ChatDownloader:
 
 
                     log('info', 'Site: {}'.format(correct_site))
-                    # log('debug', 'Parameters: {}'.format(new_keys))
-                    # log('debug', 'Parameters: {}'.format(params))
                     log('debug', 'Parameters: {}'.format(params))
                     info = correct_site.get_chat(**params)
                     if isinstance(max_messages, int):
@@ -604,10 +586,10 @@ class ChatDownloader:
             raise SiteNotSupported(
                 'Site not supported: {}'.format(parsed.netloc))
         else:
-            params['url'] = 'https://'+params['url']  # try to correct
-            chat = self.get_chat(params)
-            if chat:
-                return chat
+            # params['url'] = 'https://'+url  # try to correct
+            # chat = self.get_chat(**params)
+            # if chat:
+            #     return chat
 
             log('debug', parsed)
             raise InvalidURL('Invalid URL: "{}"'.format(url))
@@ -757,3 +739,4 @@ class ChatDownloader:
                 value = value[0]
             mapped_keys.add(value)
         return mapped_keys
+
