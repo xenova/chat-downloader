@@ -175,7 +175,7 @@ def main():
 
 
     # TODO DEBUGGING:
-    args_dict['testing'] = True
+    # args_dict['testing'] = True
 
     if args_dict['testing']:
         args_dict['logging'] = 'debug'
