@@ -58,6 +58,17 @@ class CookieError(Exception):
     """Raised when an error occurs while loading a cookie file."""
     pass
 
+# XXX Simple debug logger - could be extended to handle log levels via some LogLevel enum, but not worth the effort, since I'm only using this for temp debugging anyway.
+class DebugLogger:
+    def __init__(self, enabled):
+        self.video_id = ''
+        self.enabled = enabled
+
+    def __call__(self, format, *args):
+        print(("[DEBUG][{}][{:%Y-%m-%d %H:%M:%S}] " + format).format(self.video_id, datetime.datetime.now(), *args), flush=True)
+
+    def __bool__(self):
+        return self.enabled
 
 class ChatReplayDownloader:
     """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
@@ -121,8 +132,10 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    def __init__(self, cookies=None):
+    def __init__(self, cookies=None, debug_output=False):
         """Initialise a new session for making requests."""
+        self.debug_logger = DebugLogger(debug_output)
+
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
 
@@ -138,11 +151,16 @@ class ChatReplayDownloader:
 
     def __session_get(self, url):
         """Make a request using the current session."""
-        return self.session.get(url)
+        if self.debug_logger: self.debug_logger("HTTP GET {}", url)
+        response = self.session.get(url)
+        if self.debug_logger: self.debug_logger("HTTP GET {} => status={} len(text)={}", url, response.status_code, len(response.text))
+        return response
 
     def __session_get_json(self, url):
         """Make a request using the current session and get json data."""
-        return self.__session_get(url).json()
+        json = self.__session_get(url).json()
+        #if self.debug_logger: self.debug_logger("=> JSON:\n{}", json)
+        return json
 
     def __timestamp_to_microseconds(self, timestamp):
         """
@@ -259,11 +277,11 @@ class ChatReplayDownloader:
         info = re.search(self._YT_INITIAL_DATA_RE, html.text)
 
         if(not info):
-            raise ParsingError(
-                'Unable to parse video data. Please try again.')
+            raise ParsingError('Unable to parse video data. Please try again.')
 
         ytInitialData = json.loads(info.group(1))
-        # print(ytInitialData)
+        if self.debug_logger: self.debug_logger("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4))
+
         contents = ytInitialData.get('contents')
         if(not contents):
             raise VideoUnavailable('Video is unavailable (may be private).')
@@ -280,7 +298,6 @@ class ChatReplayDownloader:
             finally:
                 raise NoChatReplay(error_message)
 
-
         livechat_header = columns['conversationBar']['liveChatRenderer']['header']
         viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
             'viewSelector']['sortFilterSubMenuRenderer']['subMenuItems']
@@ -289,6 +306,7 @@ class ChatReplayDownloader:
             x['title']: x['continuation']['reloadContinuationData']['continuation']
             for x in viewselector_submenuitems
         }
+        if self.debug_logger: self.debug_logger("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
 
         return continuation_by_title_map
 
@@ -296,12 +314,14 @@ class ChatReplayDownloader:
         """Get YouTube replay info, given a continuation or a certain offset."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME,
                                                       'live_chat_replay', 'get_live_chat_replay', continuation) + self.__YOUTUBE_API_PARAMETERS_TEMPLATE.format(offset_microseconds)
+        if self.debug_logger: self.debug_logger("get_replay_info: continuation={}, playerOffsetMs={}", continuation, offset_microseconds)
         return self.__get_continuation_info(url)
 
     def __get_live_info(self, continuation):
         """Get YouTube live info, given a continuation."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME,
                                                       'live_chat', 'get_live_chat', continuation)
+        if self.debug_logger: self.debug_logger("get_live_info: continuation={}", continuation)
         return(self.__get_continuation_info(url))
 
     def __get_continuation_info(self, url):
@@ -375,6 +395,7 @@ class ChatReplayDownloader:
 
     def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
         """ Get chat messages for a YouTube video. """
+        self.debug_logger.video_id = video_id
 
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
@@ -497,6 +518,7 @@ class ChatReplayDownloader:
                     if 'timeoutMs' in continuation_info:
                         # must wait before calling again
                         # prevents 429 errors (too many requests)
+                        #if self.debug_logger: self.debug_logger("continuation timeoutMs={}", continuation_info['timeoutMs'])
                         time.sleep(continuation_info['timeoutMs']/1000)
                 else:
                     break
@@ -600,6 +622,9 @@ if __name__ == '__main__':
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
 
+    parser.add_argument('--debug_output', action='store_true',
+                        help='whether to log debug output to standard output')
+
     args = parser.parse_args()
 
     if(args.hide_output):
@@ -612,7 +637,7 @@ if __name__ == '__main__':
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
     try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
+        chat_downloader = ChatReplayDownloader(cookies=args.cookies, debug_output=args.debug_output)
 
         num_of_messages = 0
 
