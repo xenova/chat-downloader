@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import random
 import json
 import datetime
 import re
@@ -139,6 +142,14 @@ class ChatReplayDownloader:
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
 
+        Retry.BACKOFF_MAX = 2 ** 5
+        self.session.mount('https://', HTTPAdapter(max_retries=Retry(
+            total=10,
+            # Retry doesn't have jitter functionality; following random usage is a poor man's version that only jitters backoff_factor across sessions.
+            backoff_factor=random.uniform(1.0, 1.5),
+            status_forcelist=[413, 429, 500, 502, 503, 504], # also retries on connection/read timeouts
+            method_whitelist=False))) # retry on any HTTP method (including GET and POST)
+
         cj = MozillaCookieJar(cookies)
         if cookies is not None:
             # Only attempt to load if the cookie file exists.
@@ -152,7 +163,7 @@ class ChatReplayDownloader:
     def __session_get(self, url):
         """Make a request using the current session."""
         if self.debug_logger: self.debug_logger("HTTP GET {}", url)
-        response = self.session.get(url)
+        response = self.session.get(url, timeout=10)
         if self.debug_logger: self.debug_logger("HTTP GET {} => status={} len(text)={}", url, response.status_code, len(response.text))
         return response
 
@@ -665,35 +676,37 @@ if __name__ == '__main__':
                 open(args.output, 'w').close()  # empty the file
                 callback = write_to_file
 
-        chat_messages = chat_downloader.get_chat_replay(
-            args.url,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            message_type=args.message_type,
-            chat_type=args.chat_type,
-            callback=callback
-        )
+        chat_messages = []
+        try:
+            chat_messages = chat_downloader.get_chat_replay(
+                args.url,
+                start_time=args.start_time,
+                end_time=args.end_time,
+                message_type=args.message_type,
+                chat_type=args.chat_type,
+                callback=callback
+            )
+        finally:
+            if chat_messages and args.output:
+                if(args.output.endswith('.json')):
+                    num_of_messages = len(chat_messages)
+                    with open(args.output, 'w') as f:
+                        json.dump(chat_messages, f, sort_keys=True)
 
-        if(args.output is not None):
-            if(args.output.endswith('.json')):
-                num_of_messages = len(chat_messages)
-                with open(args.output, 'w') as f:
-                    json.dump(chat_messages, f, sort_keys=True)
+                elif(args.output.endswith('.csv')):
+                    num_of_messages = len(chat_messages)
+                    fieldnames = []
+                    for message in chat_messages:
+                        fieldnames = list(set(fieldnames + list(message.keys())))
+                    fieldnames.sort()
 
-            elif(args.output.endswith('.csv')):
-                num_of_messages = len(chat_messages)
-                fieldnames = []
-                for message in chat_messages:
-                    fieldnames = list(set(fieldnames + list(message.keys())))
-                fieldnames.sort()
+                    with open(args.output, 'w', newline='', encoding='utf-8') as f:
+                        fc = csv.DictWriter(f, fieldnames=fieldnames)
+                        fc.writeheader()
+                        fc.writerows(chat_messages)
 
-                with open(args.output, 'w', newline='', encoding='utf-8') as f:
-                    fc = csv.DictWriter(f, fieldnames=fieldnames)
-                    fc.writeheader()
-                    fc.writerows(chat_messages)
-
-            print('Finished writing', num_of_messages,
-                  'messages to', args.output, flush=True)
+                print('Finished writing', num_of_messages,
+                    'messages to', args.output, flush=True)
 
     except InvalidURL as e:
         print('[Invalid URL]', e)
