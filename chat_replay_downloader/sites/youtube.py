@@ -1,6 +1,6 @@
 
 from .common import (
-    ChatDownloader, Chat, Timeout
+    BaseChatDownloader, Chat, Timeout
 )
 
 from requests.exceptions import RequestException
@@ -46,7 +46,7 @@ from datetime import datetime
 from base64 import b64decode
 
 
-class YouTubeChatDownloader(ChatDownloader):
+class YouTubeChatDownloader(BaseChatDownloader):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -382,7 +382,7 @@ class YouTubeChatDownloader(ChatDownloader):
             return info
 
         for key in item_info:
-            ChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
+            BaseChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
                                  YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
 
         # check for colour information
@@ -407,7 +407,7 @@ class YouTubeChatDownloader(ChatDownloader):
             # currency type
             # amount (float)
 
-        ChatDownloader.move_to_dict(info, 'author')
+        BaseChatDownloader.move_to_dict(info, 'author')
 
         # TODO determine if youtube glitch has occurred
         # round(time_in_seconds/timestamp) == 1
@@ -466,9 +466,9 @@ class YouTubeChatDownloader(ChatDownloader):
                         if matches:
                             size = int(matches.group(1))
                             to_add['icons'].append(
-                                ChatDownloader.create_image(url, size, size))
+                                BaseChatDownloader.create_image(url, size, size))
                 if url:
-                    to_add['icons'].append(ChatDownloader.create_image(
+                    to_add['icons'].append(BaseChatDownloader.create_image(
                         url[0:url.index('=')], image_id='source'))
 
             badges.append(to_add)
@@ -491,7 +491,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         thumbnails = item.get('thumbnails') or []
 
-        return list(map(lambda x: ChatDownloader.create_image(
+        return list(map(lambda x: BaseChatDownloader.create_image(
             x.get('url'),
             x.get('width'),
             x.get('height'),
@@ -651,6 +651,8 @@ class YouTubeChatDownloader(ChatDownloader):
         ]
     }
 
+
+
     _KNOWN_REPLACE_ACTION_TYPES = {
         'replaceChatItemAction': [
             'liveChatPlaceholderItemRenderer',
@@ -716,7 +718,18 @@ class YouTubeChatDownloader(ChatDownloader):
     #         'liveChatMembershipItemRenderer'
     #     ]
     # }
-    _KNOWN_IGNORE_ACTION_TYPES = {}
+
+
+    _KNOWN_POLL_ACTION_TYPES = {
+    }
+
+    _KNOWN_IGNORE_ACTION_TYPES = {
+
+        # TODO add support for poll actions
+        'updateLiveChatPollAction':[],
+        'showLiveChatActionPanelAction':[]
+
+    }
 
     _KNOWN_ACTION_TYPES = {
         **_KNOWN_ITEM_ACTION_TYPES,
@@ -919,7 +932,7 @@ class YouTubeChatDownloader(ChatDownloader):
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, int) else None
 
-        force_no_timeout = params.get('force_no_timeout')
+        # force_no_timeout = params.get('force_no_timeout')
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -951,6 +964,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
         message_count = 0
         first_time = True
+        last_message_ids = []
         while True:
             info = None
             for attempt_number in attempts(max_attempts):
@@ -965,6 +979,8 @@ class YouTubeChatDownloader(ChatDownloader):
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
+
+                        log('debug', 'Continuation: {}'.format(continuation))
 
                         yt_info = self._session_post(continuation_url, json=continuation_params).json()
 
@@ -1188,7 +1204,9 @@ class YouTubeChatDownloader(ChatDownloader):
                     inactivity_timeout.reset()
                     message_count += 1
                     yield data
+
                 log('debug', 'Total number of messages: {}'.format(message_count))
+
             elif not is_live:
                 # no more actions to process in a chat replay
                 break
@@ -1228,7 +1246,7 @@ class YouTubeChatDownloader(ChatDownloader):
 
                 # sometimes continuation contains timeout info
                 sleep_duration = continuation_info.get('timeoutMs')
-                if sleep_duration and not actions and not force_no_timeout:
+                if sleep_duration:# and not actions:# and not force_no_timeout:
                     # if there is timeout info, there were no actions and the user
                     # has not chosen to force no timeouts, then sleep.
                     # This is useful for streams with varying number of messages
@@ -1268,7 +1286,6 @@ class YouTubeChatDownloader(ChatDownloader):
         )
 
     def get_chat(self,
-                 chat_type='live',
                  **kwargs
                  ):
         """
@@ -1280,16 +1297,14 @@ class YouTubeChatDownloader(ChatDownloader):
 
         """
 
-        params = self.get_program_params(locals())
-
         # get video id
-        url = params.get('url')
+        url = kwargs.get('url')
         match = re.search(self._VALID_URL, url)
 
         if match:
             video_id = match.group('id')
             if video_id:  # normal youtube video
-                return self.get_chat_by_video_id(match.group('id'), params)
+                return self.get_chat_by_video_id(match.group('id'), kwargs)
 
         #     else:  # TODO add profile, etc.
         #         pass
