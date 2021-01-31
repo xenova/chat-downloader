@@ -4,7 +4,7 @@ A simple tool used to retrieve chat messages from livestreams, videos, clips and
 
 ### Requirements:
 * Python 3.
-* Run `pip install chat_replay_downloader` to install the package.
+* Run `pip install chat-replay-downloader` to install the package.
 
 
 ### Command line:
