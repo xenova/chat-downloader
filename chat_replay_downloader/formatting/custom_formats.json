@@ -1,0 +1,94 @@
+{
+    "default": {
+        "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}{message}",
+        "keys": {
+            "time_text": "{} | ",
+            "timestamp": {
+                "template": "{} | ",
+                "format": "%Y-%m-%d %H:%M:%S"
+            },
+            "author.badges": {
+                "template": "({}) ",
+                "separator": ", "
+            },
+            "amount": "*{}* ",
+            "message": ": {}"
+        }
+    },
+    "youtube":[
+        {
+            "matching":[
+                "viewer_engagement_message",
+                "deleted_message",
+                "ban_user"
+            ],
+            "template":"{time_text|timestamp}{message}",
+            "inherit": "default",
+            "keys": {
+                "message": "{}"
+            }
+        }
+    ],
+    "24_hour": {
+        "inherit": "default",
+        "keys": {
+            "timestamp": {
+                "format": "%H:%M"
+            }
+        }
+    },
+    "twitch": [
+        {
+            "matching": [
+                "text_message"
+            ],
+            "inherit": "default"
+        },
+        {
+            "matching": [
+                "ban_user"
+            ],
+            "template": "{timestamp}{banned_user} was {ban_duration|ban_type}.",
+            "inherit": "default",
+            "keys": {
+                "ban_duration": "timed out for {} seconds",
+                "ban_type": "{}ly banned"
+            }
+        },
+        {
+            "matching": [
+                "subscription_gift",
+                "resubscription"
+            ],
+            "template": "{time_text|timestamp}{system_message}{message}",
+            "inherit": "default",
+            "keys": {
+                "system_message": "{} ",
+                "message": "{}"
+            }
+        },
+
+
+        {
+            "matching": [
+                "room_state"
+            ],
+            "template": "Room state | {channel_id}{emote_only}{follower_only}{minutes_to_follow_before_chatting}{slow_mode}{seconds_to_wait}{subscriber_only}{r9k_mode}{rituals_enabled}",
+            "keys": {
+                "channel_id": "Channel ID = {}",
+                "emote_only": ", emote only = {}",
+                "follower_only": ", follower only = {}",
+                "seconds_to_wait": " ({} seconds)",
+                "minutes_to_follow_before_chatting": " ({} minutes)",
+                "slow_mode": ", slow mode = {}",
+                "subscriber_only": ", subscriber only = {}",
+                "r9k_mode": ", r9k mode = {}",
+                "rituals_enabled": ", rituals enabled = {}"
+            }
+        },
+        {
+            "matching": "all",
+            "inherit": "default"
+        }
+    ]
+}
