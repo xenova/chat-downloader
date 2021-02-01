@@ -272,7 +272,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME+'/{}?continuation={}'
     _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + \
-        b64decode('L3lvdXR1YmVpL3YxL2xpdmVfY2hhdC9nZXRfe30/a2V5PUFJemFTeUFPX0ZKMlNscVU4UTRTVEVITEdDaWx3X1k5XzExcWNXOA==').decode()
+        b64decode(
+            'L3lvdXR1YmVpL3YxL2xpdmVfY2hhdC9nZXRfe30/a2V5PUFJemFTeUFPX0ZKMlNscVU4UTRTVEVITEdDaWx3X1k5XzExcWNXOA==').decode()
 
     _MESSAGE_GROUPS = {
         'messages': [
@@ -383,7 +384,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         for key in item_info:
             BaseChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
-                                 YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
+                                     YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
@@ -651,8 +652,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         ]
     }
 
-
-
     _KNOWN_REPLACE_ACTION_TYPES = {
         'replaceChatItemAction': [
             'liveChatPlaceholderItemRenderer',
@@ -719,15 +718,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
     #     ]
     # }
 
-
     _KNOWN_POLL_ACTION_TYPES = {
     }
 
     _KNOWN_IGNORE_ACTION_TYPES = {
 
         # TODO add support for poll actions
-        'updateLiveChatPollAction':[],
-        'showLiveChatActionPanelAction':[]
+        'showLiveChatActionPanelAction': [],
+        'updateLiveChatPollAction': [],
+        'closeLiveChatActionPanelAction': []
 
     }
 
@@ -738,6 +737,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         **_KNOWN_ADD_BANNER_TYPES,
         **_KNOWN_REMOVE_BANNER_TYPES,
         **_KNOWN_TOOLTIP_ACTION_TYPES,
+        **_KNOWN_POLL_ACTION_TYPES,
         **_KNOWN_IGNORE_ACTION_TYPES
     }
 
@@ -748,9 +748,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
     for action in _KNOWN_ACTION_TYPES:
         _KNOWN_MESSAGE_TYPES += _KNOWN_ACTION_TYPES[action]
 
-    # print('_KNOWN_ACTION_TYPES', _KNOWN_ACTION_TYPES)
-    # print('_KNOWN_MESSAGE_TYPES', _KNOWN_MESSAGE_TYPES)
-    # continuations
     _KNOWN_SEEK_CONTINUATIONS = [
         'playerSeekContinuationData'
     ]
@@ -782,10 +779,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise ParsingError(
                 'Unable to parse video data. Please try again.')
 
-        # 'Unable to parse initial YouTube data. Please try again.')
-        # yt_initial_data = json.loads(info.group(1))
-        # print(yt_initial_data)
-
         player_response_info = json.loads(player_response.group(1))
 
         playability_status = player_response_info.get('playabilityStatus')
@@ -795,94 +788,80 @@ class YouTubeChatDownloader(BaseChatDownloader):
             player_response_info, 'streamingData', 'adaptiveFormats')
         last_modified = try_get(
             adaptive_formats, lambda x: float(x[0]['lastModified']))
-        # TODO check if premiere... if so, subtract 2 mins
-        # print(adaptive_formats)
 
         details = {
             'start_time': last_modified,
             'visitor_data': multi_get(yt_initial_data, 'responseContext', 'webResponseContextExtensionData', 'ytConfigData', 'visitorData')
         }
 
-        contents = yt_initial_data.get('contents')
-        if not contents:
-            raise VideoUnavailable('Unable to find initial video contents.')
+        # Try to get continuation info
+        contents = yt_initial_data.get('contents') or {}
 
-        columns = contents.get('twoColumnWatchNextResults')
-
-        livechat_header = multi_get(
-            columns, 'conversationBar', 'liveChatRenderer', 'header')
-
-        if not livechat_header:
-            # video exists, but you cannot view chat for some reason
-            error_message = try_get(columns, lambda x: self.parse_runs(
-                x['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])) or \
-                'Video does not have a chat replay.'
-            raise NoChatReplay(error_message)
-
-        viewselector_submenuitems = multi_get(
-            livechat_header,
-            'liveChatHeaderRenderer', 'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems'
-        ) or {}
-
+        conversation_bar = multi_get(
+            contents, 'twoColumnWatchNextResults', 'conversationBar')
+        sub_menu_items = multi_get(conversation_bar, 'liveChatRenderer', 'header', 'liveChatHeaderRenderer',
+                                   'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems') or {}
         details['continuation_info'] = {
             x['title']: x['continuation']['reloadContinuationData']['continuation']
-            for x in viewselector_submenuitems
+            for x in sub_menu_items
         }
         details['is_live'] = 'Live chat' in details['continuation_info']
-
-        # TODO test with
-        # 'https://www.youtube.com/watch?v=STJQMQkF8uA'
-        # TODO move playability status error after column
-        #  raise VideoUnavailable('Unable <- move raise after playability
-
         error_screen = playability_status.get('errorScreen')
 
-        if not details['continuation_info'] and error_screen:
-            # only throw error if there is no continuation info, and there is an error screen
-            # sometimes able to view chat, but not video (e.g. very long live streams)
+        # Only raise an error if there is no continuation info. Sometimes you
+        # are able to view chat, but not the video (e.g. for very long livestreams)
+        if not details['continuation_info']:
+            if error_screen:  # There is a error screen visible
+                error_reasons = {
+                    'reason': '',
+                    'subreason': '',
+                }
+                error_info = try_get_first_value(error_screen)
 
-            error_reasons = {
-                'reason': '',
-                'subreason': '',
-            }
-            error_info = try_get_first_value(error_screen)
+                for error_reason in error_reasons:
+                    text = error_info.get(error_reason) or {}
 
-            for error_reason in error_reasons:
-                text = error_info.get(error_reason) or {}
+                    error_reasons[error_reason] = text.get('simpleText') or try_get(
+                        text, lambda x: self.parse_runs(x)) or error_info.pop(
+                        'itemTitle', '') or error_info.pop(
+                            'offerDescription', '') or playability_status.get(error_reason) or ''
 
-                error_reasons[error_reason] = text.get('simpleText') or try_get(
-                    text, lambda x: self.parse_runs(x)) or error_info.pop(
-                    'itemTitle', '') or error_info.pop(
-                        'offerDescription', '') or playability_status.get(error_reason) or ''
+                error_message = ''
+                for error_reason in error_reasons:
+                    if error_reasons[error_reason]:
+                        if isinstance(error_reasons[error_reason], str):
+                            error_message += ' {}.'.format(
+                                error_reasons[error_reason].rstrip('.'))
+                        else:
+                            error_message += str(error_reasons[error_reason])
 
-            error_message = ''
-            for error_reason in error_reasons:
-                if error_reasons[error_reason]:
-                    if isinstance(error_reasons[error_reason], str):
-                        error_message += ' {}.'.format(
-                            error_reasons[error_reason].rstrip('.'))
-                    else:
-                        error_message += str(error_reasons[error_reason])
+                error_message = error_message.strip()
 
-            error_message = error_message.strip()
-
-            if status == 'ERROR':
-                raise VideoUnavailable(error_message)
-            elif status == 'LOGIN_REQUIRED':
-                raise LoginRequired(error_message)
-            elif status == 'UNPLAYABLE':
-                raise VideoUnplayable(error_message)
+                if status == 'ERROR':
+                    raise VideoUnavailable(error_message)
+                elif status == 'LOGIN_REQUIRED':
+                    raise LoginRequired(error_message)
+                elif status == 'UNPLAYABLE':
+                    raise VideoUnplayable(error_message)
+                else:
+                    # print('UNKNOWN STATUS', status)
+                    # print(playability_status)
+                    error_message = '{}: {}'.format(status, error_message)
+                    raise VideoUnavailable(error_message)
+            elif not contents:
+                raise VideoUnavailable(
+                    'Unable to find initial video contents.')
             else:
-                # print('UNKNOWN STATUS', status)
-                # print(playability_status)
-                error_message = '{}: {}'.format(status, error_message)
-                raise VideoUnavailable(error_message)
+                # Video exists, but you cannot view chat for some reason
+                error_message = try_get(conversation_bar, lambda x: self.parse_runs(
+                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])) or \
+                    'Video does not have a chat replay.'
+                raise NoChatReplay(error_message)
 
         video_details = player_response_info.get('videoDetails')
         details['title'] = video_details.get('title')
         details['duration'] = int(video_details.get('lengthSeconds')) or None
         return details
-
 
     def _get_chat_messages(self, initial_info, params):
 
@@ -912,7 +891,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise NoContinuation(
                 'Initial continuation information could not be found for {}.'.format(continuation_title))
 
-        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(api_type, continuation)
+        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
+            api_type, continuation)
         # must run to get first few messages, otherwise might miss some
         html, yt_info = self._get_initial_info(init_page)
 
@@ -927,7 +907,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 }
             }
         }
-
 
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, int) else None
@@ -982,16 +961,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                         log('debug', 'Continuation: {}'.format(continuation))
 
-                        yt_info = self._session_post(continuation_url, json=continuation_params).json()
+                        yt_info = self._session_post(
+                            continuation_url, json=continuation_params).json()
 
                     info = multi_get(
                         yt_info, 'continuationContents', 'liveChatContinuation')
 
                     if not info:
-                        raise NoContinuation('Live stream ended.' if is_live else 'No continuation.')
+                        raise NoContinuation(
+                            'Live stream ended.' if is_live else 'No continuation.')
 
-                    break # successful retrieve
-
+                    break  # successful retrieve
 
                 except (UnexpectedHTML, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
@@ -1246,7 +1226,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                 # sometimes continuation contains timeout info
                 sleep_duration = continuation_info.get('timeoutMs')
-                if sleep_duration:# and not actions:# and not force_no_timeout:
+                if sleep_duration:  # and not actions:# and not force_no_timeout:
                     # if there is timeout info, there were no actions and the user
                     # has not chosen to force no timeouts, then sleep.
                     # This is useful for streams with varying number of messages

@@ -1322,5 +1322,10 @@
               }
            }
         }
+     },
+     {
+        "closeLiveChatActionPanelAction":{
+           "targetPanelId":"ChgKFlhYc1lZTVBjQjZ6amh3YlUzS2lRQ1E%3D"
+        }
      }
 ]
