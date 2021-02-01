@@ -21,6 +21,7 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
+MAKE := make
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
 help:
