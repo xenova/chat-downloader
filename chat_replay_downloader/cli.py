@@ -10,6 +10,7 @@ import re
 from docstring_parser import parse as doc_parse
 from requests.exceptions import RequestException
 
+import chat_replay_downloader
 from .chat_replay_downloader import ChatDownloader
 from .sites import BaseChatDownloader
 from .output.continuous_write import ContinuousWriter
@@ -22,19 +23,17 @@ from .utils import (
     get_default_args
 )
 
-
-
 from .errors import *
 
 
 def main():
 
-    # print()
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter,
-        # usage='test'
     )
+
+    parser.add_argument('--version', action='version', version=chat_replay_downloader.__version__)
 
     # PROGRAM PARAMS
     parser.add_argument(
@@ -166,10 +165,7 @@ def main():
     debug_options.add_argument(
         '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
 
-    # # INIT PARAMS
-
-    # info = get_init_info(BaseChatDownloader)
-
+    # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
     add_init_param(init_group, '--cookies', '-c')
     # TODO add headers (user agent) as arg
@@ -186,7 +182,7 @@ def main():
     if args_dict['testing']:
         args_dict['logging'] = 'debug'
         args_dict['pause_on_debug'] = True
-        args_dict['message_groups'] = 'all'
+        # args_dict['message_groups'] = 'all'
         # program_params['timeout'] = 180
 
     if args_dict['verbose']:
