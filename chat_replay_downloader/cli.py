@@ -209,6 +209,7 @@ def main():
     try:
         # TODO print program version
         log('debug', 'Python version: {}'.format(sys.version))
+        log('debug', 'Program version: {}'.format(chat_replay_downloader.__version__))
 
         # print(a)
         chat = downloader.get_chat(**chat_params)
