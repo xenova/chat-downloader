@@ -3,7 +3,10 @@ A simple tool used to retrieve chat messages from livestreams, videos, clips and
 
 [![Python](https://img.shields.io/pypi/pyversions/chat-replay-downloader)](https://pypi.org/project/chat-replay-downloader)
 [![PyPI version](https://img.shields.io/pypi/v/chat-replay-downloader.svg)](https://pypi.org/project/chat-replay-downloader)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/chat-replay-downloader)](https://pypi.org/project/chat-replay-downloader)
 [![GitHub license](https://img.shields.io/github/license/xenova/chat-replay-downloader)](https://github.com/xenova/chat-replay-downloader/blob/master/LICENSE)
+
+
 
 <!---
 [![GitHub issues](https://img.shields.io/github/issues/xenova/chat-replay-downloader)](https://badge.fury.io/py/chat-replay-downloader)
