@@ -11,7 +11,7 @@ assignees: ''
 Please follow the template as closely as possible. You can remove sections which do not apply to you (e.g. code used, screenshots)
 -->
 
-## Basic Information
+## Basic information
 - Program version:
 - Python version:
 - Operating system:
