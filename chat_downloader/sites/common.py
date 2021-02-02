@@ -72,21 +72,25 @@ class Timeout():
         else:
             return ceil(self._calculate_remaining()*1000)
 
-
 class Chat():
     def __init__(self, chat, **kwargs):
         self.chat = chat
 
-        for key in ('title', 'duration', 'is_live', 'start_time'):
-            setattr(self, key, kwargs.get(key))
+        self.title = kwargs.get('title')
+        self.duration = kwargs.get('duration')
+        self.is_live = kwargs.get('is_live')
+        self.start_time = kwargs.get('start_time')
+
 
         # TODO
         # author/user/uploader/creator
 
     def __iter__(self):
-        for item in self.chat:
-            yield item
+        yield from self.chat
 
+    # Must be set later
+    def format(self, item):
+        raise NotImplementedError
 
 class BaseChatDownloader:
     """
