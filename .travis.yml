@@ -25,5 +25,5 @@ deploy:
     secure: PLEASE_REPLACE_ME
   on:
     tags: true
-    repo: xenova/chat_replay_downloader
+    repo: xenova/chat-downloader
     python: 3.8
