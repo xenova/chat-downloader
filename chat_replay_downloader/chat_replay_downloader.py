@@ -33,6 +33,9 @@ class ChatDownloader():
         self.init_params = locals()
         self.init_params.pop('self')
 
+        # Track a list of sessions
+        self.sessions = []
+
     def get_chat(self, url=None,
                  start_time=None,
                  end_time=None,
@@ -116,25 +119,27 @@ class ChatDownloader():
         for site in get_all_sites():
             regex = getattr(site, '_VALID_URL')
             if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
-                with site(**self.init_params) as correct_site:
+                correct_site = site(**self.init_params)
 
-                    # Parse site-defaults
-                    params = {}
-                    for k, v in original_params.items():
-                        params[k] = correct_site.get_site_value(v)
+                self.sessions.append(correct_site)
 
-                    log('info', 'Site: {}'.format(correct_site))
-                    log('debug', 'Parameters: {}'.format(params))
-                    info = correct_site.get_chat(**params)
-                    if isinstance(max_messages, int):
-                        info.chat = itertools.islice(info.chat, max_messages)
-                    setattr(info, 'site', correct_site)
+                # Parse site-defaults
+                params = {}
+                for k, v in original_params.items():
+                    params[k] = correct_site.get_site_value(v)
 
-                    formatter = ItemFormatter(params['format_file'])
-                    setattr(info, 'format', lambda x: formatter.format(
-                        x, format_name=params['format']))
+                log('info', 'Site: {}'.format(correct_site))
+                log('debug', 'Parameters: {}'.format(params))
+                info = correct_site.get_chat(**params)
+                if isinstance(max_messages, int):
+                    info.chat = itertools.islice(info.chat, max_messages)
+                setattr(info, 'site', correct_site)
 
-                    return info
+                formatter = ItemFormatter(params['format_file'])
+                setattr(info, 'format', lambda x: formatter.format(
+                    x, format_name=params['format']))
+
+                return info
 
         parsed = urlparse(url)
 
@@ -150,3 +155,10 @@ class ChatDownloader():
 
             log('debug', parsed)
             raise InvalidURL('Invalid URL: "{}"'.format(url))
+
+
+    def close(self):
+        for session in self.sessions:
+            session.close()
+
+        self.sessions = []

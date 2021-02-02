@@ -53,17 +53,6 @@ def main():
             }
         return info
 
-    # args_dict =
-    # def get_site_info(site):
-    #     return get_info(site, 'get_chat')
-
-    # def get_init_info(site):
-    #     return get_info(site, '__init__')
-
-    #
-    # info = get_site_info(CDownloader)
-    # print(info)
-
     # get help and default info
     get_chat_info = get_info(ChatDownloader.get_chat)
     get_init_info = get_info(ChatDownloader.__init__)
@@ -272,5 +261,7 @@ def main():
         log('error', 'Keyboard Interrupt')
 
     finally:
+        downloader.close()
+
         if args_dict['output'] and output_file:
             output_file.close()
