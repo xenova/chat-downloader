@@ -31,6 +31,14 @@ python setup.py install
 
 ## Usage
 
+### Command line:
+```
+chat_downloader https://www.youtube.com/watch?v=5qap5aO4i9A
+```
+
+For advanced command line use-cases and examples, consult the [Command Line Wiki](https://github.com/xenova/chat-downloader/wiki/Command-Line-Usage).
+
+
 ### Python:
 ```python
 from chat_downloader import ChatDownloader
@@ -41,14 +49,6 @@ for message in chat:                        # iterate over messages
     print(chat.format(message))             # print the formatted message
 ```
 For advanced python use-cases and examples, consult the [Python Wiki](https://github.com/xenova/chat-downloader/wiki/Python-Documentation).
-
-### Command line:
-```
-chat_downloader https://www.youtube.com/watch?v=5qap5aO4i9A
-```
-
-For advanced command line use-cases and examples, consult the [Command Line Wiki](https://github.com/xenova/chat-downloader/wiki/Command-Line-Usage).
-
 
 ## Issues
 Found a bug or have a suggestion? File an issue [here](https://github.com/xenova/chat-downloader/issues/new). To assist the developers in fixing the issue, please follow the issue template (automatically generated when creating a new issue).
