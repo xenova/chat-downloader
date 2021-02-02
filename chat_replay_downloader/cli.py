@@ -153,6 +153,9 @@ def main():
         '--testing', help='Enable testing mode', action='store_true')
     debug_options.add_argument(
         '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
+    debug_options.add_argument(
+        '--quiet', '-q', help='Activate quiet mode (hide all output)', action='store_true')
+
 
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
@@ -163,32 +166,31 @@ def main():
     parser._optionals.title = 'General Arguments'
 
     args = parser.parse_args()
-    args_dict = args.__dict__
 
     # TODO DEBUGGING:
-    # args_dict['testing'] = True
+    # args.testing = True
 
-    if args_dict['testing']:
-        args_dict['logging'] = 'debug'
-        args_dict['pause_on_debug'] = True
-        # args_dict['message_groups'] = 'all'
-        # program_params['timeout'] = 180
+    if args.testing:
+        args.logging = 'debug'
+        args.pause_on_debug = True
+        # args.message_groups = 'all'
+        # program_params['timeout = 180
 
-    if args_dict['verbose']:
-        args_dict['logging'] = 'debug'
+    if args.verbose:
+        args.logging = 'debug'
 
-    if args_dict['logging'] == 'none':
+    if args.quiet or args.logging == 'none':
         get_logger().disabled = True
     else:
-        set_log_level(args_dict['logging'])
+        set_log_level(args.logging)
 
     chat_params = {
-        k: args_dict.get(k)
+        k: getattr(args, k, None)
         for k in get_chat_info
     }
 
     init_params = {
-        k: args_dict.get(k)
+        k: getattr(args, k, None)
         for k in get_init_info
     }
 
@@ -196,27 +198,25 @@ def main():
 
     output_file = None
     try:
-        # TODO print program version
         log('debug', 'Python version: {}'.format(sys.version))
         log('debug', 'Program version: {}'.format(chat_replay_downloader.__version__))
 
-        # print(a)
         chat = downloader.get_chat(**chat_params)
 
         log('debug', 'Chat information: {}'.format(chat.__dict__))
         log('info', 'Retrieving chat for "{}".'.format(chat.title))
 
         def print_formatted(item):
-            if args_dict['logging'] != 'none':
+            if not args.quiet:
                 formatted = chat.format(item)
                 safe_print(formatted)
 
-        if args_dict['output']:
+        if args.output:
             output_args = {
-                k: args_dict[k] for k in ('indent', 'sort_keys', 'overwrite')
+                k: getattr(args, k, None) for k in ('indent', 'sort_keys', 'overwrite')
             }
             output_file = ContinuousWriter(
-                args_dict['output'], **output_args)
+                args.output, **output_args)
 
             def write_to_file(item):
                 print_formatted(item)
@@ -263,5 +263,5 @@ def main():
     finally:
         downloader.close()
 
-        if args_dict['output'] and output_file:
+        if args.output and output_file:
             output_file.close()
