@@ -1,4 +1,4 @@
-"""Console script for chat_replay_downloader."""
+"""Console script for chat_downloader."""
 import argparse
 import sys
 import os
@@ -10,8 +10,8 @@ import re
 from docstring_parser import parse as doc_parse
 from requests.exceptions import RequestException
 
-import chat_replay_downloader
-from .chat_replay_downloader import ChatDownloader
+import chat_downloader
+from .chat_downloader import ChatDownloader
 from .sites import BaseChatDownloader
 from .output.continuous_write import ContinuousWriter
 
@@ -33,7 +33,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument('--version', action='version', version=chat_replay_downloader.__version__)
+    parser.add_argument('--version', action='version', version=chat_downloader.__version__)
 
     # PROGRAM PARAMS
     parser.add_argument(
@@ -199,7 +199,7 @@ def main():
     output_file = None
     try:
         log('debug', 'Python version: {}'.format(sys.version))
-        log('debug', 'Program version: {}'.format(chat_replay_downloader.__version__))
+        log('debug', 'Program version: {}'.format(chat_downloader.__version__))
 
         chat = downloader.get_chat(**chat_params)
 

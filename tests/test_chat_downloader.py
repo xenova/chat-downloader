@@ -5,8 +5,8 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_replay_downloader.sites import get_all_sites
-from chat_replay_downloader import ChatDownloader
+from chat_downloader.sites import get_all_sites
+from chat_downloader import ChatDownloader
 
 # python tests/test_chat_downloader.py
 class TestChatDownloader(unittest.TestCase):

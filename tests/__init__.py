@@ -1,1 +1,1 @@
-"""Unit test package for chat_replay_downloader."""
+"""Unit test package for chat_downloader."""

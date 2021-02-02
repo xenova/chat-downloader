@@ -2,10 +2,10 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_replay_downloader.sites.twitch import TwitchChatDownloader
+from chat_downloader.sites.twitch import TwitchChatDownloader
 
-cmd1_template = 'python -m chat_replay_downloader {} --timeout 180'
-# cmd2_template = 'python -m chat_replay_downloader --max_messages {} {}'
+cmd1_template = 'python -m chat_downloader {} --timeout 180'
+# cmd2_template = 'python -m chat_downloader --max_messages {} {}'
 
 
 

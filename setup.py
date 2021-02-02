@@ -2,7 +2,7 @@
 
 """The setup script."""
 
-import chat_replay_downloader
+import chat_downloader
 from setuptools import setup, find_packages
 
 with open('README.md') as readme_file:
@@ -26,10 +26,10 @@ setup_requirements = ['pytest-runner', ]
 test_requirements = ['pytest>=3', ]
 
 setup(
-    author=chat_replay_downloader.__author__,
-    author_email=chat_replay_downloader.__email__,
-    url=chat_replay_downloader.__url__,
-    version=chat_replay_downloader.__version__,
+    author=chat_downloader.__author__,
+    author_email=chat_downloader.__email__,
+    url=chat_downloader.__url__,
+    version=chat_downloader.__version__,
     python_requires='>=3.5',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
@@ -46,7 +46,7 @@ setup(
     description='A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!',
     entry_points={
         'console_scripts': [
-            'chat_replay_downloader=chat_replay_downloader.cli:main',
+            'chat_downloader=chat_downloader.cli:main',
         ],
     },
     install_requires=requirements,
@@ -54,11 +54,11 @@ setup(
     long_description=readme + '\n\n' + history,
     long_description_content_type='text/markdown',
     include_package_data=True,
-    keywords='chat_replay_downloader',
-    name='chat_replay_downloader',
-    packages=find_packages(include=['chat_replay_downloader', 'chat_replay_downloader.*']),
+    keywords='python chat downloader youtube twitch',
+    name='chat-downloader',
+    packages=find_packages(include=['chat_downloader', 'chat_downloader.*']),
     package_data={
-        'chat_replay_downloader':['formatting/*.json']
+        'chat_downloader':['formatting/*.json']
     },
     setup_requires=setup_requirements,
     test_suite='tests',

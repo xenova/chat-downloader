@@ -24,7 +24,7 @@ A clear and concise description of what the bug is.
 ### If running from the command line, provide the following:
 1. The command used (including the verbose tag, `-v`):
 ```
-chat_replay_downloader -v URL [OPTIONS]
+chat_downloader -v URL [OPTIONS]
 ```
 2. Output from the above command:
 ```
