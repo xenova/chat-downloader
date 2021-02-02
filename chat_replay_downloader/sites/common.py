@@ -28,6 +28,7 @@ class SiteDefault:
     def __init__(self, name):
         self.name = name
 
+
 class Timeout():
 
     # Timeout types
@@ -231,7 +232,7 @@ class BaseChatDownloader:
 
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
-        if 'all' in messages_groups_to_add:  # user wants everything
+        if 'all' in messages_groups_to_add or 'all' in messages_types_to_add:  # user wants everything
             return True
 
         valid_message_types = []
@@ -274,7 +275,6 @@ class BaseChatDownloader:
         # Set params for use later on
         # self.params = kwargs
 
-
         # Begin session
         self.session = requests.Session()
         self.session.headers = headers
@@ -309,12 +309,14 @@ class BaseChatDownloader:
 
     def close(self):
         self.session.close()
+        log('debug', 'Session closed.')
 
-    def __enter__(self):
-        return self
+    # def __enter__(self):
+    #     return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+    # def __exit__(self, exc_type, exc_val, exc_tb):
+    #     pass
+    #     # self.close()
 
     def _session_post(self, url, **kwargs):
         """Make a request using the current session."""
@@ -338,18 +340,30 @@ class BaseChatDownloader:
 
     _VALID_URL = None
 
+    # For general tests (non-site specific)
+    _TESTS = [
+        {
+            'name': 'Get a certain number of messages from a livestream.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'max_messages': 10
+            },
+
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        }
+    ]
 
     def get_site_value(self, v):
         if isinstance(v, SiteDefault):
             return self._SITE_DEFAULT_PARAMS.get(
-                        v.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(v.name))
+                v.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(v.name))
         else:
             return v
 
-
     def get_chat(self, **kwargs):
         raise NotImplementedError
-
 
     def get_tests(self):
         t = getattr(self, '_TEST', None)
@@ -491,4 +505,3 @@ class BaseChatDownloader:
                 value = value[0]
             mapped_keys.add(value)
         return mapped_keys
-

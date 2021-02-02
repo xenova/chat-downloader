@@ -16,7 +16,9 @@ from ..errors import (
     TwitchError,
     InvalidParameter,
     UnexpectedHTML,
-    NoChatReplay
+    NoChatReplay,
+    TimeoutException,
+    VideoUnavailable
 )
 
 from ..utils import (
@@ -37,16 +39,17 @@ from ..utils import (
 
 
 class TwitchChatIRC():
-    _CURRENT_CHANNEL = None
+
 
     def __init__(self):
         # create new socket
-        self._SOCKET = socket.socket()
+        self.socket = socket.socket()
 
         # start connection
-        self._SOCKET.connect(('irc.chat.twitch.tv', 6667))
+        self.socket.connect(('irc.chat.twitch.tv', 6667))
         # print('Connected to', self._HOST, 'on port', self._PORT)
 
+        self.current_channel = None
         # https://dev.twitch.tv/docs/irc/tags
         # https://dev.twitch.tv/docs/irc/membership
         # https://dev.twitch.tv/docs/irc/commands
@@ -58,15 +61,15 @@ class TwitchChatIRC():
         self.send_raw('NICK justinfan67420')
 
     def send_raw(self, string):
-        self._SOCKET.send((string+'\r\n').encode('utf-8'))
+        self.socket.send((string+'\r\n').encode('utf-8'))
 
     def recv(self, buffer_size):
-        return self._SOCKET.recv(buffer_size).decode('utf-8', 'ignore')
+        return self.socket.recv(buffer_size).decode('utf-8', 'ignore')
 
     # def recvall(self, buffer_size):
     #     fragments = []  # faster than byte string
     #     while True:
-    #         part = self._SOCKET.recv(buffer_size)
+    #         part = self.socket.recv(buffer_size)
     #         fragments.append(part)
 
     #         # attempt to decode this, otherwise the last byte was incomplete
@@ -81,24 +84,16 @@ class TwitchChatIRC():
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
 
-        if self._CURRENT_CHANNEL != channel_lower:
+        if self.current_channel != channel_lower:
             self.send_raw('JOIN #{}'.format(channel_lower))
-            self._CURRENT_CHANNEL = channel_lower
+            self.current_channel = channel_lower
 
     def set_timeout(self, message_receive_timeout):
-        self._SOCKET.settimeout(message_receive_timeout)
+        self.socket.settimeout(message_receive_timeout)
 
     def close_connection(self):
-        self._SOCKET.close()
+        self.socket.close()
 
-        # except KeyboardInterrupt:
-        # 	print('Interrupted by user.')
-
-        # except Exception as e:
-        # 	print('Unknown Error:',e)
-        # 	raise e
-
-        # return messages
 
 
 class TwitchChatDownloader(BaseChatDownloader):
@@ -127,8 +122,69 @@ class TwitchChatDownloader(BaseChatDownloader):
         return 'twitch.tv'
 
     _TESTS = [
+        # Live
+        {
+            'name': 'Livestream',
+            'params': {
+                'url': 'https://www.twitch.tv/xqcow',
+                'timeout': 5
+            },
+            'expected_result': {
+                'error': TimeoutException
+            }
+        },
+
+        # Past broadcasts
+        {
+            'name': 'Past broadcast with chat replay.',
+            'params': {
+                'url': 'https://www.twitch.tv/videos/87136772',
+                'max_messages': 30
+            },
+            'expected_result': {
+                'message_types': ['text_message'],
+                # 'action_types': [],
+                'messages_condition': lambda messages: len(messages) <= 30
+            }
+        },
+
+        # Clip
+        {
+            'name': 'Clip with chat replay.',
+            'params': {
+                'url': 'https://clips.twitch.tv/TrappedFrigidPenguinSeemsGood',
+            },
+            'expected_result': {
+                'message_types': ['text_message'],
+                # 'action_types': [],
+                'messages_condition': lambda messages: len(messages) > 0
+                # 'error': LoginRequired,
+            }
+        },
+
+
         # Commenter is "None"
         # https://www.twitch.tv/videos/873616984 --start_time 1:26:10
+
+
+        {
+            'name': "This clip's past broadcast has expired and chat replay is no longer available.",
+            'params': {
+                'url': 'https://clips.twitch.tv/AverageSparklyTortoisePeoplesChamp',
+            },
+            'expected_result': {
+                'error': NoChatReplay
+            }
+        },
+        {
+            'name': "Sorry. Unless you've got a time machine, that content is unavailable.",
+            'params': {
+                'url': 'https://www.twitch.tv/videos/1',
+            },
+            'expected_result': {
+                'error': VideoUnavailable
+            }
+        },
     ]
 
     # clips
@@ -971,10 +1027,12 @@ class TwitchChatDownloader(BaseChatDownloader):
             except (UnexpectedHTML, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
+        if not video:
+            raise VideoUnavailable("Sorry. Unless you've got a time machine, that content is unavailable.")
         title = video.get('title')
         duration = video.get('lengthSeconds')
 
-        print('duration', duration)
+        # print('duration', duration)
 
         channel_id = multi_get(video, 'owner', 'id')
         self._update_subscriber_badge_info(channel_id)
@@ -1005,9 +1063,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         vod_id = multi_get(clip, 'video', 'id')
+        # print(clip)
         if vod_id is None:
-            raise NoChatReplay(
-                'Video does not have a chat replay, because the original VOD has been deleted.')
+            raise NoChatReplay("This clip's past broadcast has expired and chat replay is no longer available.")
 
         offset = clip.get('videoOffsetSeconds')
 
@@ -1290,106 +1348,111 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         timeout = Timeout(params.get('timeout'))
         inactivity_timeout = Timeout(params.get('inactivity_timeout'), Timeout.INACTIVITY)
-        while True:
-            timeout.check_for_timeout()
+        try:
+            while True:
+                timeout.check_for_timeout()
 
-            try:
-                new_info = twitch_chat_irc.recv(buffer_size)
+                try:
+                    new_info = twitch_chat_irc.recv(buffer_size)
 
-                if not new_info:
-                    raise ConnectionError('Lost connection, reconnecting.')
+                    if not new_info:
+                        raise ConnectionError('Lost connection, reconnecting.')
 
-                readbuffer += new_info
+                    readbuffer += new_info
 
-                if self._PING_TEXT in readbuffer:
-                    twitch_chat_irc.send_raw(self._PONG_TEXT)
+                    if self._PING_TEXT in readbuffer:
+                        twitch_chat_irc.send_raw(self._PONG_TEXT)
 
-                matches = list(self._MESSAGE_REGEX.finditer(readbuffer))
-                full_readbuffer = readbuffer.endswith('\r\n')
-                if matches:
-                    if not full_readbuffer:
-                        # sometimes a buffer does not contain a full message
-                        # last one is incomplete
+                    matches = list(self._MESSAGE_REGEX.finditer(readbuffer))
+                    full_readbuffer = readbuffer.endswith('\r\n')
+                    if matches:
+                        if not full_readbuffer:
+                            # sometimes a buffer does not contain a full message
+                            # last one is incomplete
 
-                        span = matches[-1].span()
+                            span = matches[-1].span()
 
-                        pass_on = readbuffer[span[0]:]
+                            pass_on = readbuffer[span[0]:]
 
-                        # check whether message was cut off
-                        if '\r\n' in pass_on:  # last message not matched
-                            # only pass on incomplete message
+                            # check whether message was cut off
+                            if '\r\n' in pass_on:  # last message not matched
+                                # only pass on incomplete message
 
-                            # readbuffer[span[1]:]
-                            pass_on = pass_on[span[1]-span[0]:]
+                                # readbuffer[span[1]:]
+                                pass_on = pass_on[span[1]-span[0]:]
 
-                        # actual message cut off (matched, but not complete)
+                            # actual message cut off (matched, but not complete)
+                            else:
+                                # remove the last match from being processed (as it is incomplete)
+                                matches.pop()
+
+                            # pass remaining information to next attempt
+                            readbuffer = pass_on
+
                         else:
-                            # remove the last match from being processed (as it is incomplete)
-                            matches.pop()
+                            # the whole readbuffer was read correctly.
+                            # reset the readbuffer
+                            readbuffer = ''
 
-                        # pass remaining information to next attempt
-                        readbuffer = pass_on
+                        for match in matches:
 
-                    else:
-                        # the whole readbuffer was read correctly.
-                        # reset the readbuffer
+                            data = self._parse_irc_item(match)
+
+                            # test for missing keys
+                            missing_keys = data.keys()-TwitchChatDownloader._KNOWN_IRC_KEYS
+
+                            if missing_keys:
+                                debug_log(
+                                    'Missing keys found: {}'.format(
+                                        missing_keys),
+                                    'Original data: {}'.format(match.groups()),
+                                    'Parsed data: {}'.format(data)
+                                )
+                            # check whether to skip this message or not, based on its type
+
+                            to_add = self.must_add_item(
+                                data,
+                                self._MESSAGE_GROUPS,
+                                messages_groups_to_add,
+                                messages_types_to_add
+                            )
+
+                            if not to_add:
+                                continue
+
+                            inactivity_timeout.reset()
+                            message_count += 1
+                            yield data
+
+                        log('debug', 'Total number of messages: {}'.format(message_count))
+
+                    elif full_readbuffer:
+                        # No matches, but data has been read successfully.
+                        # This means that we can safely reset the readbuffer.
+                        # This is used to periodically reset the readbuffer,
+                        # to avoid a massive buffer from forming.
+
+                        log('debug', 'No matches found in "\n{}\n"'.format(
+                            readbuffer.strip()))  # never pause
                         readbuffer = ''
 
-                    for match in matches:
+                    current_time = time.time()
 
-                        data = self._parse_irc_item(match)
+                    time_since_last_ping = current_time - last_ping_time
 
-                        # test for missing keys
-                        missing_keys = data.keys()-TwitchChatDownloader._KNOWN_IRC_KEYS
+                    if time_since_last_ping > ping_every:
+                        twitch_chat_irc.send_raw('PING')
+                        last_ping_time = current_time
 
-                        if missing_keys:
-                            debug_log(
-                                'Missing keys found: {}'.format(
-                                    missing_keys),
-                                'Original data: {}'.format(match.groups()),
-                                'Parsed data: {}'.format(data)
-                            )
-                        # check whether to skip this message or not, based on its type
+                except socket.timeout:
+                    inactivity_timeout.check_for_timeout()
 
-                        to_add = self.must_add_item(
-                            data,
-                            self._MESSAGE_GROUPS,
-                            messages_groups_to_add,
-                            messages_types_to_add
-                        )
+                except ConnectionError as e:
+                    twitch_chat_irc = create_connection()
 
-                        if not to_add:
-                            continue
 
-                        inactivity_timeout.reset()
-                        message_count += 1
-                        yield data
-
-                    log('debug', 'Total number of messages: {}'.format(message_count))
-
-                elif full_readbuffer:
-                    # No matches, but data has been read successfully.
-                    # This means that we can safely reset the readbuffer.
-                    # This is used to periodically reset the readbuffer,
-                    # to avoid a massive buffer from forming.
-
-                    log('debug', 'No matches found in "\n{}\n"'.format(
-                        readbuffer.strip()))  # never pause
-                    readbuffer = ''
-
-                current_time = time.time()
-
-                time_since_last_ping = current_time - last_ping_time
-
-                if time_since_last_ping > ping_every:
-                    twitch_chat_irc.send_raw('PING')
-                    last_ping_time = current_time
-
-            except socket.timeout:
-                inactivity_timeout.check_for_timeout()
-
-            except ConnectionError as e:
-                twitch_chat_irc = create_connection()
+        finally:
+            twitch_chat_irc.close_connection()
 
     def get_chat_by_stream_id(self, stream_id, params):
 

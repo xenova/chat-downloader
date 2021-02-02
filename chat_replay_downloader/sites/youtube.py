@@ -114,26 +114,25 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'name': 'Get chat messages from live chat replay',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
-                'start_time': 10,
-                'end_time': 30,
+                'max_messages': 10
             },
 
             'expected_result': {
-                'message_types': ['text_message', 'placeholder_item', 'membership_item', 'ticker_sponsor_item'],
-                'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
+                'message_types': ['text_message'],
+                'action_types': ['add_chat_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
         {
-            'name': 'Get superchat messages from live chat replay',
+            'name': 'Get superchat and ticker messages from live chat replay',
             'params': {
-                'url': 'https://www.youtube.com/watch?v=97w16cYskVI',
-                'end_time': 50,
-                'message_types': ['superchat']
+                'url': 'https://www.youtube.com/watch?v=UlemRwXYWHg',
+                'end_time': 20,
+                'message_groups': ['superchat', 'tickers']
             },
 
             'expected_result': {
-                'message_types': ['paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
+                'message_types': ['paid_message', 'ticker_paid_message_item', 'membership_item', 'ticker_sponsor_item', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
@@ -147,7 +146,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             },
 
             'expected_result': {
-                'message_types': ['paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
+                'message_types': ['viewer_engagement_message', 'paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
@@ -172,24 +171,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'params': {
                 'url': 'https://www.youtube.com/watch?v=Ih2WTyY62J4',
                 'start_time': 0,
-                'end_time': 50,
+                'end_time': 40,
+                'message_groups':['donations']
+
             },
 
             'expected_result': {
-                'message_types': ['viewer_engagement_message', 'membership_item', 'ticker_sponsor_item', 'text_message', 'placeholder_item', 'donation_announcement'],
-                'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
+                'message_types': ['donation_announcement'],
+                'action_types': ['add_chat_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
-            }
-        },
-        {
-            'name': 'Get a certain number of messages from a livestream.',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
-                'max_messages': 10
-            },
-
-            'expected_result': {
-                'messages_condition': lambda messages: len(messages) == 10,
             }
         },
         {
@@ -202,8 +192,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             },
 
             'expected_result': {
-                'message_types': ['text_message', 'placeholder_item', 'membership_item', 'ticker_sponsor_item'],
-                'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
+                'message_types': ['text_message'],
+                'action_types': ['add_chat_item'],
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
@@ -224,7 +214,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'url': 'https://www.youtube.com/watch?v=vprErlL1w2E',
             },
             'expected_result': {
-                'error': NoChatReplay,
+                'error': VideoUnplayable,
             }
         },
         {
@@ -251,7 +241,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'url': 'https://www.youtube.com/watch?v=ijFMXqa-N0c',
             },
             'expected_result': {
-                'error': VideoUnavailable,
+                'error': LoginRequired,
             }
         },
         {
@@ -260,7 +250,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'url': 'https://www.youtube.com/watch?v=sJL6WA-aGkQ',
             },
             'expected_result': {
-                'error': VideoUnavailable,
+                'error': VideoUnplayable,
             }
         }
     ]
@@ -323,7 +313,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         ]
     }
 
-    _MESSAGE_TYPES = []
+    _MESSAGE_TYPES = ['all']
     for group in _MESSAGE_GROUPS:
         _MESSAGE_TYPES += _MESSAGE_GROUPS[group]
 
