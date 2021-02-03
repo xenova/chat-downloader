@@ -1448,6 +1448,10 @@ class TwitchChatDownloader(BaseChatDownloader):
                     inactivity_timeout.check_for_timeout()
 
                 except ConnectionError as e:
+                    # Close old connection
+                    twitch_chat_irc.close_connection()
+
+                    # Create a new connection
                     twitch_chat_irc = create_connection()
 
 
