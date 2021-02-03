@@ -55,7 +55,7 @@ class ChatDownloader():
                  inactivity_timeout=None,
 
                  message_groups=SiteDefault('message_groups'),
-                 message_types=SiteDefault('message_types'),
+                 message_types=None,  # SiteDefault('message_types'),
 
 
                  # Formatting

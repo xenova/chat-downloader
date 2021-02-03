@@ -226,16 +226,24 @@ class BaseChatDownloader:
     # sub_message
 
     _SITE_DEFAULT_PARAMS = {
-        # 'message_types': ['text_message'],
+        # MAY NOT specify message_types. must always be empty
         'message_groups': ['messages'],
         'format': 'default',
     }
+
+    _NAME = None
 
     def __str__(self):
         return ''
 
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
+
+        # Force mutual exclusion
+        if messages_types_to_add:
+            # messages_types is set
+            messages_groups_to_add = []
+
         if 'all' in messages_groups_to_add or 'all' in messages_types_to_add:  # user wants everything
             return True
 

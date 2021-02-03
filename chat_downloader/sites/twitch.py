@@ -100,19 +100,13 @@ class TwitchChatDownloader(BaseChatDownloader):
     _SUBSCRIBER_BADGE_INFO = {}  # local cache for subscriber badge info
     _SUBSCRIBER_BADGE_URL = 'https://badges.twitch.tv/v1/badges/channels/{}/display'
 
+    _NAME = 'Twitch.tv'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # self._name = None
-        # self.name = 'Twitch.tv'
 
         TwitchChatDownloader._BADGE_INFO = self._session_get_json(
             self._BADGE_INFO_URL).get('badge_sets') or {}
-        # print(TwitchChatDownloader._BADGE_INFO.keys(), flush=True)
-        # #exit()
-        # # print(TwitchChatDownloader._BADGE_INFO)
-        #
-
-    _DEFAULT_FORMAT = 'twitch'
 
     def __str__(self):
         return 'twitch.tv'
@@ -504,7 +498,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'RECONNECT': 'reconnect'
     }
 
-    # msg-id's
+    # MESSAGE GROUPS FOR IRC
     _MESSAGE_GROUP_REMAPPINGS = {
         # TODO add rest of
         # https://dev.twitch.tv/docs/irc/msg-id
@@ -658,6 +652,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         }
     }
 
+    # MESSAGE GROUPS FOR VOD/CLIPS
     _MESSAGE_GROUPS = {
         'messages': [
             'text_message'

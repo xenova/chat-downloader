@@ -299,7 +299,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         ],
 
         'deleted': [
-            'deleted_message'  # old: 'deleted_state_message'
+            'deleted_message'
         ],
         'bans': [
             'ban_user'
