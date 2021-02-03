@@ -110,3 +110,4 @@ For a more in-depth output template, consult the [Item Wiki](https://github.com/
     - dailymotion.com
     - reddit live
     - younow.com
+- Add `--statistics` tag. This will show a summary of all chat messages retrieved (e.g. sum YouTube superchat, memberships, subscriptions, etc.)
