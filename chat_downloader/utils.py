@@ -1,4 +1,5 @@
-import threading
+import inspect
+from threading import Thread
 import colorlog
 import datetime
 import re
@@ -14,8 +15,8 @@ def timestamp_to_microseconds(timestamp):
     Convert RFC3339 timestamp to microseconds.
     This is needed as datetime.datetime.strptime() does not support nanosecond precision.
     """
-    info = list(filter(None, re.split('[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
+    info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
+    return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1]))) * 1e6)
 
 
 def time_to_seconds(time):
@@ -39,7 +40,7 @@ def seconds_to_time(seconds):
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
     """Convert unix time to human-readable timestamp."""
-    return datetime.datetime.fromtimestamp(microseconds//1000000).strftime(format)
+    return datetime.datetime.fromtimestamp(microseconds // 1000000).strftime(format)
 
 
 def ensure_seconds(time, default=None):
@@ -51,7 +52,7 @@ def ensure_seconds(time, default=None):
         return int(time)
     except ValueError:
         return time_to_seconds(time)
-    except:
+    except Exception:
         return default
 
 
@@ -112,14 +113,14 @@ def int_or_none(v, default=None):
 def try_get_first_key(dictionary, default=None):
     try:
         return next(iter(dictionary))
-    except:
+    except Exception:
         return default
 
 
 def try_get_first_value(dictionary, default=None):
     try:
         return next(iter(dictionary.values()))
-    except:
+    except Exception:
         return default
 
 
@@ -182,13 +183,11 @@ def supports_colour():
     is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
 
     return is_a_tty and (
-        sys.platform != 'win32' or
-        'ANSICON' in os.environ or
         # Windows Terminal supports VT codes.
-        'WT_SESSION' in os.environ or
         # Microsoft Visual Studio Code's built-in terminal supports colours.
-        os.environ.get('TERM_PROGRAM') == 'vscode' or
-        vt_codes_enabled_in_windows_registry()
+
+        (sys.platform != 'win32') or ('ANSICON' in os.environ) or ('WT_SESSION' in os.environ) or (
+            os.environ.get('TERM_PROGRAM') == 'vscode') or (vt_codes_enabled_in_windows_registry())
     )
 
 
@@ -222,16 +221,18 @@ def pause(text='Press Enter to continue...'):
 def set_log_level(level):
     logger.setLevel(level.upper())
 
+
 def get_logger():
     return logger
 
+
 def log(level, items, to_pause=False):
-    l = getattr(logger, level, None)
-    if l:
+    logger_at_level = getattr(logger, level, None)
+    if logger_at_level:
         if not isinstance(items, (tuple, list)):
             items = [items]
         for item in items:
-            l(item)
+            logger_at_level(item)
 
         if to_pause:
             pause()
@@ -271,7 +272,7 @@ def flatten_json(original_json):
 
 
 def attempts(max_attempts):
-    return range(1, max_attempts+1)
+    return range(1, max_attempts + 1)
 
 
 def preferredencoding():
@@ -336,8 +337,7 @@ def _windows_write_string(s, out, skip_errors=True):
     def not_a_console(handle):
         if handle == INVALID_HANDLE_VALUE or handle is None:
             return True
-        return ((GetFileType(handle) & ~FILE_TYPE_REMOTE) != FILE_TYPE_CHAR
-                or GetConsoleMode(handle, ctypes.byref(ctypes.wintypes.DWORD())) == 0)
+        return ((GetFileType(handle) & ~FILE_TYPE_REMOTE) != FILE_TYPE_CHAR or GetConsoleMode(handle, ctypes.byref(ctypes.wintypes.DWORD())) == 0)
 
     if not_a_console(h):
         return False
@@ -403,7 +403,6 @@ def nested_update(d, u):
 
 
 # Inspired by https://github.com/hero24/TimedInput/
-from threading import Thread
 
 
 class TimedInput(Thread):
@@ -453,7 +452,6 @@ def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
         return TimedInput(timeout, prompt, default, *args, **kwargs).read()
 
 
-import inspect
 def get_default_args(func):
     signature = inspect.signature(func)
     return {

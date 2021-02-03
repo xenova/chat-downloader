@@ -14,7 +14,6 @@ from requests.exceptions import RequestException
 
 from ..errors import (
     TwitchError,
-    InvalidParameter,
     UnexpectedHTML,
     NoChatReplay,
     TimeoutException,
@@ -29,7 +28,6 @@ from ..utils import (
     int_or_none,
     replace_with_underscores,
     multi_get,
-    update_dict_without_overwrite,
     log,
     remove_prefixes,
     attempts
@@ -39,7 +37,6 @@ from ..utils import (
 
 
 class TwitchChatIRC():
-
 
     def __init__(self):
         # create new socket
@@ -61,7 +58,7 @@ class TwitchChatIRC():
         self.send_raw('NICK justinfan67420')
 
     def send_raw(self, string):
-        self.socket.send((string+'\r\n').encode('utf-8'))
+        self.socket.send((string + '\r\n').encode('utf-8'))
 
     def recv(self, buffer_size):
         return self.socket.recv(buffer_size).decode('utf-8', 'ignore')
@@ -93,7 +90,6 @@ class TwitchChatIRC():
 
     def close_connection(self):
         self.socket.close()
-
 
 
 class TwitchChatDownloader(BaseChatDownloader):
@@ -727,7 +723,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         info = {}
         for key in item:
             BaseChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
+                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -749,7 +745,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         for key in user_notice_params:
             BaseChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, user_notice_params[key], True)
+                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, user_notice_params[key], True)
 
         original_message_type = info.get('message_type')
         if original_message_type:
@@ -928,13 +924,11 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
-        pause_on_debug = params.get('pause_on_debug')
-
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                pause_on_debug
+                params.get('pause_on_debug')
             )
 
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
@@ -965,7 +959,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 data = self._parse_item(comment, offset)
 
                 # test for missing keys
-                missing_keys = data.keys()-TwitchChatDownloader._KNOWN_COMMENT_KEYS
+                missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
                 if missing_keys:
                     debug_log(
@@ -1018,8 +1012,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             }
         }]
 
-        pause_on_debug = params.get('pause_on_debug')
-
         for attempt_number in attempts(max_attempts):
             try:
                 video = self._download_gql(query)[0]['data']['video']
@@ -1028,7 +1020,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         if not video:
-            raise VideoUnavailable("Sorry. Unless you've got a time machine, that content is unavailable.")
+            raise VideoUnavailable(
+                "Sorry. Unless you've got a time machine, that content is unavailable.")
         title = video.get('title')
         duration = video.get('lengthSeconds')
 
@@ -1053,7 +1046,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         query = {
             'query': '{ clip(slug: "%s") { broadcaster { id } video { id createdAt } createdAt durationSeconds videoOffsetSeconds title url slug } }' % clip_id,
         }
-        pause_on_debug = params.get('pause_on_debug')
 
         for attempt_number in attempts(max_attempts):
             try:
@@ -1065,7 +1057,8 @@ class TwitchChatDownloader(BaseChatDownloader):
         vod_id = multi_get(clip, 'video', 'id')
         # print(clip)
         if vod_id is None:
-            raise NoChatReplay("This clip's past broadcast has expired and chat replay is no longer available.")
+            raise NoChatReplay(
+                "This clip's past broadcast has expired and chat replay is no longer available.")
 
         offset = clip.get('videoOffsetSeconds')
 
@@ -1117,7 +1110,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 new_badge[key] = new_badge_info.get(key)
 
             image_urls = [
-                (new_badge.pop('image_url_{}x'.format(i), ''), i*18) for i in (1, 2, 4)]
+                (new_badge.pop('image_url_{}x'.format(i), ''), i * 18) for i in (1, 2, 4)]
             if image_urls:
                 new_badge['icons'] = []
 
@@ -1163,7 +1156,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         info = {}
         for key in commenter or []:
             BaseChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
+                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
         return info
 
     @staticmethod
@@ -1180,7 +1173,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         """
         Decode text according to https://ircv3.net/specs/extensions/message-tags.html
         """
-        return text.replace('\:', ';').replace('\s', ' ')
+        return text.replace(r'\:', ';').replace(r'\s', ' ')
 
     @staticmethod
     def _set_message_type(info, original_message_type, params=None):
@@ -1188,8 +1181,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             params = {}
         new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
             original_message_type)
-
-        #print(original_message_type, '-->', new_message_type)
 
         if new_message_type:
             info['message_type'] = new_message_type
@@ -1222,9 +1213,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 continue
 
             BaseChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
-                                 TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1],
-                                 keep_unknown_keys=True,
-                                 replace_char_with_underscores='-')
+                                     TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1],
+                                     keep_unknown_keys=True,
+                                     replace_char_with_underscores='-')
 
         message_match = match.group(3)
         if message_match:
@@ -1312,13 +1303,11 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
-        pause_on_debug = params.get('pause_on_debug')
-
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                pause_on_debug
+                params.get('pause_on_debug')
             )
 
         def create_connection():
@@ -1333,21 +1322,18 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         twitch_chat_irc = create_connection()
 
-        time_since_last_message = 0
-
         last_ping_time = time.time()
 
-        # TODO make this param
+        # TODO make this a param
         ping_every = 60  # how often to ping the server
 
         readbuffer = ''
 
-        attempt_number = 0
-
         message_count = 0
 
         timeout = Timeout(params.get('timeout'))
-        inactivity_timeout = Timeout(params.get('inactivity_timeout'), Timeout.INACTIVITY)
+        inactivity_timeout = Timeout(params.get(
+            'inactivity_timeout'), Timeout.INACTIVITY)
         try:
             while True:
                 timeout.check_for_timeout()
@@ -1379,7 +1365,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                                 # only pass on incomplete message
 
                                 # readbuffer[span[1]:]
-                                pass_on = pass_on[span[1]-span[0]:]
+                                pass_on = pass_on[span[1] - span[0]:]
 
                             # actual message cut off (matched, but not complete)
                             else:
@@ -1399,7 +1385,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                             data = self._parse_irc_item(match)
 
                             # test for missing keys
-                            missing_keys = data.keys()-TwitchChatDownloader._KNOWN_IRC_KEYS
+                            missing_keys = data.keys() - TwitchChatDownloader._KNOWN_IRC_KEYS
 
                             if missing_keys:
                                 debug_log(
@@ -1424,7 +1410,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                             message_count += 1
                             yield data
 
-                        log('debug', 'Total number of messages: {}'.format(message_count))
+                        log('debug', 'Total number of messages: {}'.format(
+                            message_count))
 
                     elif full_readbuffer:
                         # No matches, but data has been read successfully.
@@ -1447,13 +1434,12 @@ class TwitchChatDownloader(BaseChatDownloader):
                 except socket.timeout:
                     inactivity_timeout.check_for_timeout()
 
-                except ConnectionError as e:
+                except ConnectionError:
                     # Close old connection
                     twitch_chat_irc.close_connection()
 
                     # Create a new connection
                     twitch_chat_irc = create_connection()
-
 
         finally:
             twitch_chat_irc.close_connection()
@@ -1467,8 +1453,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             'operationName': 'StreamMetadata',
             'variables': {'channelLogin': stream_id.lower()}
         }]
-
-        pause_on_debug = params.get('pause_on_debug')
 
         for attempt_number in attempts(max_attempts):
             try:

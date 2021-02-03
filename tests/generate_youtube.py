@@ -1,5 +1,5 @@
+from chat_downloader.utils import multi_get
 import sys
-import codecs
 import json
 import requests
 import re
@@ -7,12 +7,6 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_downloader.utils import multi_get
-
-
-
-# sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-# sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
 session = requests.Session()
 session.headers = {
@@ -30,16 +24,15 @@ def get_initial_info(url):
     return json.loads(info.group(1))
 
 
-
-
-live_url = _YT_HOME+'/channel/UC4R8DWoMoI7CAwX8_LjQHig'
+live_url = _YT_HOME + '/channel/UC4R8DWoMoI7CAwX8_LjQHig'
 
 
 # print(ytInitialData)
 
 ytInitialData = get_initial_info(live_url)
 
-sections = ytInitialData['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents']
+sections = ytInitialData['contents']['twoColumnBrowseResultsRenderer'][
+    'tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents']
 
 cmd_template = 'python -m chat_downloader https://www.youtube.com/watch?v={} --timeout 180'
 # --max_messages 100
@@ -50,10 +43,10 @@ for s in sections:
 
     section_title = section_info['title']['runs'][0]['text']
 
-
     # items = section_info['content']['horizontalListRenderer']['items']
 
-    playlist_url = _YT_HOME+section_info['endpoint']['commandMetadata']['webCommandMetadata']['url']
+    playlist_url = _YT_HOME + \
+        section_info['endpoint']['commandMetadata']['webCommandMetadata']['url']
     # print(playlist_url)
     # playlist_url = 'https://www.youtube.com/playlist?list=PLErukX1W1OYjFx2pG8zjWiMuPMG0F-LbI'
     # playlist_url = 'https://www.youtube.com/playlist?list=PLiZwe6-ujEU0vx0RU8QUw5EoRTNA3zV9M'
@@ -62,7 +55,8 @@ for s in sections:
     playlist_info = get_initial_info(playlist_url)
     # print(playlist_info)
 
-    items = playlist_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]['playlistVideoListRenderer']['contents']
+    items = playlist_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content'][
+        'sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]['playlistVideoListRenderer']['contents']
 
     for item in items:
         video_id = multi_get(item, 'playlistVideoRenderer', 'videoId')
@@ -91,13 +85,11 @@ for s in sections:
     # exit()
     # print(section_title)
 
-
     # for item in items:
 
     #     info = item['gridVideoRenderer']
     #     video_id = info['videoId']
     #     title = info['title']['simpleText']
-
 
     #     #print(cmd_template.format(video_id))
     # print()

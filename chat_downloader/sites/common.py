@@ -1,25 +1,24 @@
 
 import requests
-from http.cookiejar import MozillaCookieJar, LoadError
+from http.cookiejar import MozillaCookieJar
 import os
 import time
-import inspect
-from copy import deepcopy
 from json import JSONDecodeError
 from math import ceil
 
-from ..errors import *
+from ..errors import (
+    InvalidParameter,
+    TimeoutException,
+    UnexpectedHTML,
+    RetriesExceeded,
+    CookieError
+)
 
 from ..utils import (
     get_title_of_webpage,
-    update_dict_without_overwrite,
     log,
-    remove_prefixes,
     pause,
-    timed_input,
-    set_log_level,
-    get_logger,
-    get_default_args
+    timed_input
 )
 
 
@@ -70,7 +69,8 @@ class Timeout():
         if self.end_time is None:
             return float('inf')
         else:
-            return ceil(self._calculate_remaining()*1000)
+            return ceil(self._calculate_remaining() * 1000)
+
 
 class Chat():
     def __init__(self, chat, **kwargs):
@@ -81,7 +81,6 @@ class Chat():
         self.is_live = kwargs.get('is_live')
         self.start_time = kwargs.get('start_time')
 
-
         # TODO
         # author/user/uploader/creator
 
@@ -91,6 +90,7 @@ class Chat():
     # Must be set later
     def format(self, item):
         raise NotImplementedError
+
 
 class BaseChatDownloader:
     """
@@ -369,13 +369,12 @@ class BaseChatDownloader:
     def get_chat(self, **kwargs):
         raise NotImplementedError
 
-
     @staticmethod
     def create_image(url, width=None, height=None, image_id=None):
         if url.startswith('//'):
             url = 'https:' + url
         image = {
-            'url':  url,
+            'url': url,
         }
         if width:
             image['width'] = width
@@ -398,7 +397,7 @@ class BaseChatDownloader:
         These keys are modifed by removing some text.
         """
         if replace_key is None:
-            replace_key = dict_name+'_'
+            replace_key = dict_name + '_'
 
         new_dict = {}
 
@@ -430,7 +429,7 @@ class BaseChatDownloader:
 
         if retry_timeout is None:  # use exponential backoff
             if attempt_number > 1:
-                time_to_sleep = 2**(attempt_number-2)
+                time_to_sleep = 2**(attempt_number - 2)
             else:
                 time_to_sleep = 0
 

@@ -1,9 +1,7 @@
 import json
 from json.decoder import JSONDecodeError
-from urllib import parse
 import xml.etree.ElementTree as ET
 import isodate
-import time
 import re
 
 from .common import (
@@ -113,9 +111,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         text_to_parse = remove_prefixes(response.text, self._STRIP_TEXT)
         return json.loads(text_to_parse)
 
-    _VOD_COMMENTS_API = _FB_HOMEPAGE+'/videos/vodcomments/'
-    _GRAPH_API = _FB_HOMEPAGE+'/api/graphql/'
-    _VIDEO_URL_FORMAT = _FB_HOMEPAGE+'/video.php?v={}'
+    _VOD_COMMENTS_API = _FB_HOMEPAGE + '/videos/vodcomments/'
+    _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
+    _VIDEO_URL_FORMAT = _FB_HOMEPAGE + '/video.php?v={}'
     # _VIDEO_TITLE_REGEX = r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']\s*/>'
 
     def _attempt_fb_retrieve(self, url, max_attempts, retry_timeout, fb_json=False, **post_kwargs):
@@ -139,8 +137,6 @@ class FacebookChatDownloader(BaseChatDownloader):
         info = {}
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
-
-        pause_on_debug = params.get('pause_on_debug')
 
         # TODO remove duplication - many similar methods
         json_data = self._attempt_fb_retrieve(
@@ -245,7 +241,7 @@ class FacebookChatDownloader(BaseChatDownloader):
     ]
 
     _KNOWN_ATTACHMENT_KEYS = set(
-        list(_ATTACHMENT_REMAPPING.keys())+_IGNORE_ATTACHMENT_KEYS)
+        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
 
     @staticmethod
     def _parse_attachment_styles(item):
@@ -266,7 +262,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             if parsed.get(key) == {}:
                 parsed.pop(key)
 
-        missing_keys = attachment.keys()-FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
+        missing_keys = attachment.keys() - FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
         if missing_keys:
             print('MISSING ATTACHMENT KEYS:', missing_keys)
             print(item)
@@ -400,7 +396,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         keys = (('badge_asset', 'small'), ('information_asset', 'colour'))
         icons = list(map(lambda x: BaseChatDownloader.create_image(
-            FacebookChatDownloader._FB_HOMEPAGE+item.get(x[0]), 24, 24, x[1]), keys))
+            FacebookChatDownloader._FB_HOMEPAGE + item.get(x[0]), 24, 24, x[1]), keys))
         icons.append(BaseChatDownloader.create_image(
             item.get('multiple_badge_asset'), 36, 36, 'large'))
 
@@ -420,7 +416,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _REMAP_FUNCTIONS = {
         'parse_feedback': lambda x: FacebookChatDownloader._parse_feedback(x),
-        'multiply_by_million': lambda x: x*1000000,
+        'multiply_by_million': lambda x: x * 1000000,
         'parse_edit_history': lambda x: x.get('count'),
 
         'parse_item': lambda x: FacebookChatDownloader._parse_live_stream_node(x),
@@ -558,21 +554,18 @@ class FacebookChatDownloader(BaseChatDownloader):
         return info
 
     def _get_live_chat_messages_by_video_id(self, video_id, params):
-        callback = params.get('callback')
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
-
-        pause_on_debug = params.get('pause_on_debug')
 
         # def debug_log(*items):
         #     log(
         #         'debug',
         #         items,
-        #         pause_on_debug
+        #         params.get('pause_on_debug')
         #     )
 
         buffer_size = 25  # max num comments returned by api call
-        cursor = ''
+        # cursor = ''
         variables = {
             'videoID': video_id
         }
@@ -583,7 +576,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             # &first=12&after=<end_cursor>
         }
         data.update(self.data)
-        #p = (), params=p
+        # p = (), params=p
 
         first_try = True
 
@@ -631,7 +624,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
                 # remove items that have already been parsed
                 if comment_id in last_ids:
-                    #print('=', end='', flush=True)
+                    # print('=', end='', flush=True)
                     continue
 
                 last_ids.append(comment_id)
@@ -666,16 +659,13 @@ class FacebookChatDownloader(BaseChatDownloader):
                 first_try = False
 
     def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, params):
-        callback = params.get('callback')
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
-        pause_on_debug = params.get('pause_on_debug')
-
         # useful tool (convert curl to python request)
         # https://curl.trillworks.com/
-        timeout_duration = 10  # TODO make this modifiable
+        # timeout_duration = 10  # TODO make this modifiable
 
         initial_request_params = (
             ('eft_id', video_id),
@@ -694,9 +684,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         next_start_time = max(start_time, 0)
         end_time = min(end_time, max_duration)
 
-        #print(next_start_time, end_time, type(next_start_time), type(end_time))
+        # print(next_start_time, end_time, type(next_start_time), type(end_time))
         # return
-        #total = []
+        # total = []
         timeout = Timeout(params.get('timeout'))
         while True:
             timeout.check_for_timeout()
@@ -721,7 +711,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
                 continue
                 # TODO debug
-                #print('no comments between',next_start_time, next_end_time, flush=True)
+                # print('no comments between',next_start_time, next_end_time, flush=True)
                 # print('err1')
                 # print(json_data)
 
@@ -746,12 +736,10 @@ class FacebookChatDownloader(BaseChatDownloader):
                     # TODO debug
                     continue
 
-                pinned_comments = ufipayload.get('pinnedcomments')
+                # pinned_comments = ufipayload.get('pinnedcomments')
                 profile = try_get_first_value(ufipayload['profiles'])
 
-                #print(profile_id, comment)
                 text = comment['body']['text']  # safe_convert_text()
-                #print(time_offset, text)
 
                 temp = {
                     'author': {
@@ -761,7 +749,6 @@ class FacebookChatDownloader(BaseChatDownloader):
                     'time_text': seconds_to_time(time_offset),
                     'message': text
                 }
-                # print(temp)
 
                 yield temp
 

@@ -148,14 +148,13 @@ class ChatDownloader():
             raise SiteNotSupported(
                 'Site not supported: {}'.format(parsed.netloc))
         else:
-            original_params['url'] = 'https://'+url  # try to correct
+            original_params['url'] = 'https://' + url  # try to correct
             chat = self.get_chat(**original_params)
             if chat:
                 return chat
 
             log('debug', parsed)
             raise InvalidURL('Invalid URL: "{}"'.format(url))
-
 
     def close(self):
         for session in self.sessions:

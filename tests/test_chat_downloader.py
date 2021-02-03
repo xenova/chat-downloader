@@ -1,3 +1,8 @@
+from chat_downloader import ChatDownloader
+from chat_downloader.sites import (
+    get_all_sites,
+    BaseChatDownloader
+)
 import unittest
 
 # Allow direct execution
@@ -5,20 +10,18 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_downloader.sites import (
-    get_all_sites,
-    BaseChatDownloader
-)
-from chat_downloader import ChatDownloader
 
 class TestChatDownloader(unittest.TestCase):
     pass
 
-line = '='*70
+
+line = '=' * 70
+
 
 def generator(site, test_name):
 
     test_cases = getattr(site, '_TESTS', [])
+
     def test_template(self):
         print()
         print(line)
@@ -28,25 +31,26 @@ def generator(site, test_name):
         site_object = ChatDownloader()
         try:
             for test_number, test in enumerate(test_cases):
-                print('Running test #{}: {}'.format(test_number + 1,test.get('name')))
+                print('Running test #{}: {}'.format(
+                    test_number + 1, test.get('name')))
 
                 params = test['params']
 
-                if not params.get('logging'): # if it is not set, make it 'none'
+                if not params.get('logging'):  # if it is not set, make it 'none'
                     params['logging'] = 'none'
-
 
                 expected_result = test.pop('expected_result', None)
 
                 if not params:
-                    self.assertFalse() # Invalid test
+                    self.assertFalse()  # Invalid test
 
                 messages_list = []
                 try:
                     chat = site_object.get_chat(**params)
 
                     if site is not BaseChatDownloader:
-                        self.assertEqual(chat.site.__class__.__name__,site.__name__)
+                        self.assertEqual(
+                            chat.site.__class__.__name__, site.__name__)
 
                     messages_list = list(chat)
 
@@ -54,18 +58,17 @@ def generator(site, test_name):
                     error = expected_result.get('error')
                     self.assertTrue(error is not None and isinstance(e, error))
 
-
                 messages_condition = expected_result.get('messages_condition')
 
                 if messages_condition and callable(messages_condition):
                     self.assertTrue(messages_condition(messages_list))
 
-
                 actual_result = {
                     'message_types': [],
                     'action_types': []
                 }
-                types_to_check = [key for key in actual_result if key in expected_result]
+                types_to_check = [
+                    key for key in actual_result if key in expected_result]
 
                 if types_to_check:
                     for message in messages_list:
@@ -84,7 +87,8 @@ def generator(site, test_name):
                     #     print(expected_result.get(check),actual_result.get(check))
 
                     for check in types_to_check:
-                        self.assertCountEqual(expected_result.get(check),actual_result.get(check))
+                        self.assertCountEqual(expected_result.get(
+                            check), actual_result.get(check))
 
         finally:
             site_object.close()
@@ -94,6 +98,7 @@ def generator(site, test_name):
             print()
 
     return test_template
+
 
 all_sites = get_all_sites(True)
 for site in all_sites:
@@ -105,7 +110,6 @@ for site in all_sites:
     setattr(TestChatDownloader, test_method.__name__, test_method)
 
     del test_method
-
 
 
 if __name__ == '__main__':

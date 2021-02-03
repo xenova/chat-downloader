@@ -58,7 +58,7 @@ setup(
     name='chat-downloader',
     packages=find_packages(include=['chat_downloader', 'chat_downloader.*']),
     package_data={
-        'chat_downloader':['formatting/*.json']
+        'chat_downloader': ['formatting/*.json']
     },
     setup_requires=setup_requirements,
     test_suite='tests',

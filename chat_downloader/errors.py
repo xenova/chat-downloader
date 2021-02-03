@@ -1,8 +1,10 @@
 """File for defining errors"""
 
+
 class TimeoutException(Exception):
     """Raised after a timeout occurs."""
     pass
+
 
 class InvalidParameter(Exception):
     """Raised if an invalid parameter is specified."""
@@ -13,16 +15,20 @@ class RetriesExceeded(Exception):
     """Raised after the maximum number of retries has been reached."""
     pass
 
+# TODO change UnexpectedHTML/JSONParseError back to JSONDecode?
+
 
 class JSONParseError(Exception):
     """Raised when unable to parse JSON."""
     pass
+
 
 class UnexpectedHTML(Exception):
     """
     Raised when JSON is expected, but HTML is returned instead
     This usually occurs when an internal service error occurs.
     """
+
     def __init__(self, message=None, html=None):
         super().__init__(message)
         self.html = html
@@ -62,9 +68,11 @@ class URLNotProvided(Exception):
     """Raised when no url is provided."""
     pass
 
+
 class InvalidURL(Exception):
     """Raised when the url is invalid."""
     pass
+
 
 class SiteNotSupported(Exception):
     """Raised when the url is valid, but the site is not supported."""

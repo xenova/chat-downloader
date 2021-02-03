@@ -21,7 +21,6 @@ from urllib import parse
 import json
 import time
 import re
-import math
 
 from ..utils import (
     try_get,
@@ -36,10 +35,8 @@ from ..utils import (
     remove_suffixes,
     camel_case_split,
     ensure_seconds,
-    microseconds_to_timestamp,
     log,
-    attempts,
-    safe_print
+    attempts
 )
 
 from datetime import datetime
@@ -172,7 +169,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'url': 'https://www.youtube.com/watch?v=Ih2WTyY62J4',
                 'start_time': 0,
                 'end_time': 40,
-                'message_groups':['donations']
+                'message_groups': ['donations']
 
             },
 
@@ -260,7 +257,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _YT_HOME = 'https://www.youtube.com'
 
-    _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME+'/{}?continuation={}'
+    _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME + '/{}?continuation={}'
     _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + \
         b64decode(
             'L3lvdXR1YmVpL3YxL2xpdmVfY2hhdC9nZXRfe30/a2V5PUFJemFTeUFPX0ZKMlNscVU4UTRTVEVITEdDaWx3X1k5XzExcWNXOA==').decode()
@@ -857,11 +854,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         initial_continuation_info = initial_info.get('continuation_info')
 
-        stream_start_time = initial_info.get('start_time')
+        # stream_start_time = initial_info.get('start_time')
         is_live = initial_info.get('is_live')
         visitor_data = initial_info.get('visitor_data')
 
-        duration = initial_info.get('duration')
+        # duration = initial_info.get('duration')
 
         start_time = ensure_seconds(params.get('start_time'))
         end_time = ensure_seconds(params.get('end_time'))
@@ -918,13 +915,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
-        pause_on_debug = params.get('pause_on_debug')
-
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                pause_on_debug
+                params.get('pause_on_debug')
             )
 
         timeout = Timeout(params.get('timeout'))
@@ -933,7 +928,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         message_count = 0
         first_time = True
-        last_message_ids = []
         while True:
             info = None
             for attempt_number in attempts(max_attempts):
@@ -969,7 +963,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     continue
 
-                except NoContinuation as e:
+                except NoContinuation:
                     # debug_log(e)
                     # Live stream ended
                     return
@@ -990,7 +984,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         offset_time = replay_chat_item_action.get(
                             'videoOffsetTimeMsec')
                         if offset_time:
-                            data['time_in_seconds'] = float(offset_time)/1000
+                            data['time_in_seconds'] = float(offset_time) / 1000
 
                         action = replay_chat_item_action['actions'][0]
 
@@ -1086,7 +1080,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     test_for_missing_keys = original_item.get(
                         original_message_type, {}).keys()
-                    missing_keys = test_for_missing_keys-self._KNOWN_KEYS
+                    missing_keys = test_for_missing_keys - self._KNOWN_KEYS
 
                     # print(action)
                     if not data:  # TODO debug
@@ -1229,7 +1223,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
                     # print('time_until_timeout',timeout.time_until_timeout())
-                    time.sleep(sleep_duration/1000)
+                    time.sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
                 break

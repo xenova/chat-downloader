@@ -1,18 +1,12 @@
 """Console script for chat_downloader."""
 import argparse
 import sys
-import os
-import codecs
-import json
-import traceback
-import time
 import re
 from docstring_parser import parse as doc_parse
 from requests.exceptions import RequestException
 
 import chat_downloader
 from .chat_downloader import ChatDownloader
-from .sites import BaseChatDownloader
 from .output.continuous_write import ContinuousWriter
 
 from .utils import (
@@ -23,7 +17,19 @@ from .utils import (
     get_default_args
 )
 
-from .errors import *
+from .errors import (
+    URLNotProvided,
+    SiteNotSupported,
+    LoginRequired,
+    VideoUnavailable,
+    NoChatReplay,
+    VideoUnplayable,
+    InvalidParameter,
+    InvalidURL,
+    RetriesExceeded,
+    NoContinuation,
+    TimeoutException
+)
 
 
 def main():
@@ -33,7 +39,8 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument('--version', action='version', version=chat_downloader.__version__)
+    parser.add_argument('--version', action='version',
+                        version=chat_downloader.__version__)
 
     # PROGRAM PARAMS
     parser.add_argument(
@@ -78,7 +85,7 @@ def main():
     add_chat_param(time_group, '--end_time', '-e')
 
     def splitter(s):
-        return [item.strip() for item in re.split('[\s,;]+', s)]
+        return [item.strip() for item in re.split(r'[\s,;]+', s)]
 
     # Specify message types/groups
     type_group = parser.add_argument_group('Message Type Arguments')
@@ -90,10 +97,11 @@ def main():
     def try_parse_int(text):
         try:
             return int(text)
-        except:
+        except Exception:
             return text
 
-    retry_group = parser.add_argument_group('Retry Arguments')  # what to do when an error occurs
+    retry_group = parser.add_argument_group(
+        'Retry Arguments')  # what to do when an error occurs
     add_chat_param(retry_group, '--max_attempts', type=int)
     add_chat_param(retry_group, '--retry_timeout', type=float)
 
@@ -130,8 +138,6 @@ def main():
         twitch_group, '--message_receive_timeout', type=float)
     add_chat_param(twitch_group, '--buffer_size', type=int)
 
-
-
     output_group = parser.add_argument_group('Output Arguments')
     output_group.add_argument(
         '--output', '-o', help='Path of the output file, default is None (i.e. print to standard output)', default=None)
@@ -155,7 +161,6 @@ def main():
         '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
     debug_options.add_argument(
         '--quiet', '-q', help='Activate quiet mode (hide all output)', action='store_true')
-
 
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
@@ -257,7 +262,7 @@ def main():
     except TimeoutException as e:
         log('info', e)
 
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         log('error', 'Keyboard Interrupt')
 
     finally:

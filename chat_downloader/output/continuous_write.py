@@ -1,9 +1,9 @@
-import time
 import os
 import json
 import csv
 
 from ..utils import flatten_json
+
 
 class CW:
     """
@@ -12,6 +12,7 @@ class CW:
     Can be used as a context manager (using the `with` keyword).
     Otherwise, the writer can be explicitly closed.
     """
+
     def __init__(self, file_name, overwrite=False):
         self.file_name = file_name
         # subclasses must set self.file
@@ -37,6 +38,7 @@ class CW:
 
     def flush(self):
         self.file.flush()
+
 
 class JSONCW(CW):
     """
@@ -71,8 +73,7 @@ class JSONCW(CW):
         padding = self.indent * \
             self.indent_character if isinstance(
                 self.indent, int) else self.indent
-        return ''.join(map(lambda x: padding+x, text.splitlines(True)))
-
+        return ''.join(map(lambda x: padding + x, text.splitlines(True)))
 
     def write(self, item, flush=False):
 
@@ -90,18 +91,19 @@ class JSONCW(CW):
             # If empty, write the start of an array
             self.file.write('['.encode())
         else:
-            #print(self.file.closed)
+            # print(self.file.closed)
             # seek to last character
-            self.file.seek(-len(indent_padding)-1, os.SEEK_END)
+            self.file.seek(-len(indent_padding) - 1, os.SEEK_END)
             self.file.write(self.separator.encode())  # Write the separator
 
             # self.file.truncate()
 
         self.file.write(to_write.encode())  # Dump the item
-        self.file.write((indent_padding+']').encode())  # Close the array
+        self.file.write((indent_padding + ']').encode())  # Close the array
 
         if flush:
             self.flush()
+
 
 class CSVCW(CW):
     """
@@ -111,11 +113,11 @@ class CSVCW(CW):
     def __init__(self, file_name, overwrite=False, sort_keys=True):
         super().__init__(file_name, overwrite)
 
-
-        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8') # , buffering=1
+        self.file = open(self.file_name, 'a+', newline='',
+                         encoding='utf-8')  # , buffering=1
 
         if not overwrite:
-        # save previous data
+            # save previous data
             self.file.seek(0)  # go to beginning of file
             csv_dict_reader = csv.DictReader(self.file)
             self.columns = list(csv_dict_reader.fieldnames or [])
@@ -154,6 +156,7 @@ class CSVCW(CW):
         if flush:
             self.flush()
 
+
 class TXTCW(CW):
     """
     Class used to control the continuous writing of a text to a TXT file.
@@ -161,17 +164,18 @@ class TXTCW(CW):
 
     def __init__(self, file_name, overwrite=False):
         super().__init__(file_name, overwrite)
-        self.file = open(self.file_name, 'a', encoding='utf-8')#, buffering=1
+        self.file = open(self.file_name, 'a',
+                         encoding='utf-8')  # , buffering=1
 
     def write(self, item, flush=False):
-        print(item, file=self.file, flush=flush) # , flush=True
+        print(item, file=self.file, flush=flush)  # , flush=True
 
 
 class ContinuousWriter:
     _SUPPORTED_WRITERS = {
         'json': JSONCW,
         'csv': CSVCW,
-        'txt':TXTCW
+        'txt': TXTCW
     }
 
     def __init__(self, file_name, **kwargs):
