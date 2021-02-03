@@ -27,10 +27,6 @@ class UnexpectedHTML(Exception):
         super().__init__(message)
         self.html = html
 
-class CallbackFunction(Exception):
-    """Raised when the callback function does not have (only) one required positional argument"""
-    pass
-
 
 class VideoNotFound(Exception):
     """Raised when video cannot be found."""

@@ -369,34 +369,6 @@ class BaseChatDownloader:
     def get_chat(self, **kwargs):
         raise NotImplementedError
 
-    def get_tests(self):
-        t = getattr(self, '_TEST', None)
-        if t:
-            assert not hasattr(self, '_TESTS'), \
-                '%s has _TEST and _TESTS' % type(self).__name__
-            tests = [t]
-        else:
-            tests = getattr(self, '_TESTS', [])
-        for t in tests:
-            yield t
-
-    # @staticmethod
-    # def perform_callback(callback, data, params=None):
-    #     if params is None:
-    #         params = {}
-    #     if callable(callback):
-    #         try:
-    #             callback(data)
-    #         except TypeError:
-    #             raise CallbackFunction(
-    #                 'Incorrect number of parameters for function '+callback.__name__)
-    #     elif callback is None:
-    #         pass  # do not perform callback
-    #     else:
-    #         raise CallbackFunction(
-    #             'Unable to call callback function '+callback.__name__)
-
-    # TODO make this a class with a __dict__ attribute
 
     @staticmethod
     def create_image(url, width=None, height=None, image_id=None):
