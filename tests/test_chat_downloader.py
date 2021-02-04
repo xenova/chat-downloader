@@ -1,10 +1,10 @@
 # Allow direct execution
-import unittest
+from chat_downloader import ChatDownloader
 from chat_downloader.sites import (
     get_all_sites,
     BaseChatDownloader
 )
-from chat_downloader import ChatDownloader
+import unittest
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

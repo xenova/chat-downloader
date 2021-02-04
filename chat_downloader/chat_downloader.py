@@ -33,8 +33,8 @@ class ChatDownloader():
         self.init_params = locals()
         self.init_params.pop('self')
 
-        # Track a list of sessions
-        self.sessions = []
+        # Track a dict of sessions
+        self.sessions = {}
 
     def get_chat(self, url=None,
                  start_time=None,
@@ -119,25 +119,26 @@ class ChatDownloader():
         for site in get_all_sites():
             regex = getattr(site, '_VALID_URL')
             if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
-                correct_site = site(**self.init_params)
 
-                self.sessions.append(correct_site)
+                # Create new session if not already created
+                if site.__name__ not in self.sessions:
+                    self.sessions[site.__name__] = site(**self.init_params)
 
                 # Parse site-defaults
                 params = {}
                 for k, v in original_params.items():
-                    params[k] = correct_site.get_site_value(v)
+                    params[k] = self.sessions[site.__name__].get_site_value(v)
 
-                log('info', 'Site: {}'.format(correct_site))
+                log('info', 'Site: {}'.format(self.sessions[site.__name__]))
                 log('debug', 'Parameters: {}'.format(params))
-                info = correct_site.get_chat(**params)
+                info = self.sessions[site.__name__].get_chat(**params)
                 if isinstance(max_messages, int):
                     info.chat = itertools.islice(info.chat, max_messages)
-                setattr(info, 'site', correct_site)
+
+                info.site = self.sessions[site.__name__]
 
                 formatter = ItemFormatter(params['format_file'])
-                setattr(info, 'format', lambda x: formatter.format(
-                    x, format_name=params['format']))
+                info.format = lambda x: formatter.format(x, format_name=params['format'])
 
                 return info
 
@@ -157,7 +158,7 @@ class ChatDownloader():
             raise InvalidURL('Invalid URL: "{}"'.format(url))
 
     def close(self):
-        for session in self.sessions:
+        for session in self.sessions.values():
             session.close()
 
-        self.sessions = []
+        self.sessions = {}
