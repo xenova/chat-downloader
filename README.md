@@ -51,7 +51,7 @@ for message in chat:                        # iterate over messages
 For advanced python use-cases and examples, consult the [Python Wiki](https://github.com/xenova/chat-downloader/wiki/Python-Documentation).
 
 ## Issues
-Found a bug or have a suggestion? File an issue [here](https://github.com/xenova/chat-downloader/issues/new). To assist the developers in fixing the issue, please follow the issue template (automatically generated when creating a new issue).
+Found a bug or have a suggestion? File an issue [here](https://github.com/xenova/chat-downloader/issues/new/choose). To assist the developers in fixing the issue, please follow the issue template (automatically generated when creating a new issue).
 
 ## Contributing
 ### Become a contributor
