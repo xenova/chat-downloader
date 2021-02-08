@@ -3,11 +3,11 @@ A simple tool used to retrieve chat messages from livestreams, videos, clips and
 
 [![Python](https://img.shields.io/pypi/pyversions/chat-downloader)](https://pypi.org/project/chat-downloader)
 [![PyPI version](https://img.shields.io/pypi/v/chat-downloader.svg)](https://pypi.org/project/chat-downloader)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/chat-downloader)](https://pypi.org/project/chat-downloader)
+[![Downloads](https://pepy.tech/badge/chat-downloader)](https://pypi.org/project/chat-downloader)
 [![GitHub license](https://img.shields.io/github/license/xenova/chat-downloader)](https://github.com/xenova/chat-downloader/blob/master/LICENSE)
 
 
-
+<!-- [![PyPI Downloads](https://img.shields.io/pypi/dm/chat-downloader)](https://pypi.org/project/chat-downloader) -->
 <!---
 [![GitHub issues](https://img.shields.io/github/issues/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
 [![GitHub forks](https://img.shields.io/github/forks/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
