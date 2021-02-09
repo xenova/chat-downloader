@@ -30,6 +30,7 @@ python setup.py install
 ```
 
 ## Usage
+Chat items are parsed into JSON objects (a.k.a. dictionaries). For a comprehensive, documented list of included fields, consult the [Chat Item Wiki](https://github.com/xenova/chat-downloader/wiki/Item-Template).
 
 ### Command line:
 ```
@@ -51,46 +52,11 @@ for message in chat:                        # iterate over messages
 For advanced python use-cases and examples, consult the [Python Wiki](https://github.com/xenova/chat-downloader/wiki/Python-Documentation).
 
 ## Issues
-Found a bug or have a suggestion? File an issue [here](https://github.com/xenova/chat-downloader/issues/new/choose). To assist the developers in fixing the issue, please follow the issue template (automatically generated when creating a new issue).
+Found a bug or have a suggestion? File an issue [here](https://github.com/xenova/chat-downloader/issues/new/choose). To assist the developers in fixing the issue, please follow the issue template as closely as possible.
 
 ## Contributing
-### Become a contributor
-#### Run as a developer
-To run the program as a developer, you do not need to build anything separately. Simply execute:
-```
-python -m chat_downloader
-```
-[work in progress]
+If you want to contribute to chat-downloader, be sure to follow the [contribution guidelines](https://github.com/xenova/chat-downloader/blob/master/CONTRIBUTING.md).
 
-#### Add support for a new site:
-1. [Fork](https://github.com/xenova/chat-downloader/fork) this repository.
-2. Clone the source code with:
-
-        git clone git@github.com:YOUR_GITHUB_USERNAME/chat-downloader.git
-3. Start a new branch with:
-
-        cd youtube-dl
-        git checkout -b site
-4. *Rest of guide in progress...*
-
-### Test the program
-If you are unable to write code but still wish to assist, we encourage users to run commands with the `--testing` flag included. This will print debugging messages and pause once something unexpected happens (e.g. when an unknown item is being parsed). If something happens, please raise an issue and we will fix it or add support for it as soon as possible!
-Note that this will not affect any output you write to files (using `--output`).
- For example:
-
-```
-chat_downloader https://www.youtube.com/watch?v=5qap5aO4i9A --testing
-```
-
-Some extractors use undocumented endpoints and may and as a result, users may encounter items which will not be parsed correctly. Increased testing will improve functionality of the software for other users and is greatly appreciated.
-
-
-## Chat Items
-Chat items are parsed into JSON objects (a.k.a. dictionaries) and follow this template:
-
-[work in progress]
-
-For a more in-depth output template, consult the [Item Wiki](https://github.com/xenova/chat-downloader/wiki/Item-Template).
 
 ## Supported sites:
 - YouTube.com - Livestreams, past broadcasts and premieres.
