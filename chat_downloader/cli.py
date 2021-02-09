@@ -5,8 +5,9 @@ import re
 from docstring_parser import parse as doc_parse
 from requests.exceptions import RequestException
 
-import chat_downloader
 from .chat_downloader import ChatDownloader
+
+import chat_downloader.metadata as metadata
 from .output.continuous_write import ContinuousWriter
 
 from .utils import (
@@ -40,7 +41,7 @@ def main():
     )
 
     parser.add_argument('--version', action='version',
-                        version=chat_downloader.__version__)
+                        version=metadata.__version__)
 
     # PROGRAM PARAMS
     parser.add_argument(
@@ -204,7 +205,7 @@ def main():
     output_file = None
     try:
         log('debug', 'Python version: {}'.format(sys.version))
-        log('debug', 'Program version: {}'.format(chat_downloader.__version__))
+        log('debug', 'Program version: {}'.format(metadata.__version__))
 
         chat = downloader.get_chat(**chat_params)
 
