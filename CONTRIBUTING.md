@@ -1,128 +1,84 @@
-.. highlight:: shell
+## Developer Instructions
 
-============
-Contributing
-============
+If you wish to assist in development, first install the developer dependencies:
+```
+pip install -e .[dev]
+```
 
-Contributions are welcome, and they are greatly appreciated! Every little bit
-helps, and credit will always be given.
-
-You can contribute in many ways:
-
-Types of Contributions
-----------------------
-
-Report Bugs
-~~~~~~~~~~~
-
-Report bugs at https://github.com/xenova/chat-downloader/issues.
-
-If you are reporting a bug, please include:
-
-* Your operating system name and version.
-* Any details about your local setup that might be helpful in troubleshooting.
-* Detailed steps to reproduce the bug.
-
-Fix Bugs
-~~~~~~~~
-
-Look through the GitHub issues for bugs. Anything tagged with "bug" and "help
-wanted" is open to whoever wants to implement it.
-
-Implement Features
-~~~~~~~~~~~~~~~~~~
-
-Look through the GitHub issues for features. Anything tagged with "enhancement"
-and "help wanted" is open to whoever wants to implement it.
-
-Write Documentation
-~~~~~~~~~~~~~~~~~~~
-
-chat-downloader could always use more documentation, whether as part of the
-official chat-downloader docs, in docstrings, or even on the web in blog posts,
-articles, and such.
-
-Submit Feedback
-~~~~~~~~~~~~~~~
-
-The best way to send feedback is to file an issue at https://github.com/xenova/chat-downloader/issues.
-
-If you are proposing a feature:
-
-* Explain in detail how it would work.
-* Keep the scope as narrow as possible, to make it easier to implement.
-* Remember that this is a volunteer-driven project, and that contributions
-  are welcome :)
-
-Get Started!
-------------
-
-Ready to contribute? Here's how to set up `chat-downloader` for local development.
-
-1. Fork the `chat-downloader` repo on GitHub.
-2. Clone your fork locally::
-
-    $ git clone git@github.com:your_name_here/chat-downloader.git
-
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
-
-    $ mkvirtualenv chat-downloader
-    $ cd chat-downloader/
-    $ python setup.py develop
-
-4. Create a branch for local development::
-
-    $ git checkout -b name-of-your-bugfix-or-feature
-
-   Now you can make your changes locally.
-
-5. When you're done making changes, check that your changes pass flake8 and the
-   tests, including testing other Python versions with tox::
-
-    $ flake8 chat-downloader tests
-    $ python setup.py test or pytest
-    $ tox
-
-   To get flake8 and tox, just pip install them into your virtualenv.
-
-6. Commit your changes and push your branch to GitHub::
-
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
-
-7. Submit a pull request through the GitHub website.
-
-Pull Request Guidelines
------------------------
-
-Before you submit a pull request, check that it meets these guidelines:
-
-1. The pull request should include tests.
-2. If the pull request adds functionality, the docs should be updated. Put
-   your new functionality into a function with a docstring, and add the
-   feature to the list in README.rst.
-3. The pull request should work for Python 3.5, 3.6, 3.7 and 3.8, and for PyPy. Check
-   https://travis-ci.com/xenova/chat-downloader/pull_requests
-   and make sure that the tests pass for all supported Python versions.
-
-Tips
-----
-
-To run a subset of tests::
-
-$ pytest tests.test_chat_downloader
+### Basic developer guide
 
 
-Deploying
----------
+1. [Fork this repository](https://github.com/xenova/chat-downloader/fork).
+2. Clone the forked repository with:
 
-A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed (including an entry in HISTORY.rst).
-Then run::
+    ```
+    git clone git@github.com:YOUR_GITHUB_USERNAME/chat-downloader.git
+    ```
 
-$ bump2version patch # possible: major / minor / patch
-$ git push
-$ git push --tags
+3. Start a new branch with:
 
-Travis will then deploy to PyPI if tests pass.
+    ```
+    cd chat-downloader
+    git checkout -b name
+    ```
+
+4. Make changes. See below for common changes to be made.
+
+
+5. Test your changes with pytest:
+
+    Depending on the changes made, run the appropriate tests to ensure everything still works as intended.
+
+
+    1. To run all tests:
+
+        ```
+        pytest -v
+        ```
+
+    2. To run tests for all sites:
+
+        ```
+        pytest -v tests/test_chat_downloader.py::TestChatDownloader
+        ```
+
+    3. To run the tests for a specific site:
+
+        ```
+        pytest -v tests/test_chat_downloader.py::TestChatDownloader::test_YourChatDownloader_TestNumber
+        ```
+
+        e.g.
+
+        ```
+        pytest -v tests/test_chat_downloader.py::TestChatDownloader::test_YouTubeChatDownloader_1
+        ```
+
+
+6. Make sure your code follows our coding conventions and check the code with [flake8](https://flake8.pycqa.org/en/latest/):
+    ```
+    flake8 path/to/code/to/check.py
+    ```
+
+    While we encourage users to follow flake8 conventions, some warnings are not very important and can be ignored, e.g:
+    ```
+    flake8 path/to/code/to/check.py --ignore E501,W503,W504
+    ```
+
+
+
+7. When the tests pass, [add](https://git-scm.com/docs/git-add) the new files and [commit](https://git-scm.com/docs/git-commit) them and [push](https://git-scm.com/docs/git-push) the result, like this:
+    ```
+    git add path/to/code.py
+    git commit -m 'message'
+    git push origin name
+    ```
+
+8. Finally, [create a pull request](https://help.github.com/articles/creating-a-pull-request). We'll then review and merge it.
+
+
+
+
+
+### Templates
+*Coming soon*
