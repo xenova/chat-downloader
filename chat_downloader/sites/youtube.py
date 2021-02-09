@@ -1252,14 +1252,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def get_chat(self,
                  **kwargs
                  ):
-        """
-        Short description
-
-        Long desc
-
-        :param chat_type: Specify chat type, default is live
-
-        """
 
         # get video id
         url = kwargs.get('url')
