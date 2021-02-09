@@ -338,6 +338,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def parse_runs(run_info, parse_links=False):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
         message_text = ''
+        message_emoji = {}
 
         runs = run_info.get('runs') or []
         for run in runs:
@@ -351,12 +352,33 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 else:  # is a normal message
                     message_text += run['text']
             elif 'emoji' in run:
-                message_text += run['emoji']['shortcuts'][0]
+                emoji = run['emoji']
+                shortcut = emoji['shortcuts'][0]
+                message_text += shortcut
+
+                if parse_links and emoji.get('isCustomEmoji', False):
+                    emoji_url = None
+                    for thumb in emoji['image']['thumbnails']:
+                        # expect and remove the size parameter;
+                        # native resolution is rarely any of the offered sizes
+                        m = re.match('(.*)=[ws][0-9]+', thumb['url'])
+                        if m:
+                            emoji_url = m.group(1)
+                            break
+                    
+                    if emoji_url:
+                        # include id since shortcut isn't strictly unique
+                        emoji_key = '{} {}'.format(emoji['emojiId'], shortcut)
+                        message_emoji[emoji_key] = emoji_url
             else:
                 # unknown run
                 message_text += str(run)
 
-        return message_text
+        ret = {'text': message_text}
+        if message_emoji:
+            ret['emoji'] = message_emoji
+
+        return ret
 
     @ staticmethod
     def _parse_item(item, info=None):
