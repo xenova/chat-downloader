@@ -1,6 +1,9 @@
 
 from .common import (
-    BaseChatDownloader, Chat, Timeout
+    BaseChatDownloader,
+    Chat,
+    Timeout,
+    Remapper as r
 )
 
 from requests.exceptions import RequestException
@@ -314,6 +317,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
     for group in _MESSAGE_GROUPS:
         _MESSAGE_TYPES += _MESSAGE_GROUPS[group]
 
+    @staticmethod
+    def get_source_image_url(url):
+        index = url.find('=')
+        if index >= 0:
+            return url[0:url.index('=')]
+        else:
+            return url
+
     @ staticmethod
     def parse_youtube_link(text):
         if text.startswith(('/redirect', 'https://www.youtube.com/redirect')):  # is a redirect link
@@ -335,10 +346,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
         return url
 
     @ staticmethod
-    def parse_runs(run_info, parse_links=False):
+    def parse_runs(run_info, parse_links=True):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
-        message_text = ''
-        message_emoji = {}
+
+        message_info = {
+            'message': ''
+        }
+        message_emotes = {}
 
         runs = run_info.get('runs') or []
         for run in runs:
@@ -346,39 +360,34 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 if parse_links and 'navigationEndpoint' in run:  # is a link and must parse
 
                     # if something fails, use default text
-                    message_text += YouTubeChatDownloader.parse_navigation_endpoint(
+                    message_info['message'] += YouTubeChatDownloader.parse_navigation_endpoint(
                         run['navigationEndpoint'], run['text'])
 
                 else:  # is a normal message
-                    message_text += run['text']
+                    message_info['message'] += run['text']
             elif 'emoji' in run:
                 emoji = run['emoji']
-                shortcut = emoji['shortcuts'][0]
-                message_text += shortcut
+                emoji_id = emoji['emojiId']
 
-                if parse_links and emoji.get('isCustomEmoji', False):
-                    emoji_url = None
-                    for thumb in emoji['image']['thumbnails']:
-                        # expect and remove the size parameter;
-                        # native resolution is rarely any of the offered sizes
-                        m = re.match('(.*)=[ws][0-9]+', thumb['url'])
-                        if m:
-                            emoji_url = m.group(1)
-                            break
-                    
-                    if emoji_url:
-                        # include id since shortcut isn't strictly unique
-                        emoji_key = '{} {}'.format(emoji['emojiId'], shortcut)
-                        message_emoji[emoji_key] = emoji_url
+                if emoji_id and emoji_id not in message_emotes:
+                    message_emotes[emoji_id] = {
+                        'id': emoji_id,
+                        'shortcuts': emoji['shortcuts'],
+                        'search_terms': emoji['searchTerms'],
+                        'images': YouTubeChatDownloader.parse_thumbnails(emoji['image']),
+                        'is_custom_emoji': emoji['isCustomEmoji']
+                    }
+
+                message_info['message'] += emoji['shortcuts'][0]
+
             else:
                 # unknown run
-                message_text += str(run)
+                message_info['message'] += str(run)
 
-        ret = {'text': message_text}
-        if message_emoji:
-            ret['emoji'] = message_emoji
+        if message_emotes:
+            message_info['emotes'] = list(message_emotes.values())
 
-        return ret
+        return message_info
 
     @ staticmethod
     def _parse_item(item, info=None):
@@ -392,8 +401,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return info
 
         for key in item_info:
-            BaseChatDownloader.remap(info, YouTubeChatDownloader._REMAPPING,
-                                     YouTubeChatDownloader._REMAP_FUNCTIONS, key, item_info[key])
+            BaseChatDownloader.remap(
+                info, YouTubeChatDownloader._REMAPPING, key, item_info[key])
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
@@ -444,7 +453,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         return info
 
-    _IMAGE_SIZE_REGEX = r'=s(\d+)'
+    # _IMAGE_SIZE_REGEX = r'=s(\d+)'
     # TODO move regex to inline where possible?
 
     @ staticmethod
@@ -471,15 +480,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 for icon in badge_icons:
                     url = icon.get('url')
                     if url:
-                        matches = re.search(
-                            YouTubeChatDownloader._IMAGE_SIZE_REGEX, url)
+                        matches = re.search(r'=s(\d+)', url)
                         if matches:
                             size = int(matches.group(1))
                             to_add['icons'].append(
                                 BaseChatDownloader.create_image(url, size, size))
                 if url:
-                    to_add['icons'].append(BaseChatDownloader.create_image(
-                        url[0:url.index('=')], image_id='source'))
+                    to_add['icons'].insert(0, BaseChatDownloader.create_image(
+                        YouTubeChatDownloader.get_source_image_url(url), image_id='source'))
 
             badges.append(to_add)
 
@@ -500,12 +508,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ
 
         thumbnails = item.get('thumbnails') or []
-
-        return list(map(lambda x: BaseChatDownloader.create_image(
+        final = list(map(lambda x: BaseChatDownloader.create_image(
             x.get('url'),
             x.get('width'),
             x.get('height'),
         ), thumbnails))
+
+        if len(final) > 0:
+            final.insert(0, BaseChatDownloader.create_image(
+                YouTubeChatDownloader.get_source_image_url(final[0]['url']), image_id='source'))
+
+        return final
 
     @ staticmethod
     def parse_action_button(item):
@@ -514,65 +527,57 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'text': multi_get(item, 'buttonRenderer', 'text', 'simpleText') or ''
         }
 
-    _REMAP_FUNCTIONS = {
-        'simple_text': lambda x: x.get('simpleText'),
-        'convert_to_int': lambda x: int_or_none(x),
-        'get_thumbnails': lambda x: YouTubeChatDownloader.parse_thumbnails(x),
-        'parse_runs': lambda x: YouTubeChatDownloader.parse_runs(x, True),
-        'parse_badges': lambda x: YouTubeChatDownloader.parse_badges(x),
-
-        'parse_icon': lambda x: x.get('iconType'),
-
-        'parse_action_button': lambda x: YouTubeChatDownloader.parse_action_button(x),
-    }
+    @staticmethod
+    def get_simple_text(item):
+        return item.get('simpleText')
 
     _REMAPPING = {
-        # 'youtubeID' : ('mapped_id', 'remapping_function')
         'id': 'message_id',
         'authorExternalChannelId': 'author_id',
-        'authorName': ('author_name', 'simple_text'),
+        'authorName': r('author_name', get_simple_text),
         # TODO author_display_name
-        'purchaseAmountText': ('amount', 'simple_text'),
-        'message': ('message', 'parse_runs'),
-        'timestampText': ('time_text', 'simple_text'),
-        'timestampUsec': ('timestamp', 'convert_to_int'),
-        'authorPhoto': ('author_images', 'get_thumbnails'),
+        'purchaseAmountText': r('amount', get_simple_text),
+        'message': r(None, parse_runs, True),
+        'timestampText': r('time_text', get_simple_text),
+        'timestampUsec': r('timestamp', int_or_none),
+
+        'authorPhoto': r('author_images', parse_thumbnails),
+
         'tooltip': 'tooltip',
 
-        'icon': ('icon', 'parse_icon'),
-        'authorBadges': ('author_badges', 'parse_badges'),
+        'icon': r('icon', lambda x: x.get('iconType')),
+        'authorBadges': r('author_badges', parse_badges),
 
         # stickers
-        'sticker': ('sticker_images', 'get_thumbnails'),
+        'sticker': r('sticker_images', parse_thumbnails),
 
         # ticker_paid_message_item
-        'fullDurationSec': ('ticker_duration', 'convert_to_int'),
-        'amount': ('amount', 'simple_text'),
+        'fullDurationSec': r('ticker_duration', int_or_none),
+        'amount': r('amount', get_simple_text),
 
 
         # ticker_sponsor_item
-        'detailText': ('message', 'parse_runs'),
-
-        'customThumbnail': ('badge_icons', 'get_thumbnails'),
+        'detailText': r('message', parse_runs),
+        'customThumbnail': r('badge_icons', parse_thumbnails),
 
         # membership_item
-        'headerSubtext': ('message', 'parse_runs'),
-        'sponsorPhoto': ('sponsor_icons', 'get_thumbnails'),
+        'headerSubtext': r('message', parse_runs),
+        'sponsorPhoto': r('sponsor_icons', parse_thumbnails),
 
         # ticker_paid_sticker_item
-        'tickerThumbnails': ('ticker_icons', 'get_thumbnails'),
+        'tickerThumbnails': r('ticker_icons', parse_thumbnails),
 
         # deleted messages
-        'deletedStateMessage': ('message', 'parse_runs'),
+        'deletedStateMessage': r('message', parse_runs),
         'targetItemId': 'target_message_id',
 
         'externalChannelId': 'author_id',
 
         # action buttons
-        'actionButton': ('action', 'parse_action_button'),
+        'actionButton': r('action', parse_action_button),
 
         # addBannerToLiveChatCommand
-        'text': ('message', 'parse_runs'),
+        'text': r('message', parse_runs),
         'viewerIsCreator': 'viewer_is_creator',
         'targetId': 'target_message_id',
         'isStackable': 'is_stackable',
@@ -581,10 +586,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'targetActionId': 'target_message_id',
 
         # donation_announcement
-        'subtext': ('sub_message', 'parse_runs'),
+        'subtext': r('sub_message', parse_runs),
 
         # tooltip
-        'detailsText': ('message', 'parse_runs'),
+        'detailsText': r('message', parse_runs),
+
     }
 
     _COLOUR_KEYS = [
@@ -831,7 +837,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     text = error_info.get(error_reason) or {}
 
                     error_reasons[error_reason] = text.get('simpleText') or try_get(
-                        text, lambda x: self.parse_runs(x)) or error_info.pop(
+                        text, lambda x: self.parse_runs(x, False)) or error_info.pop(
                         'itemTitle', '') or error_info.pop(
                             'offerDescription', '') or playability_status.get(error_reason) or ''
 
@@ -863,7 +869,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             else:
                 # Video exists, but you cannot view chat for some reason
                 error_message = try_get(conversation_bar, lambda x: self.parse_runs(
-                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'])) or \
+                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'], False)) or \
                     'Video does not have a chat replay.'
                 raise NoChatReplay(error_message)
 

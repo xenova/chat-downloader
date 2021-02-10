@@ -21,6 +21,24 @@ from ..utils import (
     timed_input
 )
 
+class Remapper():
+    def __init__(self, new_key=None, remap_function=None, to_unpack=False):
+        if new_key is not None and to_unpack:
+            # New key is specified, but must unpack. Not allowed
+            raise ValueError(
+                'If to_unpack is True, new_key may not be specified.')
+
+        self.new_key = new_key
+
+        if isinstance(remap_function, staticmethod):
+            remap_function = remap_function.__func__
+
+        if remap_function is None or not (hasattr(remap_function, '__call__')):
+            raise ValueError('remap_function must be callable or None.')
+
+        self.remap_function = remap_function
+        self.to_unpack = to_unpack
+
 
 class SiteDefault:
     # Used for site-default parameters
@@ -257,16 +275,44 @@ class BaseChatDownloader:
         return item.get('message_type') in valid_message_types
 
     @staticmethod
-    def remap(info, remapping_dict, remapping_functions, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
+    def remap(info, remapping_dict, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
+        """
+        A function used to remap items from one dictionary to another
+
+        :param info: Output dictionary
+        :param remapping_dict: Dictionary of remappings
+        :param remap_key: The key of the remapping
+        :param remap_input: The input sent to the remapping function
+        :param keep_unknown_keys: If no remap is found, keep the data with its original key and value
+        :param replace_char_with_underscores: If no remap is found, replace a character in the key with underscores
+        """
         remap = remapping_dict.get(remap_key)
 
-        if remap:
-            if isinstance(remap, tuple):
-                index, mapping_function = remap
-                info[index] = remapping_functions[mapping_function](
-                    remap_input)
-            else:
+        if remap:  # A matching 'remapping' has been found, apply this remapping
+            if isinstance(remap, Remapper):
+                new_key = remap.new_key# or remap_key
+
+                # Perform transformation
+                if remap.remap_function:  # Has a remap function
+                    new_value = remap.remap_function(remap_input)
+                else:  # No remap function specified, apply identity transformation
+                    new_value = remap_input
+
+                # Assign values to info
+                if not remap.to_unpack:
+                    info[new_key] = new_value
+                elif isinstance(new_value, dict):
+                    info.update(new_value)
+                else:
+                    raise ValueError(
+                        'Unable to unpack item which is not a dictionary.')
+
+            elif isinstance(remap, str):
+                # If it is just a string, simply assign the new value to this key
                 info[remap] = remap_input
+            else:
+                raise ValueError('Unknown remapping specified.')
+
         elif keep_unknown_keys:
             if replace_char_with_underscores:
                 remap_key = remap_key.replace(
@@ -484,7 +530,9 @@ class BaseChatDownloader:
         mapped_keys = set()
         for key in remapping:
             value = remapping[key]
-            if isinstance(remapping[key], tuple):
-                value = value[0]
+
+            if isinstance(value, Remapper):
+                value = value.new_key
             mapped_keys.add(value)
+
         return mapped_keys
