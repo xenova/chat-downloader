@@ -7,7 +7,8 @@ import re
 from .common import (
     Chat,
     BaseChatDownloader,
-    Timeout
+    Timeout,
+    Remapper as r
 )
 
 from requests.exceptions import RequestException
@@ -223,114 +224,17 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         return new_feedback
 
-    _ATTACHMENT_REMAPPING = {
-        'url': 'url',  # facebook redirect url,
-        'source': ('source', 'get_text'),
-        'title_with_entities': ('title', 'get_text'),
-
-        'target': ('target', 'parse_attachment_info'),
-        'media': ('media', 'parse_attachment_info'),
-        'style_infos': ('style_infos', '_parse_attachment_info'),
-
-        'attachment_text': ('text', 'get_text'),
-    }
-
-    _IGNORE_ATTACHMENT_KEYS = [
-        'tracking',
-        'action_links'
-    ]
-
-    _KNOWN_ATTACHMENT_KEYS = set(
-        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
+    @staticmethod
+    def get_text(item):
+        return item.get('text') if item else None
 
     @staticmethod
-    def _parse_attachment_styles(item):
-        parsed = {}
-        attachment = multi_get(item, 'style_type_renderer', 'attachment')
-        if not attachment:
-            # TODO debug log
-            print('NO ATTACHMENT')
-            print(item)
-            return parsed
+    def parse_image(item):
+        return BaseChatDownloader.create_image(item.get('uri'), item.get('width'), item.get('height'))
 
-        # set texts:
-        for key in attachment:
-            BaseChatDownloader.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
-                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, attachment[key])
-
-        for key in ('target', 'media', 'style_infos'):
-            if parsed.get(key) == {}:
-                parsed.pop(key)
-
-        missing_keys = attachment.keys() - FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
-        if missing_keys:
-            print('MISSING ATTACHMENT KEYS:', missing_keys)
-            print(item)
-            print(parsed)
-            input()
-
-        return parsed
-
-    _TARGET_MEDIA_REMAPPING = {
-        'id': 'id',
-        '__typename': ('type', 'camel_case_split'),
-        'fallback_image': ('image', 'parse_image'),
-        'is_playable': 'is_playable',
-        'url': 'url',
-
-        'mobileUrl': 'mobile_url',
-
-
-        # Sticker
-        'pack': 'pack',
-        'label': 'label',
-        'image': ('image', 'parse_image'),
-
-        # VideoTipJarPayment
-
-        'stars_image_on_star_quantity': 'icon',
-        'spark_quantity': 'quantity',
-
-
-
-        # Page
-        'name': 'name',
-        'category_name': 'category',
-        'address': 'address',
-        'overall_star_rating': 'overall_star_rating',
-
-        'profile_picture': ('profile_picture', 'get_uri'),
-
-        # Photo
-        'accessibility_caption': 'accessibility_caption',
-
-        'blurred_image': ('blurred_image', 'get_uri'),
-        'massive_image': 'massive_image',
-
-
-        # FundraiserForStoryDonationAttachmentStyleInfo
-        'donation_comment_text': 'donation_comment_text'
-
-    }
-
-    _KNOWN_ATTACHMENT_TYPES = [
-        'Sticker',
-        'VideoTipJarPayment',
-        'Page',
-
-        'Group',
-        'ProfilePicAttachmentMedia',
-        'User',
-        'Photo',
-
-        'ExternalUrl',
-        'GenericAttachmentMedia',
-
-        'ChatCommandResult',
-
-        'CommentMessageInfo',
-        'FundraiserForStoryDonationAttachmentStyleInfo'
-    ]
+    @staticmethod
+    def get_uri(item):
+        return item.get('uri')
 
     @staticmethod
     def _parse_attachment_info(original_item):
@@ -343,8 +247,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             return item
 
         for key in original_item:
-            BaseChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
-                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, original_item[key])
+            BaseChatDownloader.remap(
+                item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, original_item[key])
 
         # VideoTipJarPayment
         quantity = item.get('quantity')
@@ -370,8 +274,8 @@ class FacebookChatDownloader(BaseChatDownloader):
                              lambda x: x['ranges'][0]['entity']) or {}
 
             for key in entity:
-                BaseChatDownloader.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
-                                         FacebookChatDownloader._REMAP_FUNCTIONS, key, entity[key])
+                BaseChatDownloader.remap(
+                    item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
             item['text'] = donation_comment_text.get('text')
 
         # DEBUGGING
@@ -414,33 +318,114 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         }
 
-    _REMAP_FUNCTIONS = {
-        'parse_feedback': lambda x: FacebookChatDownloader._parse_feedback(x),
-        'multiply_by_million': lambda x: x * 1000000,
-        'parse_edit_history': lambda x: x.get('count'),
+    _ATTACHMENT_REMAPPING = {
+        'url': 'url',  # facebook redirect url,
+        'source': r('source', get_text),
+        'title_with_entities': r('title', get_text),
 
-        'parse_item': lambda x: FacebookChatDownloader._parse_live_stream_node(x),
+        'target': r('target', _parse_attachment_info),
+        'media': r('media', _parse_attachment_info),
+        'style_infos': r('style_infos', _parse_attachment_info),
 
-        'get_source_dialect_name': lambda x: x.get('source_dialect_name'),
-        'get_text': lambda x: x.get('text') if x else None,
-
-        'parse_author_badges': lambda x: list(map(FacebookChatDownloader._parse_author_badges, x)),
-
-        'parse_attachment_styles': lambda x: list(map(FacebookChatDownloader._parse_attachment_styles, x)),
-
-        'to_lowercase': lambda x: x.lower(),
-
-        'parse_attachment_info': lambda x: FacebookChatDownloader._parse_attachment_info(x),
-
-        'parse_image': lambda x: BaseChatDownloader.create_image(x.get('uri'), x.get('width'), x.get('height')),
-        'camel_case_split': camel_case_split,
-
-        'get_uri': lambda x: x.get('uri')
+        'attachment_text': r('text', get_text),
     }
 
-    # _MESSAGE_TYPES = {
-    #     'Comment'
-    # }
+    _IGNORE_ATTACHMENT_KEYS = [
+        'tracking',
+        'action_links'
+    ]
+
+    _KNOWN_ATTACHMENT_KEYS = set(
+        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
+
+    @staticmethod
+    def _parse_attachment_styles(item):
+        parsed = {}
+        attachment = multi_get(item, 'style_type_renderer', 'attachment')
+        if not attachment:
+            # TODO debug log
+            print('NO ATTACHMENT')
+            print(item)
+            return parsed
+
+        # set texts:
+        for key in attachment:
+            BaseChatDownloader.remap(
+                parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING, key, attachment[key])
+
+        for key in ('target', 'media', 'style_infos'):
+            if parsed.get(key) == {}:
+                parsed.pop(key)
+
+        missing_keys = attachment.keys() - FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
+        if missing_keys:
+            print('MISSING ATTACHMENT KEYS:', missing_keys)
+            print(item)
+            print(parsed)
+            input()
+
+        return parsed
+
+    _TARGET_MEDIA_REMAPPING = {
+        'id': 'id',
+        '__typename': r('type', camel_case_split),
+        'fallback_image': r('image', parse_image),
+        'is_playable': 'is_playable',
+        'url': 'url',
+
+        'mobileUrl': 'mobile_url',
+
+
+        # Sticker
+        'pack': 'pack',
+        'label': 'label',
+        'image': r('image', parse_image),
+
+        # VideoTipJarPayment
+
+        'stars_image_on_star_quantity': 'icon',
+        'spark_quantity': 'quantity',
+
+
+
+        # Page
+        'name': 'name',
+        'category_name': 'category',
+        'address': 'address',
+        'overall_star_rating': 'overall_star_rating',
+
+        'profile_picture': r('profile_picture', get_uri),
+
+        # Photo
+        'accessibility_caption': 'accessibility_caption',
+
+        'blurred_image': r('blurred_image', get_uri),
+        'massive_image': 'massive_image',
+
+
+        # FundraiserForStoryDonationAttachmentStyleInfo
+        'donation_comment_text': 'donation_comment_text'
+
+    }
+
+    _KNOWN_ATTACHMENT_TYPES = [
+        'Sticker',
+        'VideoTipJarPayment',
+        'Page',
+
+        'Group',
+        'ProfilePicAttachmentMedia',
+        'User',
+        'Photo',
+
+        'ExternalUrl',
+        'GenericAttachmentMedia',
+
+        'ChatCommandResult',
+
+        'CommentMessageInfo',
+        'FundraiserForStoryDonationAttachmentStyleInfo'
+    ]
 
     _REMAPPING = {
         'id': 'message_id',
@@ -451,8 +436,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         'author': 'author',
 
 
-        'feedback': ('reactions', 'parse_feedback'),
-        'created_time': ('timestamp', 'multiply_by_million'),
+        'feedback': r('reactions', _parse_feedback),
+        'created_time': r('timestamp', lambda x: x * 1000000),
 
 
         'upvote_downvote_total': 'upvote_downvote_total',
@@ -464,7 +449,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         'comment_parent': 'comment_parent',
 
-        'edit_history': ('number_of_edits', 'parse_edit_history'),
+        'edit_history': r('number_of_edits', lambda x: x.get('count')),
 
 
         'timestamp_in_video': 'time_in_seconds',
@@ -472,28 +457,28 @@ class FacebookChatDownloader(BaseChatDownloader):
 
 
 
-        'translatability_for_viewer': ('message_dialect', 'get_source_dialect_name'),
+        'translatability_for_viewer': r('message_dialect', lambda x: x.get('source_dialect_name')),
 
 
         'url': 'message_url',
 
-        'body': ('message', 'get_text'),
+        'body': r('message', get_text),
 
-        'identity_badges_web': ('author_badges', 'parse_author_badges'),
+        'identity_badges_web': r('author_badges', lambda x: list(map(FacebookChatDownloader._parse_author_badges, x))),
 
-        'attachments': ('attachments', 'parse_attachment_styles')
+        'attachments': r('attachments', lambda x: list(map(FacebookChatDownloader._parse_attachment_styles, x)))
 
     }
 
     _AUTHOR_REMAPPING = {
         'id': 'id',
         'name': 'name',
-        '__typename': ('type', 'camel_case_split'),
+        '__typename': r('type', camel_case_split),
         'url': 'url',
 
         'is_verified': 'is_verified',
 
-        'gender': ('gender', 'to_lowercase'),
+        'gender': r('gender', lambda x: x.lower()),
         'short_name': 'short_name'
     }
 
@@ -504,15 +489,15 @@ class FacebookChatDownloader(BaseChatDownloader):
         info = {}
 
         for key in node:
-            BaseChatDownloader.remap(info, FacebookChatDownloader._REMAPPING,
-                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, node[key])
+            BaseChatDownloader.remap(
+                info, FacebookChatDownloader._REMAPPING, key, node[key])
 
         author_info = info.pop('author', {})
         BaseChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
 
         for key in author_info:
-            BaseChatDownloader.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING,
-                                     FacebookChatDownloader._REMAP_FUNCTIONS, key, author_info[key])
+            BaseChatDownloader.remap(
+                info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
 
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []

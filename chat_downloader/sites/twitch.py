@@ -7,7 +7,8 @@ import base64
 from .common import (
     Chat,
     BaseChatDownloader,
-    Timeout
+    Timeout,
+    Remapper as r
 )
 
 from requests.exceptions import RequestException
@@ -232,57 +233,150 @@ class TwitchChatDownloader(BaseChatDownloader):
         '3000': 'Tier 3'
     }
 
-    _REMAP_FUNCTIONS = {
-        'parse_timestamp': timestamp_to_microseconds,  # lambda x :  * 1000,
-        'parse_author_images': lambda x: TwitchChatDownloader.parse_author_images(x),
+    @staticmethod
+    def parse_bool(text):
+        return text == '1'
 
-        'multiply_by_1000': lambda x: int_or_none(x) * 1000,
-        'parse_int': int_or_none,
-        'parse_bool': lambda x: x == '1',
-        'parse_bool_text': lambda x: x == 'true',
+    @staticmethod
+    def parse_bool_text(text):
+        return text == 'true'
 
-        'replace_with_underscores': replace_with_underscores,
+    @staticmethod
+    def parse_author_images(original_url):
+        smaller_icon = original_url.replace('300x300', '70x70')
+        return [
+            BaseChatDownloader.create_image(original_url, 300, 300),
+            BaseChatDownloader.create_image(smaller_icon, 70, 70),
+        ]
 
+    @staticmethod
+    def parse_commenter(commenter):
+        info = {}
+        for key in commenter or []:
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._AUTHOR_REMAPPING, key, commenter[key])
+        return info
 
-        'parse_subscription_type': lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x),
-        'parse_commenter': lambda x: TwitchChatDownloader.parse_commenter(x),
-        'parse_message_info': lambda x: TwitchChatDownloader.parse_message_info(x),
+    @staticmethod
+    def parse_message_info(message):
+        # Ignore: fragments, is_action
+        message_text = message.get('body') or ''
 
-        'decode_pseudo_BNF': lambda x: TwitchChatDownloader.decode_pseudo_BNF(x)
-    }
+        message_emotes = {}
+        locations = {}
+
+        for emoticon in message.get('emoticons') or []:
+            emote_id = emoticon.get('_id')
+            begin = emoticon.get('begin')
+            end = emoticon.get('end')
+
+            if emote_id:
+                if emote_id not in message_emotes:
+                    message_emotes[emote_id] = {
+                        'id': emote_id,
+                        'images': TwitchChatDownloader.generate_twitch_emote_image_list(emote_id),
+                        'name': message_text[begin:end+1]
+                    }
+
+                    locations[emote_id] = []
+
+                locations[emote_id].append(
+                    '{}-{}'.format(begin, end)
+                )
+
+        for emote_id in message_emotes:
+            message_emotes[emote_id]['locations'] = ','.join(locations[emote_id])
+
+        message_info = {
+            'message': message_text,
+            'author_colour': message.get('user_color'),
+            'author_badges': message.get('user_badges') or [],
+            'user_notice_params': message.get('user_notice_params') or {},
+            }
+
+        if message_emotes:
+            message_info['emotes'] = list(message_emotes.values())
+            # TwitchChatDownloader._add_text_for_emotes(message_info['message'], message_info['emotes'])
+
+        return message_info
+
+    @staticmethod
+    def decode_pseudo_BNF(text):
+        """
+        Decode text according to https://ircv3.net/specs/extensions/message-tags.html
+        """
+        return text.replace(r'\:', ';').replace(r'\s', ' ')
+
+    @staticmethod
+    def generate_twitch_emote_image_list(emote_id):
+        emote_image_list = []
+        for theme in ('light', 'dark'):
+            for size in ((28, '1.0'), (56, '2.0'), (112, '3.0')):
+                image = BaseChatDownloader.create_image(
+                    TwitchChatDownloader._EMOTE_URL_TEMPLATE.format(
+                        emote_id, theme, size[1]),
+                    size[0],
+                    size[0],
+                    '{0}x{0}-{1}'.format(size[0], theme)
+                )
+
+                emote_image_list.append(image)
+        return emote_image_list
+
+    _EMOTE_REGEX = r'(\d+):([\d,-]+)'
+    _EMOTE_URL_TEMPLATE = 'https://static-cdn.jtvnw.net/emoticons/v2/{}/default/{}/{}'
+
+    @staticmethod
+    def parse_emotes(text):
+        # Information to replace text in the message with emote images. This can be empty.
+        # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
+        emotes = []
+
+        matches = re.findall(TwitchChatDownloader._EMOTE_REGEX, text)
+
+        for match in matches:
+            emote_id = match[0]
+            emote = {
+                'id': emote_id,
+                'locations': match[1].split(','),
+                'images': TwitchChatDownloader.generate_twitch_emote_image_list(emote_id)
+            }
+            emotes.append(emote)
+
+        return emotes
+
     _AUTHOR_REMAPPING = {
-        '_id': ('id', 'parse_int'),
+        '_id': r('id', int_or_none),
         'name': 'name',
         'display_name': 'display_name',
-        'logo': ('images', 'parse_author_images'),
+        'logo': r('images', parse_author_images),
         'type': 'type',
-        'created_at': ('created_at', 'parse_timestamp'),
-        # 'updated_at': ('updated_at', 'parse_timestamp'),
+        'created_at': r('created_at', timestamp_to_microseconds),
+        # 'updated_at': r('updated_at', 'parse_timestamp'),
         'bio': 'bio'
-
     }
-    #
+
     _COMMENT_REMAPPING = {
         '_id': 'message_id',
-        'created_at': ('timestamp', 'parse_timestamp'),
-        'commenter': ('author', 'parse_commenter'),
+        'created_at': r('timestamp', timestamp_to_microseconds),
+        'commenter': r('author', parse_commenter),
 
         'content_offset_seconds': 'time_in_seconds',
 
         'source': 'source',
         'state': 'state',
         # TODO make sure body vs. fragments okay
-        'message': ('message_info', 'parse_message_info')
+        'message': r(None, parse_message_info, True)
     }
 
     _MESSAGE_PARAM_REMAPPING = {
         'msg-id': 'message_type',
 
-        'msg-param-cumulative-months': ('cumulative_months', 'parse_int'),
-        'msg-param-months': ('months', 'parse_int'),
+        'msg-param-cumulative-months': r('cumulative_months', int_or_none),
+        'msg-param-months': r('months', int_or_none),
         'msg-param-displayName': 'raider_display_name',
         'msg-param-login': 'raider_name',
-        'msg-param-viewerCount': ('number_of_raiders', 'parse_int'),
+        'msg-param-viewerCount': r('number_of_raiders', int_or_none),
 
         'msg-param-promo-name': 'promotion_name',
         'msg-param-promo-gift-total': 'number_of_gifts_given_during_promo',
@@ -290,16 +384,16 @@ class TwitchChatDownloader(BaseChatDownloader):
         'msg-param-recipient-id': 'gift_recipient_id',
         'msg-param-recipient-user-name': 'gift_recipient_display_name',
         'msg-param-recipient-display-name': 'gift_recipient_display_name',
-        'msg-param-gift-months': ('number_of_months_gifted', 'parse_int'),
+        'msg-param-gift-months': r('number_of_months_gifted', int_or_none),
 
 
         'msg-param-sender-login': 'gifter_name',
         'msg-param-sender-name': 'gifter_display_name',
 
-        'msg-param-should-share-streak': ('user_wants_to_share_streaks', 'parse_bool'),
-        'msg-param-streak-months': ('number_of_consecutive_months_subscribed', 'parse_int'),
-        'msg-param-sub-plan': ('subscription_type', 'parse_subscription_type'),
-        'msg-param-sub-plan-name': ('subscription_plan_name', 'decode_pseudo_BNF'),
+        'msg-param-should-share-streak': r('user_wants_to_share_streaks', parse_bool),
+        'msg-param-streak-months': r('number_of_consecutive_months_subscribed', int_or_none),
+        'msg-param-sub-plan': r('subscription_type', lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x)),
+        'msg-param-sub-plan-name': r('subscription_plan_name', decode_pseudo_BNF),
 
         'msg-param-ritual-name': 'ritual_name',
 
@@ -309,30 +403,30 @@ class TwitchChatDownloader(BaseChatDownloader):
         # found in vods
 
         # resub
-        'msg-param-multimonth-duration': ('multimonth_duration', 'parse_int'),
-        'msg-param-multimonth-tenure': ('multimonth_tenure', 'parse_int'),
-        'msg-param-was-gifted': ('was_gifted', 'parse_bool_text'),
+        'msg-param-multimonth-duration': r('multimonth_duration', int_or_none),
+        'msg-param-multimonth-tenure': r('multimonth_tenure', int_or_none),
+        'msg-param-was-gifted': r('was_gifted', parse_bool_text),
 
         'msg-param-gifter-id': 'gifter_id',
         'msg-param-gifter-login': 'gifter_name',
         'msg-param-gifter-name': 'gifter_display_name',
-        'msg-param-anon-gift': ('was_anonymous_gift', 'parse_bool_text'),
-        'msg-param-gift-month-being-redeemed': ('gift_months_being_redeemed', 'parse_int'),
+        'msg-param-anon-gift': r('was_anonymous_gift', parse_bool_text),
+        'msg-param-gift-month-being-redeemed': r('gift_months_being_redeemed', int_or_none),
 
         # rewardgift
         'msg-param-domain': 'domain',
-        'msg-param-selected-count': ('selected_count', 'parse_int'),
+        'msg-param-selected-count': r('selected_count', int_or_none),
         'msg-param-trigger-type': 'trigger_type',
-        'msg-param-total-reward-count': ('total_reward_count', 'parse_int'),
-        'msg-param-trigger-amount': ('trigger_amount', 'parse_int'),
+        'msg-param-total-reward-count': r('total_reward_count', int_or_none),
+        'msg-param-trigger-amount': r('trigger_amount', int_or_none),
 
         # submysterygift
-        'msg-param-origin-id': ('origin_id', 'decode_pseudo_BNF'),
-        'msg-param-sender-count': ('sender_count', 'parse_int'),
-        'msg-param-mass-gift-count': ('mass_gift_count', 'parse_int'),
+        'msg-param-origin-id': r('origin_id', decode_pseudo_BNF),
+        'msg-param-sender-count': r('sender_count', int_or_none),
+        'msg-param-mass-gift-count': r('mass_gift_count', int_or_none),
 
         # communitypayforward
-        'msg-param-prior-gifter-anonymous': ('prior_gifter_anonymous', 'parse_bool_text'),
+        'msg-param-prior-gifter-anonymous': r('prior_gifter_anonymous', parse_bool_text),
         'msg-param-prior-gifter-user-name': 'prior_gifter_name',
         'msg-param-prior-gifter-display-name': 'prior_gifter_display_name',
         'msg-param-prior-gifter-id': 'prior_gifter_id',
@@ -364,7 +458,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     # Create set of known types
     _KNOWN_COMMENT_KEYS = {
         # created elsewhere
-        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type'
+        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type', 'emotes'
     }
 
     _KNOWN_COMMENT_KEYS.update(BaseChatDownloader.get_mapped_keys({
@@ -376,7 +470,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # CLEARCHAT
         # Purges all chat messages in a channel, or purges chat messages from a specific user, typically after a timeout or ban.
         # (Optional) Duration of the timeout, in seconds. If omitted, the ban is permanent.
-        'ban-duration': ('ban_duration', 'parse_int'),
+        'ban-duration': r('ban_duration', int_or_none),
 
         # CLEARMSG
         # Removes a single message from a channel. This is triggered by the/delete <target-msg-id> command on IRC.
@@ -395,7 +489,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # can be empty (which means it depends on dark/light theme)
         'color': 'colour',
         'display-name': 'author_display_name',
-        'user-id': ('author_id', 'parse_int'),
+        'user-id': r('author_id', int_or_none),
 
 
 
@@ -406,16 +500,16 @@ class TwitchChatDownloader(BaseChatDownloader):
         'badge-info': 'author_badge_metadata',
         'badges': 'author_badges',
 
-        'bits': ('bits', 'parse_int'),
+        'bits': r('bits', int_or_none),
 
         'id': 'message_id',
-        'mod': ('is_moderator', 'parse_bool'),
-        'room-id': ('channel_id', 'parse_int'),
+        'mod': r('is_moderator', parse_bool),
+        'room-id': r('channel_id', int_or_none),
 
-        'tmi-sent-ts': ('timestamp', 'multiply_by_1000'),
+        'tmi-sent-ts': r('timestamp', lambda x: int_or_none(x, 0) * 1000),
 
-        'subscriber': ('is_subscriber', 'parse_bool'),
-        'turbo': ('is_turbo', 'parse_bool'),
+        'subscriber': r('is_subscriber', parse_bool),
+        'turbo': r('is_turbo', parse_bool),
 
         'client-nonce': 'client_nonce',
 
@@ -423,8 +517,8 @@ class TwitchChatDownloader(BaseChatDownloader):
 
 
 
-        'reply-parent-msg-body': ('in_reply_to_message', 'decode_pseudo_BNF'),
-        'reply-parent-user-id': ('in_reply_to_author_id', 'parse_int'),
+        'reply-parent-msg-body': r('in_reply_to_message', decode_pseudo_BNF),
+        'reply-parent-user-id': r('in_reply_to_author_id', int_or_none),
         'reply-parent-msg-id': 'in_reply_to_message_id',
         'reply-parent-display-name': 'in_reply_to_author_display_name',
         'reply-parent-user-login': 'in_reply_to_author_name',
@@ -433,32 +527,29 @@ class TwitchChatDownloader(BaseChatDownloader):
         'custom-reward-id': 'custom_reward_id',
 
 
-        # Information to replace text in the message with emote images. This can be empty.
-        # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
-        # TODO parse emote info?
-        'emotes': 'emotes',
+        'emotes': r('emotes', parse_emotes),
         'flags': 'flags',
 
 
 
         # ROOMSTATE
-        'emote-only': ('emote_only', 'parse_bool'),
-        'followers-only': ('follower_only', 'parse_int'),
+        'emote-only': r('emote_only', parse_bool),
+        'followers-only': r('follower_only', int_or_none),
 
-        'r9k': ('r9k_mode', 'parse_bool'),
-        'slow': ('slow_mode', 'parse_int'),
-        'subs-only': ('subscriber_only', 'parse_bool'),
-        'rituals': ('rituals_enabled', 'parse_bool'),
+        'r9k': r('r9k_mode', parse_bool),
+        'slow': r('slow_mode', int_or_none),
+        'subs-only': r('subscriber_only', parse_bool),
+        'rituals': r('rituals_enabled', parse_bool),
 
         # USERNOTICE
-        'system-msg': ('system_message', 'decode_pseudo_BNF'),
+        'system-msg': r('system_message', decode_pseudo_BNF),
 
         # (Commands)
         # HOSTTARGET
         'number-of-viewers': 'number_of_viewers',
 
         # ban user
-        'target-user-id': ('target_author_id', 'parse_int'),
+        'target-user-id': r('target_author_id', int_or_none),
 
         # USERNOTICE - other
         **_MESSAGE_PARAM_REMAPPING
@@ -705,20 +796,12 @@ class TwitchChatDownloader(BaseChatDownloader):
         # print(self._SUBSCRIBER_BADGE_INFO)
         # print(self._SUBSCRIBER_BADGE_INFO.keys())
 
-    @staticmethod
-    def parse_author_images(original_url):
-        smaller_icon = original_url.replace('300x300', '70x70')
-        return [
-            BaseChatDownloader.create_image(original_url, 300, 300),
-            BaseChatDownloader.create_image(smaller_icon, 70, 70),
-        ]
-
     @ staticmethod
     def _parse_item(item, offset):
         info = {}
         for key in item:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
-                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, item[key])  # , True
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._COMMENT_REMAPPING, key, item[key])  # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -726,21 +809,25 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         channel_id = item.get('channel_id')
 
-        message_info = info.pop('message_info', None)
-        if message_info:
-            info['message'] = message_info.get('message')
-            info['author']['colour'] = message_info.get('colour')
+        # author_badges
 
-            badges = message_info.get('badges') or []
-            if badges:
-                info['author']['badges'] = list(map(lambda x: TwitchChatDownloader.parse_badge_info(
-                    x.get('_id'), x.get('version'), channel_id), badges))
+        badges = info.pop('author_badges', None)
+        if badges:
+            info['author']['badges'] = list(map(lambda x: TwitchChatDownloader.parse_badge_info(
+                x.get('_id'), x.get('version'), channel_id), badges))
 
-        user_notice_params = message_info.pop('user_notice_params', {}) or {}
+        user_notice_params = info.pop('user_notice_params', {})
 
         for key in user_notice_params:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
-                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, user_notice_params[key], True)
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING, key, user_notice_params[key], True)
+
+        # TODO add user colour to author dict
+        # TODO check this works
+        # author_colour
+        # print()
+
+        BaseChatDownloader.move_to_dict(info, 'author')
 
         original_message_type = info.get('message_type')
         if original_message_type:
@@ -1147,30 +1234,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         return info
 
     @staticmethod
-    def parse_commenter(commenter):
-        info = {}
-        for key in commenter or []:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
-                                     TwitchChatDownloader._REMAP_FUNCTIONS, key, commenter[key])
-        return info
-
-    @staticmethod
-    def parse_message_info(message):
-        return {
-            'message': message.get('body'),
-            'colour': message.get('user_color'),
-            'badges': message.get('user_badges') or [],
-            'user_notice_params': message.get('user_notice_params')
-        }
-
-    @staticmethod
-    def decode_pseudo_BNF(text):
-        """
-        Decode text according to https://ircv3.net/specs/extensions/message-tags.html
-        """
-        return text.replace(r'\:', ';').replace(r'\s', ' ')
-
-    @staticmethod
     def _set_message_type(info, original_message_type, params=None):
         if params is None:
             params = {}
@@ -1185,6 +1248,20 @@ class TwitchChatDownloader(BaseChatDownloader):
                 'Unknown message type:', original_message_type,
                 params.get('pause_on_debug')
             )
+
+    @staticmethod
+    def _add_text_for_emotes(message, emote_list):
+        for emote in emote_list:
+            try:
+                first_location = list(
+                    map(lambda x: int(x), emote['locations'][0].split('-')))
+                emote['name'] = message[first_location[0]:first_location[1]+1]
+            except Exception:
+                log('debug', [
+                    'Invalid emote: {}'.format(emote),
+                    'Message: {}'.format(message)
+                ])
+                continue
 
     @staticmethod
     def _parse_irc_item(match):
@@ -1207,14 +1284,19 @@ class TwitchChatDownloader(BaseChatDownloader):
                 ])
                 continue
 
-            BaseChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING,
-                                     TwitchChatDownloader._REMAP_FUNCTIONS, keys[0], keys[1],
+            BaseChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING, keys[0], keys[1],
                                      keep_unknown_keys=True,
                                      replace_char_with_underscores='-')
 
         message_match = match.group(3)
         if message_match:
             info['message'] = remove_prefixes(message_match, '\u0001ACTION ')
+
+            emotes = info.pop('emotes', None)
+            if emotes:
+                TwitchChatDownloader._add_text_for_emotes(
+                    info['message'], emotes)
+                info['emotes'] = emotes
 
         author_badge_metadata = info.pop('author_badge_metadata', [])
         author_badges = info.pop('author_badges', [])
