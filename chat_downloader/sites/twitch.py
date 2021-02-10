@@ -249,22 +249,56 @@ class TwitchChatDownloader(BaseChatDownloader):
             BaseChatDownloader.create_image(smaller_icon, 70, 70),
         ]
 
-
     @staticmethod
     def parse_commenter(commenter):
         info = {}
         for key in commenter or []:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING, key, commenter[key])
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._AUTHOR_REMAPPING, key, commenter[key])
         return info
 
     @staticmethod
     def parse_message_info(message):
-        return {
-            'message': message.get('body'),
-            'colour': message.get('user_color'),
-            'badges': message.get('user_badges') or [],
-            'user_notice_params': message.get('user_notice_params')
-        }
+        # Ignore: fragments, is_action
+        message_text = message.get('body') or ''
+
+        message_emotes = {}
+        locations = {}
+
+        for emoticon in message.get('emoticons') or []:
+            emote_id = emoticon.get('_id')
+            begin = emoticon.get('begin')
+            end = emoticon.get('end')
+
+            if emote_id:
+                if emote_id not in message_emotes:
+                    message_emotes[emote_id] = {
+                        'id': emote_id,
+                        'images': TwitchChatDownloader.generate_twitch_emote_image_list(emote_id),
+                        'name': message_text[begin:end+1]
+                    }
+
+                    locations[emote_id] = []
+
+                locations[emote_id].append(
+                    '{}-{}'.format(begin, end)
+                )
+
+        for emote_id in message_emotes:
+            message_emotes[emote_id]['locations'] = ','.join(locations[emote_id])
+
+        message_info = {
+            'message': message_text,
+            'author_colour': message.get('user_color'),
+            'author_badges': message.get('user_badges') or [],
+            'user_notice_params': message.get('user_notice_params') or {},
+            }
+
+        if message_emotes:
+            message_info['emotes'] = list(message_emotes.values())
+            # TwitchChatDownloader._add_text_for_emotes(message_info['message'], message_info['emotes'])
+
+        return message_info
 
     @staticmethod
     def decode_pseudo_BNF(text):
@@ -273,6 +307,43 @@ class TwitchChatDownloader(BaseChatDownloader):
         """
         return text.replace(r'\:', ';').replace(r'\s', ' ')
 
+    @staticmethod
+    def generate_twitch_emote_image_list(emote_id):
+        emote_image_list = []
+        for theme in ('light', 'dark'):
+            for size in ((28, '1.0'), (56, '2.0'), (112, '3.0')):
+                image = BaseChatDownloader.create_image(
+                    TwitchChatDownloader._EMOTE_URL_TEMPLATE.format(
+                        emote_id, theme, size[1]),
+                    size[0],
+                    size[0],
+                    '{0}x{0}-{1}'.format(size[0], theme)
+                )
+
+                emote_image_list.append(image)
+        return emote_image_list
+
+    _EMOTE_REGEX = r'(\d+):([\d,-]+)'
+    _EMOTE_URL_TEMPLATE = 'https://static-cdn.jtvnw.net/emoticons/v2/{}/default/{}/{}'
+
+    @staticmethod
+    def parse_emotes(text):
+        # Information to replace text in the message with emote images. This can be empty.
+        # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
+        emotes = []
+
+        matches = re.findall(TwitchChatDownloader._EMOTE_REGEX, text)
+
+        for match in matches:
+            emote_id = match[0]
+            emote = {
+                'id': emote_id,
+                'locations': match[1].split(','),
+                'images': TwitchChatDownloader.generate_twitch_emote_image_list(emote_id)
+            }
+            emotes.append(emote)
+
+        return emotes
 
     _AUTHOR_REMAPPING = {
         '_id': r('id', int_or_none),
@@ -295,7 +366,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'source': 'source',
         'state': 'state',
         # TODO make sure body vs. fragments okay
-        'message': r('message_info', parse_message_info)
+        'message': r(None, parse_message_info, True)
     }
 
     _MESSAGE_PARAM_REMAPPING = {
@@ -387,7 +458,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     # Create set of known types
     _KNOWN_COMMENT_KEYS = {
         # created elsewhere
-        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type'
+        'message', 'time_in_seconds', 'message_id', 'time_text', 'author', 'timestamp', 'message_type', 'emotes'
     }
 
     _KNOWN_COMMENT_KEYS.update(BaseChatDownloader.get_mapped_keys({
@@ -456,10 +527,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'custom-reward-id': 'custom_reward_id',
 
 
-        # Information to replace text in the message with emote images. This can be empty.
-        # <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>
-        # TODO parse emote info?
-        'emotes': 'emotes',
+        'emotes': r('emotes', parse_emotes),
         'flags': 'flags',
 
 
@@ -728,13 +796,12 @@ class TwitchChatDownloader(BaseChatDownloader):
         # print(self._SUBSCRIBER_BADGE_INFO)
         # print(self._SUBSCRIBER_BADGE_INFO.keys())
 
-
-
     @ staticmethod
     def _parse_item(item, offset):
         info = {}
         for key in item:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._COMMENT_REMAPPING, key, item[key])  # , True
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._COMMENT_REMAPPING, key, item[key])  # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -742,20 +809,25 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         channel_id = item.get('channel_id')
 
-        message_info = info.pop('message_info', None)
-        if message_info:
-            info['message'] = message_info.get('message')
-            info['author']['colour'] = message_info.get('colour')
+        # author_badges
 
-            badges = message_info.get('badges') or []
-            if badges:
-                info['author']['badges'] = list(map(lambda x: TwitchChatDownloader.parse_badge_info(
-                    x.get('_id'), x.get('version'), channel_id), badges))
+        badges = info.pop('author_badges', None)
+        if badges:
+            info['author']['badges'] = list(map(lambda x: TwitchChatDownloader.parse_badge_info(
+                x.get('_id'), x.get('version'), channel_id), badges))
 
-        user_notice_params = message_info.pop('user_notice_params', {}) or {}
+        user_notice_params = info.pop('user_notice_params', {})
 
         for key in user_notice_params:
-            BaseChatDownloader.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING, key, user_notice_params[key], True)
+            BaseChatDownloader.remap(
+                info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING, key, user_notice_params[key], True)
+
+        # TODO add user colour to author dict
+        # TODO check this works
+        # author_colour
+        # print()
+
+        BaseChatDownloader.move_to_dict(info, 'author')
 
         original_message_type = info.get('message_type')
         if original_message_type:
@@ -1136,7 +1208,6 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         return new_badge
 
-
     @staticmethod
     def parse_irc_badges(badges, channel_id):
         info = []
@@ -1179,6 +1250,20 @@ class TwitchChatDownloader(BaseChatDownloader):
             )
 
     @staticmethod
+    def _add_text_for_emotes(message, emote_list):
+        for emote in emote_list:
+            try:
+                first_location = list(
+                    map(lambda x: int(x), emote['locations'][0].split('-')))
+                emote['name'] = message[first_location[0]:first_location[1]+1]
+            except Exception:
+                log('debug', [
+                    'Invalid emote: {}'.format(emote),
+                    'Message: {}'.format(message)
+                ])
+                continue
+
+    @staticmethod
     def _parse_irc_item(match):
         info = {}
 
@@ -1206,6 +1291,12 @@ class TwitchChatDownloader(BaseChatDownloader):
         message_match = match.group(3)
         if message_match:
             info['message'] = remove_prefixes(message_match, '\u0001ACTION ')
+
+            emotes = info.pop('emotes', None)
+            if emotes:
+                TwitchChatDownloader._add_text_for_emotes(
+                    info['message'], emotes)
+                info['emotes'] = emotes
 
         author_badge_metadata = info.pop('author_badge_metadata', [])
         author_badges = info.pop('author_badges', [])

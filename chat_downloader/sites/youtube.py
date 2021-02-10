@@ -369,16 +369,19 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 emoji = run['emoji']
                 emoji_id = emoji['emojiId']
 
+                name = emoji['shortcuts'][0]
+
                 if emoji_id and emoji_id not in message_emotes:
                     message_emotes[emoji_id] = {
                         'id': emoji_id,
+                        'name': name,
                         'shortcuts': emoji['shortcuts'],
                         'search_terms': emoji['searchTerms'],
                         'images': YouTubeChatDownloader.parse_thumbnails(emoji['image']),
                         'is_custom_emoji': emoji['isCustomEmoji']
                     }
 
-                message_info['message'] += emoji['shortcuts'][0]
+                message_info['message'] += name
 
             else:
                 # unknown run

@@ -455,8 +455,7 @@ class BaseChatDownloader:
 
         new_dict = {}
 
-        keys = (info_keys or info or {}).copy()
-        for key in keys:
+        for key in (info_keys or info or {}).copy():
             if replace_key in key:
                 info_item = info.pop(key, None)
                 new_key = key.replace(replace_key, '')
@@ -465,7 +464,9 @@ class BaseChatDownloader:
                 if info_item not in (None, [], {}):
                     new_dict[new_key] = info_item
 
-        if dict_name not in info and (create_when_empty or new_dict != {}):
+        if dict_name in info:
+            info[dict_name].update(new_dict)
+        elif create_when_empty or new_dict != {}: # dict_name not in info
             info[dict_name] = new_dict
 
         return new_dict
