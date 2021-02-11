@@ -129,7 +129,8 @@ class ChatDownloader():
                 for k, v in original_params.items():
                     params[k] = self.sessions[site.__name__].get_site_value(v)
 
-                log('info', 'Site: {}'.format(self.sessions[site.__name__]))
+                log('info', 'Site: {}'.format(
+                    self.sessions[site.__name__]._NAME))
                 log('debug', 'Parameters: {}'.format(params))
                 info = self.sessions[site.__name__].get_chat(**params)
                 if isinstance(max_messages, int):
@@ -138,7 +139,8 @@ class ChatDownloader():
                 info.site = self.sessions[site.__name__]
 
                 formatter = ItemFormatter(params['format_file'])
-                info.format = lambda x: formatter.format(x, format_name=params['format'])
+                info.format = lambda x: formatter.format(
+                    x, format_name=params['format'])
 
                 return info
 

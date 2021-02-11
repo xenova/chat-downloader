@@ -98,19 +98,15 @@ class TwitchChatDownloader(BaseChatDownloader):
     _BADGE_INFO_URL = 'https://badges.twitch.tv/v1/badges/global/display'
     # TODO add local version of badge list?
 
-    _SUBSCRIBER_BADGE_INFO = {}  # local cache for subscriber badge info
-    _SUBSCRIBER_BADGE_URL = 'https://badges.twitch.tv/v1/badges/channels/{}/display'
-
-    _NAME = 'Twitch.tv'
+    _NAME = 'twitch.tv'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        TwitchChatDownloader._BADGE_INFO = self._session_get_json(
-            self._BADGE_INFO_URL).get('badge_sets') or {}
-
-    def __str__(self):
-        return 'twitch.tv'
+        # Only get badge info if not already retrieved
+        if not TwitchChatDownloader._BADGE_INFO:
+            TwitchChatDownloader._BADGE_INFO = self._session_get_json(
+                self._BADGE_INFO_URL).get('badge_sets') or {}
 
     _TESTS = [
         # Live
@@ -285,14 +281,15 @@ class TwitchChatDownloader(BaseChatDownloader):
                 )
 
         for emote_id in message_emotes:
-            message_emotes[emote_id]['locations'] = ','.join(locations[emote_id])
+            message_emotes[emote_id]['locations'] = ','.join(
+                locations[emote_id])
 
         message_info = {
             'message': message_text,
             'author_colour': message.get('user_color'),
             'author_badges': message.get('user_badges') or [],
             'user_notice_params': message.get('user_notice_params') or {},
-            }
+        }
 
         if message_emotes:
             message_info['emotes'] = list(message_emotes.values())
@@ -782,6 +779,9 @@ class TwitchChatDownloader(BaseChatDownloader):
         if message_group not in _MESSAGE_GROUPS:
             _MESSAGE_GROUPS[message_group] = []
         _MESSAGE_GROUPS[message_group] += list(value.values())
+
+    _SUBSCRIBER_BADGE_INFO = {}  # local cache for subscriber badge info
+    _SUBSCRIBER_BADGE_URL = 'https://badges.twitch.tv/v1/badges/channels/{}/display'
 
     def _update_subscriber_badge_info(self, channel_id):
         # print('updated sub badges')

@@ -51,11 +51,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    _NAME = 'YouTube'
-
-    def __str__(self):
-        return 'youtube.com'
-        # return 'youtube.com'
+    _NAME = 'youtube.com'
 
     _SITE_DEFAULT_PARAMS = {
         'format': 'youtube',

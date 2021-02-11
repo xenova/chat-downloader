@@ -86,9 +86,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             'lsd': lsd,
         }
 
-    def __str__(self):
-        return 'facebook.com'
-
+    _NAME = 'facebook.com'
     # Regex provided by youtube-dl
     _VALID_URL = r'''(?x)
             (?:
@@ -106,10 +104,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
         '/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
-    _STRIP_TEXT = 'for (;;);'
 
     def _parse_fb_json(self, response):
-        text_to_parse = remove_prefixes(response.text, self._STRIP_TEXT)
+        text_to_parse = remove_prefixes(response.text, 'for (;;);')
         return json.loads(text_to_parse)
 
     _VOD_COMMENTS_API = _FB_HOMEPAGE + '/videos/vodcomments/'

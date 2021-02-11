@@ -21,6 +21,7 @@ from ..utils import (
     timed_input
 )
 
+
 class Remapper():
     def __init__(self, new_key=None, remap_function=None, to_unpack=False):
         if new_key is not None and to_unpack:
@@ -243,16 +244,29 @@ class BaseChatDownloader:
     # is_stackable
     # sub_message
 
+    _NAME = None
+    _VALID_URL = None
+
     _SITE_DEFAULT_PARAMS = {
         # MAY NOT specify message_types. must always be empty
         'message_groups': ['messages'],
         'format': 'default',
     }
 
-    _NAME = None
+    # For general tests (non-site specific)
+    _TESTS = [
+        {
+            'name': 'Get a certain number of messages from a livestream.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'max_messages': 10
+            },
 
-    def __str__(self):
-        return ''
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        }
+    ]
 
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
@@ -290,7 +304,7 @@ class BaseChatDownloader:
 
         if remap:  # A matching 'remapping' has been found, apply this remapping
             if isinstance(remap, Remapper):
-                new_key = remap.new_key# or remap_key
+                new_key = remap.new_key  # or remap_key
 
                 # Perform transformation
                 if remap.remap_function:  # Has a remap function
@@ -396,23 +410,6 @@ class BaseChatDownloader:
             webpage_title = get_title_of_webpage(s.text)
             raise UnexpectedHTML(webpage_title, s.text)
 
-    _VALID_URL = None
-
-    # For general tests (non-site specific)
-    _TESTS = [
-        {
-            'name': 'Get a certain number of messages from a livestream.',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
-                'max_messages': 10
-            },
-
-            'expected_result': {
-                'messages_condition': lambda messages: len(messages) <= 10,
-            }
-        }
-    ]
-
     def get_site_value(self, v):
         if isinstance(v, SiteDefault):
             return self._SITE_DEFAULT_PARAMS.get(
@@ -466,7 +463,7 @@ class BaseChatDownloader:
 
         if dict_name in info:
             info[dict_name].update(new_dict)
-        elif create_when_empty or new_dict != {}: # dict_name not in info
+        elif create_when_empty or new_dict != {}:  # dict_name not in info
             info[dict_name] = new_dict
 
         return new_dict
