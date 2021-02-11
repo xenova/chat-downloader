@@ -503,13 +503,13 @@ class TwitchChatDownloader(BaseChatDownloader):
         'bits': r('bits', int_or_none),
 
         'id': 'message_id',
-        'mod': r('is_moderator', parse_bool),
+        'mod': r('author_is_moderator', parse_bool),
         'room-id': r('channel_id', int_or_none),
 
         'tmi-sent-ts': r('timestamp', lambda x: int_or_none(x, 0) * 1000),
 
-        'subscriber': r('is_subscriber', parse_bool),
-        'turbo': r('is_turbo', parse_bool),
+        'subscriber': r('author_is_subscriber', parse_bool),
+        'turbo': r('author_is_turbo', parse_bool),
 
         'client-nonce': 'client_nonce',
 
