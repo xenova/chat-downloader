@@ -372,8 +372,11 @@ class ChatReplayDownloader:
         error = response.get('error')
         if error:
             # Error code 403 'The caller does not have permission' error likely means the stream was privated immediately while the chat is still active.
-            if error.get('code') == 403:
+            error_code = error.get('code')
+            if error_code == 403:
                 raise VideoUnavailable
+            elif error_code == 404:
+                raise VideoNotFound
             else:
                 raise ParsingError("JSON response to '{}' is error:\n{}".format(url, json.dumps(response)))
         info = response.get('continuationContents', {}).get('liveChatContinuation')
@@ -506,7 +509,11 @@ class ChatReplayDownloader:
                     break
 
                 except VideoUnavailable:
-                    print('Video now unavailable, stream may have been privated while live chat was still active.')
+                    print('Video not unavailable, stream may have been privated while live chat was still active.')
+                    break
+
+                except VideoNotFound:
+                    print('Video not found, stream may have been deleted while live chat was still active.')
                     break
 
                 if('actions' in info):
