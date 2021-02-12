@@ -556,18 +556,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
 
         # ticker_sponsor_item
-        'detailText': r('message', parse_runs),
+        'detailText': r(None, parse_runs, True),
         'customThumbnail': r('badge_icons', parse_thumbnails),
 
         # membership_item
-        'headerSubtext': r('message', parse_runs),
+        'headerSubtext': r(None, parse_runs, True),
         'sponsorPhoto': r('sponsor_icons', parse_thumbnails),
 
         # ticker_paid_sticker_item
         'tickerThumbnails': r('ticker_icons', parse_thumbnails),
 
         # deleted messages
-        'deletedStateMessage': r('message', parse_runs),
+        'deletedStateMessage': r(None, parse_runs, True),
         'targetItemId': 'target_message_id',
 
         'externalChannelId': 'author_id',
@@ -576,7 +576,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'actionButton': r('action', parse_action_button),
 
         # addBannerToLiveChatCommand
-        'text': r('message', parse_runs),
+        'text': r(None, parse_runs, True),
         'viewerIsCreator': 'viewer_is_creator',
         'targetId': 'target_message_id',
         'isStackable': 'is_stackable',
@@ -585,10 +585,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'targetActionId': 'target_message_id',
 
         # donation_announcement
-        'subtext': r('sub_message', parse_runs),
+        'subtext': r(None, parse_runs, True),
 
         # tooltip
-        'detailsText': r('message', parse_runs),
+        'detailsText': r(None, parse_runs, True),
 
     }
 
@@ -836,7 +836,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     text = error_info.get(error_reason) or {}
 
                     error_reasons[error_reason] = text.get('simpleText') or try_get(
-                        text, lambda x: self.parse_runs(x, False)) or error_info.pop(
+                        text, lambda x: self.parse_runs(x, False)['message']) or error_info.pop(
                         'itemTitle', '') or error_info.pop(
                             'offerDescription', '') or playability_status.get(error_reason) or ''
 
@@ -868,7 +868,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             else:
                 # Video exists, but you cannot view chat for some reason
                 error_message = try_get(conversation_bar, lambda x: self.parse_runs(
-                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'], False)) or \
+                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'], False)['message']) or \
                     'Video does not have a chat replay.'
                 raise NoChatReplay(error_message)
 
