@@ -4,6 +4,7 @@ import sys
 import re
 from docstring_parser import parse as doc_parse
 from requests.exceptions import RequestException
+from urllib.parse import urlparse
 
 from .chat_downloader import ChatDownloader
 
@@ -31,6 +32,15 @@ from .errors import (
     NoContinuation,
     TimeoutException
 )
+
+
+class ProxyType(object):
+    def __call__(self, string):
+        url = urlparse(string)
+        return {
+            'http': '{}://{}'.format(url.scheme, url.netloc),
+            'https': '{}://{}'.format(url.scheme, url.netloc),
+        }
 
 
 def main():
@@ -166,6 +176,7 @@ def main():
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
     add_init_param(init_group, '--cookies', '-c')
+    init_group.add_argument('--proxy', help='Use HTTP proxy (http://10.10.1.10:3128)', type=ProxyType(), default=None)
     # TODO add headers (user agent) as arg
 
     parser._positionals.title = 'Mandatory Arguments'
@@ -195,10 +206,10 @@ def main():
         for k in get_chat_info
     }
 
-    init_params = {
+    init_params = {**{
         k: getattr(args, k, None)
         for k in get_init_info
-    }
+    }, **{'proxies': getattr(args, 'proxy', None)}}
 
     downloader = ChatDownloader(**init_params)
 
