@@ -344,12 +344,17 @@ class BaseChatDownloader:
                 'Accept-Language': 'en-US, en'
             }
 
+        proxies = kwargs.get('proxies')
+
         # Set params for use later on
         # self.params = kwargs
 
         # Begin session
         self.session = requests.Session()
         self.session.headers = headers
+
+        if proxies:
+            self.session.proxies.update(proxies)
 
         # Set cookies if present
         cookies = kwargs.get('cookies')

@@ -22,12 +22,14 @@ class ChatDownloader():
     def __init__(self,
                  headers=None,
                  cookies=None,
+                 proxies=None,
                  ):
         """
         Initialise a new session for making requests.
 
         :param headers: Test headers
         :param cookies: Path of cookies file
+        :param proxies: Proxy servers
 
         """
         self.init_params = locals()
