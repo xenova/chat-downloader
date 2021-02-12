@@ -57,8 +57,10 @@ setup(
             'twine',
             'wheel',
             'tox',
+            'pytest',
             'sphinx',
-            'pytest'
+            'sphinx-rtd-theme',
+            # 'm2r'
         ]
     },
     license='MIT license',

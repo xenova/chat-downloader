@@ -121,6 +121,7 @@ def main():
 
     # Formatting
     format_group = parser.add_argument_group('Format Arguments')
+    # format_group.add_argument('--print_json', action='store_true', help='Print out json ', default=None)
     add_chat_param(format_group, '--format')
     add_chat_param(format_group, '--format_file')
 

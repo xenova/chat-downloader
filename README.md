@@ -1,32 +1,14 @@
-# Chat Downloader
-A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!
-
-[![Python](https://img.shields.io/pypi/pyversions/chat-downloader)](https://pypi.org/project/chat-downloader)
-[![PyPI version](https://img.shields.io/pypi/v/chat-downloader.svg)](https://pypi.org/project/chat-downloader)
-[![Downloads](https://pepy.tech/badge/chat-downloader)](https://pypi.org/project/chat-downloader)
-[![GitHub license](https://img.shields.io/github/license/xenova/chat-downloader)](https://github.com/xenova/chat-downloader/blob/master/LICENSE)
-
-
-<!-- [![PyPI Downloads](https://img.shields.io/pypi/dm/chat-downloader)](https://pypi.org/project/chat-downloader) -->
-<!---
-[![GitHub issues](https://img.shields.io/github/issues/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
-[![GitHub forks](https://img.shields.io/github/forks/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
-[![GitHub stars](https://img.shields.io/github/stars/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
-[![Downloads](https://img.shields.io/github/downloads/xenova/chat-downloader/total.svg)](https://github.com/xenova/chat-downloader/releases)
--->
 
 ## Installation
 ### Install using `pip`
 ```
-pip install chat-downloader
+
 ```
 
-To update to the latest version, add the `--upgrade` flag to the above command.
+
 ### Install using `git`
 ```
-git clone https://github.com/xenova/chat-downloader.git
-cd chat-downloader
-python setup.py install
+
 ```
 
 ## Usage
