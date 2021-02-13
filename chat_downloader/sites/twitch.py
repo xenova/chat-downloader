@@ -271,7 +271,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     message_emotes[emote_id] = {
                         'id': emote_id,
                         'images': TwitchChatDownloader.generate_twitch_emote_image_list(emote_id),
-                        'name': message_text[begin:end+1]
+                        'name': message_text[begin:end + 1]
                     }
 
                     locations[emote_id] = []
@@ -1255,7 +1255,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             try:
                 first_location = list(
                     map(lambda x: int(x), emote['locations'][0].split('-')))
-                emote['name'] = message[first_location[0]:first_location[1]+1]
+                emote['name'] = message[first_location[0]:first_location[1] + 1]
             except Exception:
                 log('debug', [
                     'Invalid emote: {}'.format(emote),

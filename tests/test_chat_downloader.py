@@ -1,9 +1,11 @@
-# Allow direct execution
+
 from chat_downloader import ChatDownloader
 from chat_downloader.sites import (
     get_all_sites,
     BaseChatDownloader
 )
+
+# Allow direct execution
 import unittest
 import os
 import sys
@@ -85,7 +87,7 @@ for site in get_all_sites(True):
     for test_number, test in enumerate(test_cases):
         test_method = generator(site, test)
         test_method.__name__ = 'test_{}_{}'.format(
-            site.__name__, test_number+1)
+            site.__name__, test_number + 1)
 
         setattr(TestChatDownloader, test_method.__name__, test_method)
 
