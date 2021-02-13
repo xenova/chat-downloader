@@ -3,8 +3,10 @@ import argparse
 import sys
 import re
 from docstring_parser import parse as doc_parse
-from requests.exceptions import RequestException
-from urllib.parse import urlparse
+from requests.exceptions import (
+    RequestException,
+    ConnectionError
+)
 
 from .chat_downloader import ChatDownloader
 
@@ -32,15 +34,6 @@ from .errors import (
     NoContinuation,
     TimeoutException
 )
-
-
-class ProxyType(object):
-    def __call__(self, string):
-        url = urlparse(string)
-        return {
-            'http': '{}://{}'.format(url.scheme, url.netloc),
-            'https': '{}://{}'.format(url.scheme, url.netloc),
-        }
 
 
 def main():
@@ -176,7 +169,8 @@ def main():
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
     add_init_param(init_group, '--cookies', '-c')
-    init_group.add_argument('--proxy', help='Use HTTP proxy (http://10.10.1.10:3128)', type=ProxyType(), default=None)
+    add_init_param(init_group, '--proxy', '-p')
+
     # TODO add headers (user agent) as arg
 
     parser._positionals.title = 'Mandatory Arguments'
@@ -206,18 +200,20 @@ def main():
         for k in get_chat_info
     }
 
-    init_params = {**{
+    init_params = {
         k: getattr(args, k, None)
         for k in get_init_info
-    }, **{'proxies': getattr(args, 'proxy', None)}}
+    }
+
+    log('debug', 'Python version: {}'.format(sys.version))
+    log('debug', 'Program version: {}'.format(metadata.__version__))
+
+    log('debug', 'Initialisation parameters: {}'.format(init_params))
 
     downloader = ChatDownloader(**init_params)
 
     output_file = None
     try:
-        log('debug', 'Python version: {}'.format(sys.version))
-        log('debug', 'Program version: {}'.format(metadata.__version__))
-
         chat = downloader.get_chat(**chat_params)
 
         log('debug', 'Chat information: {}'.format(chat.__dict__))
@@ -267,10 +263,12 @@ def main():
     except NoContinuation as e:
         log('info', e)
 
-    except RequestException as e:
+    except ConnectionError as e:
         log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
-        # log('error', e)  # traceback.format_exc()
-        # TODO if e instance of (no internet connection)...
+
+    except RequestException as e:
+        log('error', e)
+
     except TimeoutException as e:
         log('info', e)
 
