@@ -48,6 +48,7 @@ class ChatDownloader():
 
                  logging='info',
                  pause_on_debug=False,
+                 exit_on_debug=False,
 
                  # If True, program will not sleep when a timeout instruction is given
                  # force_no_timeout=False,
@@ -100,8 +101,8 @@ class ChatDownloader():
         :param format_file: Specify the format file to choose formats from
 
         :param pause_on_debug: Pause on certain debug messages
+        :param exit_on_debug: Exit when something unexpected happens
         :param logging: Level of logging to display
-
 
         :param chat_type: Specify chat type, default is live
 

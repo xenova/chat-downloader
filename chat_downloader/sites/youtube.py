@@ -942,12 +942,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
+        pause_on_debug = params.get('pause_on_debug')
+        exit_on_debug = params.get('exit_on_debug')
+
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                params.get('pause_on_debug')
+                pause_on_debug
             )
+            if exit_on_debug:
+                raise UnexpectedError
 
         timeout = Timeout(params.get('timeout'))
         inactivity_timeout = Timeout(params.get(

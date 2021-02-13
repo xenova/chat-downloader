@@ -1,5 +1,9 @@
 """File for defining errors"""
 
+class UnexpectedError(Exception):
+    """Raised if something unexpected happens."""
+    pass
+
 
 class TimeoutException(Exception):
     """Raised after a timeout occurs."""

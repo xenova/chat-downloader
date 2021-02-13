@@ -70,6 +70,15 @@ def main():
 
     def add_param(param_type, group, *keys, **kwargs):
 
+        is_boolean_flag = kwargs.pop('is_boolean_flag', None)
+
+        if is_boolean_flag:
+            # If True by default, set action to store_false
+            # If False by default, set action to store_false
+
+            default = kwargs.pop('default', None)
+            kwargs['action'] = 'store_{}'.format(str(not bool(default)).lower())
+
         info = get_chat_info if param_type == 'chat' else get_init_info
         key = keys[0].lstrip('-')
         group.add_argument(*keys,
@@ -153,14 +162,17 @@ def main():
         '--overwrite', help='Overwrite output file if it exists. Otherwise, append to the end of the file.', action='store_true')
 
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')
-    add_chat_param(debug_group, '--pause_on_debug')
+
+    on_debug_options = debug_group.add_mutually_exclusive_group()
+    add_chat_param(on_debug_options, '--pause_on_debug', is_boolean_flag=True)
+    add_chat_param(on_debug_options, '--exit_on_debug', is_boolean_flag=True)
 
     debug_options = debug_group.add_mutually_exclusive_group()
     add_chat_param(debug_options, '--logging',
                    choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
 
     debug_options.add_argument(
-        '--testing', help='Enable testing mode', action='store_true')
+        '--testing', help='Enable testing mode. This is equivalent to setting logging to debug and enabling pause_on_debug', action='store_true')
     debug_options.add_argument(
         '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
     debug_options.add_argument(
@@ -177,9 +189,6 @@ def main():
     parser._optionals.title = 'General Arguments'
 
     args = parser.parse_args()
-
-    # TODO DEBUGGING:
-    # args.testing = True
 
     if args.testing:
         args.logging = 'debug'

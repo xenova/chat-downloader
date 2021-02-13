@@ -1006,12 +1006,17 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
+        pause_on_debug = params.get('pause_on_debug')
+        exit_on_debug = params.get('exit_on_debug')
+
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                params.get('pause_on_debug')
+                pause_on_debug
             )
+            if exit_on_debug:
+                raise UnexpectedError
 
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
@@ -1380,12 +1385,17 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
+        pause_on_debug = params.get('pause_on_debug')
+        exit_on_debug = params.get('exit_on_debug')
+
         def debug_log(*items):
             log(
                 'debug',
                 items,
-                params.get('pause_on_debug')
+                pause_on_debug
             )
+            if exit_on_debug:
+                raise UnexpectedError
 
         def create_connection():
             for attempt_number in attempts(max_attempts):
