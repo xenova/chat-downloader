@@ -337,19 +337,26 @@ class BaseChatDownloader:
                  **kwargs
                  ):
 
+        # Begin session
+        self.session = requests.Session()
+
         headers = kwargs.get('headers')
         if headers is None:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
                 'Accept-Language': 'en-US, en'
             }
-
-        # Set params for use later on
-        # self.params = kwargs
-
-        # Begin session
-        self.session = requests.Session()
         self.session.headers = headers
+
+        # Set proxies if present
+        proxy = kwargs.get('proxy')
+        if proxy is not None:
+            if proxy == '':
+                proxies = {}
+            else:
+                proxies = {'http': proxy, 'https': proxy}
+
+            self.session.proxies.update(proxies)
 
         # Set cookies if present
         cookies = kwargs.get('cookies')

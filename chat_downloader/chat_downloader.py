@@ -22,12 +22,14 @@ class ChatDownloader():
     def __init__(self,
                  headers=None,
                  cookies=None,
+                 proxy=None,
                  ):
         """
         Initialise a new session for making requests.
 
         :param headers: Test headers
         :param cookies: Path of cookies file
+        :param proxy: Use the specified HTTP/HTTPS/SOCKS proxy. To enable SOCKS proxy, specify a proper scheme. For example socks5://127.0.0.1:1080/. Pass in an empty string (--proxy "") for direct connection. Default is None (i.e. do not use a proxy)
 
         """
         self.init_params = locals()
@@ -131,7 +133,7 @@ class ChatDownloader():
 
                 log('info', 'Site: {}'.format(
                     self.sessions[site.__name__]._NAME))
-                log('debug', 'Parameters: {}'.format(params))
+                log('debug', 'Program parameters: {}'.format(params))
                 info = self.sessions[site.__name__].get_chat(**params)
                 if isinstance(max_messages, int):
                     info.chat = itertools.islice(info.chat, max_messages)
