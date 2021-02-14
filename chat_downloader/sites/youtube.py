@@ -8,6 +8,8 @@ from .common import (
 
 from requests.exceptions import RequestException
 
+from json.decoder import JSONDecodeError
+
 from ..errors import (
     NoChatReplay,
     NoContinuation,
@@ -15,8 +17,7 @@ from ..errors import (
     VideoUnavailable,
     LoginRequired,
     VideoUnplayable,
-    InvalidParameter,
-    UnexpectedHTML
+    InvalidParameter
 )
 
 from urllib import parse
@@ -790,6 +791,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
 
         if not yt_initial_data:
+            log('debug', html)
             raise ParsingError(
                 'Unable to parse video data. Please try again.')
 
@@ -984,7 +986,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     break  # successful retrieve
 
-                except (UnexpectedHTML, RequestException) as e:
+                except (JSONDecodeError, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
                     self.clear_cookies()
 

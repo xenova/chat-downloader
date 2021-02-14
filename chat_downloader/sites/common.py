@@ -9,7 +9,6 @@ from math import ceil
 from ..errors import (
     InvalidParameter,
     TimeoutException,
-    UnexpectedHTML,
     RetriesExceeded,
     CookieError
 )
@@ -407,15 +406,7 @@ class BaseChatDownloader:
 
     def _session_get_json(self, url, **kwargs):
         """Make a request using the current session and get json data."""
-        s = self._session_get(url, **kwargs)
-
-        try:
-            return s.json()
-        except JSONDecodeError:
-            # print(s.content)
-            # TODO determine if html
-            webpage_title = get_title_of_webpage(s.text)
-            raise UnexpectedHTML(webpage_title, s.text)
+        return self._session_get(url, **kwargs).json()
 
     def get_site_value(self, v):
         if isinstance(v, SiteDefault):
@@ -511,11 +502,14 @@ class BaseChatDownloader:
             text + [retry_text]
         )
 
-        if isinstance(error, UnexpectedHTML):
+        if isinstance(error, JSONDecodeError):
             log(
                 'debug',
-                error.html
+                error.__dict__
             )
+            page_title = get_title_of_webpage(error.doc)
+            if page_title:
+                log('debug', 'Title: {}'.format(page_title))
 
         if must_sleep:
             # time.sleep(time_to_sleep)
