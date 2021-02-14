@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 from chat_downloader import run
 from chat_downloader.sites import get_all_sites
 
+
 class TestURLGenerators(unittest.TestCase):
     """
     Test case generator for all sites. For each site, URLs are generated with the class'
@@ -41,11 +42,13 @@ for site in get_all_sites():
         for i, url in enumerate(list_of_urls):
             name = str(i + 1).zfill(padding)
 
+            print(name, '|', url)
+
             test_method = generator(site, url)
-            test_method.__name__ = 'test_{}_url_{}'.format(site.__name__, name)
+            test_method.__name__ = 'test_{}_{}'.format(site.__name__, name)
             setattr(TestURLGenerators, test_method.__name__, test_method)
 
-        del test_method
+            del test_method
 
     except NotImplementedError:
         pass  # No generator, skip
@@ -53,3 +56,7 @@ for site in get_all_sites():
 
 if __name__ == '__main__':
     unittest.main()
+
+    # pytest -v tests/test_generators.py
+    # pytest -v tests/test_generators.py -k YouTubeChatDownloader
+    # pytest -v tests/test_generators.py -k TwitchChatDownloader

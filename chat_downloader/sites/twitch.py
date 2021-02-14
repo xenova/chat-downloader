@@ -1102,8 +1102,10 @@ class TwitchChatDownloader(BaseChatDownloader):
         downloader = TwitchChatDownloader()
 
         livestream_limit = 10
-        vod_limit = 10
-        clip_limit = 10
+        vod_limit = 5
+        clip_limit = 5
+
+        # max_tests = livestream_limit + livestream_limit*(vod_limit+clip_limit)
 
         livestreams = downloader.get_top_livestreams(livestream_limit)
         for livestream in livestreams:
@@ -1112,7 +1114,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             # e.g. https://www.twitch.tv/shroud
             yield '{}/{}'.format(TwitchChatDownloader._TWITCH_HOME, name)
 
-            vods = downloader.get_user_videos(name)
+            vods = downloader.get_user_videos(name, vod_limit)
             for vod in vods:
                 # e.g. https://www.twitch.tv/videos/12345678
                 yield '{}/{}'.format(TwitchChatDownloader._TWITCH_VIDEOS, vod['id'])
