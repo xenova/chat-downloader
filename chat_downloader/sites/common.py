@@ -11,7 +11,8 @@ from ..errors import (
     TimeoutException,
     UnexpectedHTML,
     RetriesExceeded,
-    CookieError
+    CookieError,
+    UnexpectedError
 )
 
 from ..utils import (
@@ -268,6 +269,10 @@ class BaseChatDownloader:
         }
     ]
 
+    _URL_GENERATORS = [
+
+    ]
+
     @staticmethod
     def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
 
@@ -287,6 +292,17 @@ class BaseChatDownloader:
             valid_message_types.append(message_type)
 
         return item.get('message_type') in valid_message_types
+
+    @staticmethod
+    def remap_dict(item, remapping_dict, keep_unknown_keys=False, replace_char_with_underscores=None):
+        info = {}
+        for key in item:
+            BaseChatDownloader.remap(
+                info, remapping_dict, key, item[key],
+                keep_unknown_keys=keep_unknown_keys,
+                replace_char_with_underscores=replace_char_with_underscores
+                )
+        return info
 
     @staticmethod
     def remap(info, remapping_dict, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
@@ -332,6 +348,19 @@ class BaseChatDownloader:
                 remap_key = remap_key.replace(
                     replace_char_with_underscores, '_')
             info[remap_key] = remap_input
+
+    @staticmethod
+    def debug_log(params, *items):
+        pause_on_debug = params.get('pause_on_debug')
+        exit_on_debug = params.get('exit_on_debug')
+
+        log(
+            'debug',
+            items,
+            pause_on_debug
+        )
+        if exit_on_debug:
+            raise UnexpectedError(items)
 
     def __init__(self,
                  **kwargs
@@ -425,6 +454,10 @@ class BaseChatDownloader:
             return v
 
     def get_chat(self, **kwargs):
+        raise NotImplementedError
+
+    @staticmethod
+    def generate_urls():
         raise NotImplementedError
 
     @staticmethod

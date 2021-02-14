@@ -1,15 +1,16 @@
+import os
+import sys
+import unittest
+
+# Allow direct execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # noqa
+
 
 from chat_downloader import ChatDownloader
 from chat_downloader.sites import (
     get_all_sites,
     BaseChatDownloader
 )
-
-# Allow direct execution
-import unittest
-import os
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class TestChatDownloader(unittest.TestCase):

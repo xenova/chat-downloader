@@ -942,17 +942,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
-        pause_on_debug = params.get('pause_on_debug')
-        exit_on_debug = params.get('exit_on_debug')
 
-        def debug_log(*items):
-            log(
-                'debug',
-                items,
-                pause_on_debug
-            )
-            if exit_on_debug:
-                raise UnexpectedError
+
+
 
         timeout = Timeout(params.get('timeout'))
         inactivity_timeout = Timeout(params.get(
@@ -984,8 +976,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         yt_info, 'continuationContents', 'liveChatContinuation')
 
                     if not info:
-                        raise NoContinuation(
-                            'Live stream ended.' if is_live else 'No continuation.')
+                        return
 
                     break  # successful retrieve
 
@@ -994,11 +985,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     self.clear_cookies()
 
                     continue
-
-                except NoContinuation:
-                    # debug_log(e)
-                    # Live stream ended
-                    return
 
             actions = info.get('actions') or []
 
@@ -1085,7 +1071,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             data.update(parsed_contents)
                             data['header_message'] = header_message
                         else:
-                            debug_log(
+                            self.debug_log(params,
                                 'No bannerRenderer item',
                                 'Action type: {}'.format(
                                     original_action_type),
@@ -1103,7 +1089,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         # ignore these
                     else:
                         # not processing these
-                        debug_log(
+                        self.debug_log(params,
                             'Unknown action: {}'.format(
                                 original_action_type),
                             action,
@@ -1116,14 +1102,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     # print(action)
                     if not data:  # TODO debug
-                        debug_log(
+                        self.debug_log(params,
                             'Parse of action returned empty results: {}'.format(
                                 original_action_type),
                             action
                         )
 
                     if missing_keys:  # TODO debugging for missing keys
-                        debug_log(
+                        self.debug_log(params,
                             'Missing keys found: {}'.format(missing_keys),
                             'Message type: {}'.format(
                                 original_message_type),
@@ -1144,7 +1130,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             continue
                             # skip placeholder items
                         elif original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
-                            debug_log(
+                            self.debug_log(params,
                                 'Unknown message type "{}" for action "{}"'.format(
                                     original_message_type,
                                     original_action_type
@@ -1156,7 +1142,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             )
 
                     else:  # no type # can ignore message
-                        debug_log(
+                        self.debug_log(params,
                             'No message type',
                             'Action type: {}'.format(original_action_type),
                             'Action: {}'.format(action),
@@ -1234,7 +1220,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     pass
                     # ignore these continuations
                 else:
-                    debug_log(
+                    self.debug_log(params,
                         'Unknown continuation: {}'.format(
                             continuation_key),
                         cont

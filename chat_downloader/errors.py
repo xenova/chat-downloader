@@ -2,7 +2,8 @@
 
 class UnexpectedError(Exception):
     """Raised if something unexpected happens."""
-    pass
+    def __init__(self, items):
+        super().__init__(str(items))
 
 
 class TimeoutException(Exception):
@@ -89,7 +90,7 @@ class TwitchError(Exception):
 
 
 class NoContinuation(Exception):
-    """Raised when there are no more messages to retrieve (in a live stream)."""
+    """Raised when no continuation can be found."""
     pass
 
 

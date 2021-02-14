@@ -18,7 +18,8 @@ from ..errors import (
     UnexpectedHTML,
     NoChatReplay,
     TimeoutException,
-    VideoUnavailable
+    VideoUnavailable,
+    UnexpectedError
 )
 
 from ..utils import (
@@ -104,6 +105,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         super().__init__(**kwargs)
 
         # Only get badge info if not already retrieved
+        # TODO add argument (no_badges)
         if not TwitchChatDownloader._BADGE_INFO:
             TwitchChatDownloader._BADGE_INFO = self._session_get_json(
                 self._BADGE_INFO_URL).get('badge_sets') or {}
@@ -239,6 +241,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
     @staticmethod
     def parse_author_images(original_url):
+        # e.g. https://static-cdn.jtvnw.net/jtv_user_pictures/3892c956-0616-4fc9-b2fe-527b1be0b623-profile_image-300x300.png
         smaller_icon = original_url.replace('300x300', '70x70')
         return [
             BaseChatDownloader.create_image(original_url, 300, 300),
@@ -846,10 +849,10 @@ class TwitchChatDownloader(BaseChatDownloader):
         'ChannelVideoShelvesQuery': 'fb663273aa958ebe2f58d5fcb3aacc112d67ebfd7f414b095c5d1498d21aad92',
         'ClipsCards__User': 'b73ad2bfaecfd30a9e6c28fada15bd97032c83ec77a0440766a56fe0bd632777',
         'VideoMetadata': '226edb3e692509f727fd56821f5653c05740242c82b0388883e0c0e75dcbf687',
+        'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
 
         # Not used yet
         # 'CollectionSideBar': '27111f1b382effad0b6def325caef1909c733fe6a4fbabf54f8d491ef2cf2f14',
-        # 'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
         # 'ChannelCollectionsContent': '07e3691a1bad77a36aba590c351180439a40baefc1c275356f40fc7082419a84',
         # 'ComscoreStreamingQuery': 'e1edae8122517d013405f237ffcc124515dc6ded82480a88daef69c83b53ac01',
         # 'VideoPreviewOverlay': '3006e77e51b128d838fa4e835723ca4dc9a05c5efd4466c1085215c6e437e65c',
@@ -871,8 +874,52 @@ class TwitchChatDownloader(BaseChatDownloader):
             }
         return self._download_base_gql(ops)
 
-    def get_user_clips(self, user_name, limit=100, filter_by='LAST_WEEK'):
+    _USER_REMAPPING = {
+        'id': 'id',
+        'login': 'name',
+        'displayName': 'display_name',
+        'profileImageURL': 'profile_image_url',
+        'primaryColorHex': 'colour'
+    }
 
+    @staticmethod
+    def parse_user(item):
+        return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
+
+    _GAME_REMAPPING = {
+        'id': 'id',
+        'name': 'name',
+        'displayName': 'display_name',
+        'boxArtURL': 'box_art_url'
+    }
+
+    @staticmethod
+    def parse_game(item):
+        if isinstance(item, dict):
+            return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._GAME_REMAPPING)
+        return None
+
+    _CLIP_REMAPPING = {
+        'id': r('id', int_or_none),
+        'slug': 'slug',
+        'url': 'url',
+        'embedURL': 'embed_url',
+        'title': 'title',
+        'viewCount': 'views',
+        'language': 'language',
+        'curator': r('curator', parse_user),
+        'game': r('game', parse_game),
+        'language': 'language',
+        'broadcaster': r('broadcaster', parse_user),
+
+        'thumbnailURL': 'thumbnail_url',
+        'createdAt': r('created_at', timestamp_to_microseconds),
+        'durationSeconds': 'duration',
+
+
+    }
+
+    def get_user_clips(self, username, limit=100, filter_by='LAST_WEEK'):
         # filter_by:
         # LAST_WEEK
         # LAST_DAY
@@ -881,25 +928,21 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         # offset= 20# , offset = 0
 
-        count = limit
+        remaining_count = limit
         offset = 0
         to_return = []
         while True:
-            cursor = base64.b64encode(str(offset).encode()).decode()
-            num_to_get = max(min(count, 100), 0)
+            num_to_get = max(min(remaining_count, 100), 0)  # in this call
             if num_to_get <= 0:
                 break
-            # print('num_to_get', num_to_get)
 
             query = [{
                 'operationName': 'ClipsCards__User',
-                'variables':
-                {
-                    'cursor': cursor,
-                    'login': user_name,
+                'variables': {
+                    'cursor': base64.b64encode(str(offset).encode()).decode(),
+                    'login': username,
                     'limit': num_to_get,
-                    'criteria':
-                    {
+                    'criteria': {
                         'filter': filter_by
                     }
                 }
@@ -907,29 +950,94 @@ class TwitchChatDownloader(BaseChatDownloader):
             info = self._download_gql(query)
             if not info:
                 break
+
             clips = info[0]['data']['user']['clips']
 
             edges = clips['edges']
+            remaining_count -= len(edges)
 
-            count -= len(edges)
-
-            to_return += edges
+            for edge in edges:
+                node = edge['node'] or {}
+                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._CLIP_REMAPPING)
 
             if not clips['pageInfo']['hasNextPage']:
                 break
 
-        return to_return
+    _VIDEO_REMAPPING = {
+        'id': r('id', int_or_none),
+        'animatedPreviewURL': 'animated_preview_url',
+        'game': r('game', parse_game),
 
-        # TODO check if pageInfo hasNextPage
+        'lengthSeconds': 'duration',
 
-        # print(len(edges))
-        return edges
+        'owner': r('owner', parse_user),
 
-    def get_user_vods(self, user_name):
+        'previewThumbnailURL': 'preview_thumbnail_url',
+
+        'publishedAt': r('published_at', timestamp_to_microseconds),
+
+        'title': 'title',
+        'viewCount': 'views',
+        'resourceRestriction': 'resource_restriction'
+
+        # 'contentTags': 'tags'
+    }
+
+    def get_user_videos(self, username, limit=30, video_type=None, sort='TIME'):
+        # Name -> broadcastType
+
+        # Collections (ChannelCollectionsContent)
+        #
+
+        # Past broadcasts -> ARCHIVE
+        # Highlights -> HIGHLIGHT
+        # Uploads -> UPLOAD
+        # Past premieres -> PAST_PREMIERE
+        # All Videos -> null
+
+        # Sort -> videoSort
+        # VIEWS
+        # TIME
+
+        remaining_count = limit
+        offset = 0
+        to_return = []
+        while True:
+            num_to_get = max(min(remaining_count, 30), 0)  # in this call
+            if num_to_get <= 0:
+                break
+
+            query = [{
+                'operationName': 'FilterableVideoTower_Videos',
+                'variables': {
+                    'limit': num_to_get,
+                    'channelOwnerLogin': username,
+                    'broadcastType': video_type,
+                    'videoSort': sort
+                }
+            }]
+
+            info = self._download_gql(query)
+            if not info:
+                break
+
+            videos = info[0]['data']['user']['videos']
+
+            edges = videos['edges']
+            remaining_count -= len(edges)
+
+            for edge in edges:
+                node = edge['node'] or {}
+                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._VIDEO_REMAPPING)
+
+            if not videos['pageInfo']['hasNextPage']:
+                break
+
+    def get_featured_videos(self, username):
         query = [{
             'operationName': 'ChannelVideoShelvesQuery',
             'variables': {
-                'channelLogin': user_name,
+                'channelLogin': username,
                 'first': 5
             }
         }]
@@ -938,14 +1046,29 @@ class TwitchChatDownloader(BaseChatDownloader):
         # print(len(edges))
         return edges
 
+    _LIVESTREAM_REMAPPING = {
+
+        'id': r('id', int_or_none),
+        'title': 'title',
+        'viewersCount': 'viewers',
+
+        'previewImageURL': 'preview_image_url',
+        'broadcaster': r('broadcaster', parse_user),
+        'game': r('game', parse_game),
+
+
+        # 'tags': 'tags'
+
+        'type': 'type'  # e.g. 'live'
+    }
+
     def get_top_livestreams(self, limit=30):
-        count = limit
+        remaining_count = limit
 
         cursor = ''
 
-        to_return = []
         while True:
-            num_to_get = max(min(count, 30), 0)
+            num_to_get = max(min(remaining_count, 30), 0)
             if num_to_get <= 0:
                 break
             # print('num_to_get', num_to_get)
@@ -965,12 +1088,39 @@ class TwitchChatDownloader(BaseChatDownloader):
             edges = self._download_gql(query)[0]['data']['streams']['edges']
 
             cursor = edges[-1]['cursor']
-            count -= num_to_get
+            remaining_count -= num_to_get
 
-            to_return += edges
+            for edge in edges:
+                node = edge['node'] or {}
+                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._LIVESTREAM_REMAPPING)
 
-        return to_return
-        # print(streams)
+    _TWITCH_HOME = 'https://www.twitch.tv'
+    _TWITCH_VIDEOS = 'https://www.twitch.tv/videos'
+
+    @staticmethod
+    def generate_urls():
+        downloader = TwitchChatDownloader()
+
+        livestream_limit = 10
+        vod_limit = 10
+        clip_limit = 10
+
+        livestreams = downloader.get_top_livestreams(livestream_limit)
+        for livestream in livestreams:
+            name = livestream['broadcaster']['name']
+
+            # e.g. https://www.twitch.tv/shroud
+            yield '{}/{}'.format(TwitchChatDownloader._TWITCH_HOME, name)
+
+            vods = downloader.get_user_videos(name)
+            for vod in vods:
+                # e.g. https://www.twitch.tv/videos/12345678
+                yield '{}/{}'.format(TwitchChatDownloader._TWITCH_VIDEOS, vod['id'])
+
+            clips = downloader.get_user_clips(name, clip_limit)
+            for clip in clips:
+                # e.g. https://clips.twitch.tv/FastThankfulLobsterEagleEye-SFi4SJWaTkAYu-B3
+                yield clip['url']
 
     _REGEX_FUNCTION_MAP = [
         (_VALID_VOD_URL, 'get_chat_by_vod_id'),
@@ -1006,18 +1156,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
-        pause_on_debug = params.get('pause_on_debug')
-        exit_on_debug = params.get('exit_on_debug')
-
-        def debug_log(*items):
-            log(
-                'debug',
-                items,
-                pause_on_debug
-            )
-            if exit_on_debug:
-                raise UnexpectedError
-
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
         message_count = 0
@@ -1049,13 +1187,14 @@ class TwitchChatDownloader(BaseChatDownloader):
                 missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
                 if missing_keys:
-                    debug_log(
-                        'Missing keys found: {}'.format(missing_keys),
-                        'Original data: {}'.format(comment),
-                        'Parsed data: {}'.format(data),
-                        comment.keys(),
-                        TwitchChatDownloader._KNOWN_COMMENT_KEYS
-                    )
+                    self.debug_log(params,
+                                   'Missing keys found: {}'.format(
+                                       missing_keys),
+                                   'Original data: {}'.format(comment),
+                                   'Parsed data: {}'.format(data),
+                                   comment.keys(),
+                                   TwitchChatDownloader._KNOWN_COMMENT_KEYS
+                                   )
 
                 time_in_seconds = data.get('time_in_seconds', 0)
 
@@ -1385,18 +1524,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
-        pause_on_debug = params.get('pause_on_debug')
-        exit_on_debug = params.get('exit_on_debug')
-
-        def debug_log(*items):
-            log(
-                'debug',
-                items,
-                pause_on_debug
-            )
-            if exit_on_debug:
-                raise UnexpectedError
-
         def create_connection():
             for attempt_number in attempts(max_attempts):
                 try:
@@ -1475,7 +1602,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                             missing_keys = data.keys() - TwitchChatDownloader._KNOWN_IRC_KEYS
 
                             if missing_keys:
-                                debug_log(
+                                self.debug_log(params,
                                     'Missing keys found: {}'.format(
                                         missing_keys),
                                     'Original data: {}'.format(match.groups()),

@@ -539,12 +539,6 @@ class FacebookChatDownloader(BaseChatDownloader):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
-        # def debug_log(*items):
-        #     log(
-        #         'debug',
-        #         items,
-        #         params.get('pause_on_debug')
-        #     )
 
         buffer_size = 25  # max num comments returned by api call
         # cursor = ''

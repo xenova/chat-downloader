@@ -1,11 +1,13 @@
-from chat_downloader.utils import multi_get
+import os
 import sys
 import json
 import requests
 import re
-import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Allow direct execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # noqa
+
+from chat_downloader.utils import multi_get
 
 
 session = requests.Session()
