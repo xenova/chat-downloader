@@ -1,12 +1,14 @@
+import os
+import sys
+import unittest
 from requests.exceptions import ProxyError
-from chat_downloader import ChatDownloader
 
 
 # Allow direct execution
-import unittest
-import os
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # noqa
+
+
+from chat_downloader import ChatDownloader
 
 
 class TestInitParams(unittest.TestCase):
