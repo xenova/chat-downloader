@@ -17,24 +17,6 @@ class RetriesExceeded(Exception):
     """Raised after the maximum number of retries has been reached."""
     pass
 
-# TODO change UnexpectedHTML/JSONParseError back to JSONDecode?
-
-
-class JSONParseError(Exception):
-    """Raised when unable to parse JSON."""
-    pass
-
-
-class UnexpectedHTML(Exception):
-    """
-    Raised when JSON is expected, but HTML is returned instead
-    This usually occurs when an internal service error occurs.
-    """
-
-    def __init__(self, message=None, html=None):
-        super().__init__(message)
-        self.html = html
-
 
 class VideoNotFound(Exception):
     """Raised when video cannot be found."""

@@ -11,10 +11,11 @@ from .common import (
 )
 
 from requests.exceptions import RequestException
+from json.decoder import JSONDecodeError
+
 
 from ..errors import (
     TwitchError,
-    UnexpectedHTML,
     NoChatReplay,
     VideoUnavailable
 )
@@ -1163,7 +1164,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 try:
                     info = self._session_get_json(url)
                     break
-                except (UnexpectedHTML, RequestException) as e:
+                except (JSONDecodeError, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
 
             error_message = multi_get(info, 'error', 'message')
@@ -1234,7 +1235,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             try:
                 video = self._download_gql(query)[0]['data']['video']
                 break
-            except (UnexpectedHTML, RequestException) as e:
+            except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         if not video:
@@ -1269,7 +1270,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             try:
                 clip = self._download_base_gql(query)['data']['clip']
                 break
-            except (UnexpectedHTML, RequestException) as e:
+            except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         vod_id = multi_get(clip, 'video', 'id')
@@ -1660,7 +1661,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             try:
                 stream_info = self._download_gql(query)[0]['data']['user']
                 break
-            except (UnexpectedHTML, RequestException) as e:
+            except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
