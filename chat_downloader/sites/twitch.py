@@ -16,8 +16,7 @@ from ..errors import (
     TwitchError,
     UnexpectedHTML,
     NoChatReplay,
-    VideoUnavailable,
-    UnexpectedError
+    VideoUnavailable
 )
 
 from ..utils import (
@@ -925,7 +924,6 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         remaining_count = limit
         offset = 0
-        to_return = []
         while True:
             num_to_get = max(min(remaining_count, 100), 0)  # in this call
             if num_to_get <= 0:
@@ -995,8 +993,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # TIME
 
         remaining_count = limit
-        offset = 0
-        to_return = []
+        # offset = 0
         while True:
             num_to_get = max(min(remaining_count, 30), 0)  # in this call
             if num_to_get <= 0:

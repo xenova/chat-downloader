@@ -21,7 +21,6 @@ from ..errors import (
 from urllib import parse
 
 import json
-import time
 import re
 
 from ..utils import (
@@ -806,7 +805,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             # print(section_info)
 
-            section_title = section_info['title']['runs'][0]['text']
+            # section_title = section_info['title']['runs'][0]['text']
             # print(section_title)
 
             # items = section_info['content']['horizontalListRenderer']['items']

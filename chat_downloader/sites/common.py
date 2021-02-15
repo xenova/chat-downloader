@@ -2,9 +2,7 @@
 import requests
 from http.cookiejar import MozillaCookieJar
 import os
-import time
 from json import JSONDecodeError
-from math import ceil
 
 from ..errors import (
     InvalidParameter,
@@ -257,7 +255,7 @@ class BaseChatDownloader:
                 info, remapping_dict, key, item[key],
                 keep_unknown_keys=keep_unknown_keys,
                 replace_char_with_underscores=replace_char_with_underscores
-                )
+            )
         return info
 
     @staticmethod

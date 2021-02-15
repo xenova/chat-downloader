@@ -12,8 +12,6 @@ from .chat_downloader import (
 from .metadata import __version__
 
 from .utils import (
-    get_logger,
-    set_log_level,
     get_default_args,
     int_or_none
 )
