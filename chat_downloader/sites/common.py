@@ -213,7 +213,7 @@ class BaseChatDownloader:
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
                 'max_messages': 10,
-                # 'timeout': 60, # As a fallback
+                'timeout': 60, # As a fallback
             },
 
             'expected_result': {
