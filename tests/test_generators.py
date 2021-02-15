@@ -42,10 +42,9 @@ for site in get_all_sites():
         for i, url in enumerate(list_of_urls):
             name = str(i + 1).zfill(padding)
 
-            print(name, '|', url)
-
             test_method = generator(site, url)
-            test_method.__name__ = 'test_{}_{}'.format(site.__name__, name)
+            test_method.__name__ = 'test_{}_{}_{}'.format(
+                site.__name__, name, url)
             setattr(TestURLGenerators, test_method.__name__, test_method)
 
             del test_method

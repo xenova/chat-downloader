@@ -2,6 +2,7 @@
 import sys
 import re
 import itertools
+import time
 
 from urllib.parse import urlparse
 
@@ -17,7 +18,8 @@ from .utils import (
     safe_print,
     set_log_level,
     get_default_args,
-    update_dict_without_overwrite
+    update_dict_without_overwrite,
+    TimedGenerator
 )
 
 
@@ -39,8 +41,7 @@ from .errors import (
     InvalidParameter,
     InvalidURL,
     RetriesExceeded,
-    NoContinuation,
-    TimeoutException
+    NoContinuation
 )
 
 
@@ -166,6 +167,27 @@ class ChatDownloader():
                 if isinstance(max_messages, int):
                     info.chat = itertools.islice(info.chat, max_messages)
 
+                if timeout is not None or inactivity_timeout is not None:
+                    # Generator requires timing functionality
+
+                    info.chat = TimedGenerator(
+                        info.chat, timeout, inactivity_timeout)
+
+                    if isinstance(timeout, (float, int)):
+                        start = time.time()
+
+                        def log_on_timeout():
+                            log('debug', 'Timeout occurred after {} seconds.'.format(
+                                time.time() - start))
+                        setattr(info.chat, 'on_timeout', log_on_timeout)
+
+                    if isinstance(inactivity_timeout, (float, int)):
+                        def log_on_inactivity_timeout():
+                            log('debug', 'Inactivity timeout occurred after {} seconds.'.format(
+                                inactivity_timeout))
+                        setattr(info.chat, 'on_inactivity_timeout',
+                                log_on_inactivity_timeout)
+
                 info.site = self.sessions[site.__name__]
 
                 formatter = ItemFormatter(params['format_file'])
@@ -225,7 +247,6 @@ def run(**kwargs):
         get_logger().disabled = True
     else:
         set_log_level(kwargs['logging'])
-
 
     output = kwargs.get('output')
 
@@ -300,9 +321,6 @@ def run(**kwargs):
 
     except RequestException as e:
         log('error', e)
-
-    except TimeoutException as e:
-        log('info', e)
 
     except KeyboardInterrupt as e:
         if kwargs.get('interruptible'):

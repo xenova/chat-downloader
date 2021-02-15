@@ -1,5 +1,6 @@
 import inspect
-from threading import Thread
+import threading
+import _thread
 import colorlog
 import datetime
 import re
@@ -8,6 +9,7 @@ import os
 import locale
 import collections.abc
 import io
+import time
 
 
 def timestamp_to_microseconds(timestamp):
@@ -405,7 +407,7 @@ def nested_update(d, u):
 # Inspired by https://github.com/hero24/TimedInput/
 
 
-class TimedInput(Thread):
+class TimedInput(threading.Thread):
     """ Timed input reader """
 
     def get_input(self):
@@ -445,11 +447,107 @@ class TimedInput(Thread):
         return self.join()
 
 
+class TimedGenerator:
+    """
+    Add timing functionality to generator objects.
+
+    Used to create timed-generator objects as well as add inactivity functionality
+    (i.e. return if no items have been generated in a given time period)
+    """
+
+    def __init__(self, generator, timeout=None, inactivity_timeout=None, on_timeout=None, on_inactivity_timeout=None):
+        self.generator = generator
+        self.timeout = timeout
+        self.inactivity_timeout = inactivity_timeout
+
+        self.on_timeout = on_timeout
+        self.on_inactivity_timeout = on_inactivity_timeout
+
+        self.timer = self.inactivity_timer = None
+
+        if self.timeout is not None:
+            self.start_timer()
+
+        if self.inactivity_timeout is not None:
+            self.start_inactivity_timer()
+
+    def start_timer(self):
+        self.timer = threading.Timer(self.timeout, _thread.interrupt_main)
+        self.timer.start()
+
+    def start_inactivity_timer(self):
+        self.inactivity_timer = threading.Timer(
+            self.inactivity_timeout, _thread.interrupt_main)
+        self.inactivity_timer.start()
+
+    def reset_inactivity_timer(self):
+        if self.inactivity_timer:
+            self.inactivity_timer.cancel()
+            self.start_inactivity_timer()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        to_raise = None
+        set_timers = [timer for timer in (
+            self.timer, self.inactivity_timer) if timer is not None]
+
+        try:
+            next_item = next(self.generator)
+            self.reset_inactivity_timer()
+            return next_item
+        except StopIteration as e:
+            # No more items to get. Temporarily save exception so that
+            # we can close the timers before exiting
+            to_raise = e
+
+        except KeyboardInterrupt as e:
+
+            if not set_timers:
+                # Neither timer has been set, so we treat this
+                # as a normal KeyboardInterrupt. No need to cancel
+                # timers afterwards, we can exit here.
+                raise e
+
+            # get expired timers
+            expired_timers = [
+                timer for timer in set_timers if not timer.is_alive()]
+            if expired_timers:
+                # Some timer expired
+                first_expired = expired_timers[0]
+
+                to_raise = StopIteration
+                function = self.on_timeout if (
+                    first_expired == self.timer) else self.on_inactivity_timeout
+                self._run_function(function)
+
+            else:  # both timers are still active, user sent a keyboard interrupt
+                to_raise = e
+
+        if to_raise:  # Something happened which will cause the generator to exit, cancel timers
+            for timer in set_timers:
+                timer.cancel()
+
+            raise to_raise
+
+    def _run_function(self, function):
+        if callable(function):
+            function()
+
+
 def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
     if timeout is None:
         return input(prompt)
     else:
         return TimedInput(timeout, prompt, default, *args, **kwargs).read()
+
+
+def interruptable_sleep(secs, poll_time=0.1):
+    start_time = time.time()
+
+    while time.time() - start_time <= secs:
+        time.sleep(poll_time)
 
 
 def get_default_args(func):

@@ -7,7 +7,6 @@ import re
 from .common import (
     Chat,
     BaseChatDownloader,
-    Timeout,
     Remapper as r
 )
 
@@ -44,9 +43,6 @@ class FacebookChatDownloader(BaseChatDownloader):
         # update headers for all subsequent FB requests
         self.update_session_headers(self._FB_HEADERS)
 
-        # timeout = self._INIT_PARAMS.get('timeout')
-
-        # , timeout=timeout
         initial_data = self._session_get(
             self._FB_HOMEPAGE,
             headers=self._FB_HEADERS, allow_redirects=False).text
@@ -539,7 +535,6 @@ class FacebookChatDownloader(BaseChatDownloader):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
-
         buffer_size = 25  # max num comments returned by api call
         # cursor = ''
         variables = {
@@ -556,10 +551,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         first_try = True
 
-        timeout = Timeout(params.get('timeout'))
         last_ids = []
         while True:
-            timeout.check_for_timeout()
 
             json_data = self._attempt_fb_retrieve(
                 self._GRAPH_API,
@@ -663,9 +656,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         # print(next_start_time, end_time, type(next_start_time), type(end_time))
         # return
         # total = []
-        timeout = Timeout(params.get('timeout'))
         while True:
-            timeout.check_for_timeout()
             next_end_time = min(next_start_time + time_increment, end_time)
             times = (('start_time', next_start_time),
                      ('end_time', next_end_time))

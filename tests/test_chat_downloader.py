@@ -27,7 +27,7 @@ def generator(site, test):
             if not params.get('logging'):  # if it is not set, make it 'none'
                 params['logging'] = 'none'
 
-            expected_result = test.pop('expected_result', None)
+            expected_result = test.get('expected_result') or {}
 
             if not params:
                 self.assertFalse('No parameters specified.')  # Invalid test

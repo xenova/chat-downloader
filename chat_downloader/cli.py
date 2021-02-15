@@ -41,7 +41,6 @@ def main():
 
         for param in docstring.params:
             info[param.arg_name] = {
-                # + '\n' + '(default: {})'.format(args.get(param.arg_name))
                 'help': param.description,
                 'default': args.get(param.arg_name)
             }
@@ -171,4 +170,3 @@ def main():
     # Finished parsing CLI arguments
     # Run with these arguments
     run(**args.__dict__)
-

@@ -1,14 +1,11 @@
 """File for defining errors"""
 
+
 class UnexpectedError(Exception):
     """Raised if something unexpected happens."""
+
     def __init__(self, items):
         super().__init__(str(items))
-
-
-class TimeoutException(Exception):
-    """Raised after a timeout occurs."""
-    pass
 
 
 class InvalidParameter(Exception):

@@ -7,7 +7,6 @@ import base64
 from .common import (
     Chat,
     BaseChatDownloader,
-    Timeout,
     Remapper as r
 )
 
@@ -17,7 +16,6 @@ from ..errors import (
     TwitchError,
     UnexpectedHTML,
     NoChatReplay,
-    TimeoutException,
     VideoUnavailable,
     UnexpectedError
 )
@@ -117,9 +115,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             'params': {
                 'url': 'https://www.twitch.tv/xqcow',
                 'timeout': 5
-            },
-            'expected_result': {
-                'error': TimeoutException
             }
         },
 
@@ -1161,7 +1156,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
         message_count = 0
-        timeout = Timeout(params.get('timeout'))
         # do not need inactivity timeout (not live)
         cursor = ''
         while True:
@@ -1169,7 +1163,6 @@ class TwitchChatDownloader(BaseChatDownloader):
                 api_url, cursor, content_offset_seconds)
 
             for attempt_number in attempts(max_attempts):
-                timeout.check_for_timeout()
                 try:
                     info = self._session_get_json(url)
                     break
@@ -1547,12 +1540,8 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         message_count = 0
 
-        timeout = Timeout(params.get('timeout'))
-        inactivity_timeout = Timeout(params.get(
-            'inactivity_timeout'), Timeout.INACTIVITY)
         try:
             while True:
-                timeout.check_for_timeout()
 
                 try:
                     new_info = twitch_chat_irc.recv(buffer_size)
@@ -1605,11 +1594,12 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                             if missing_keys:
                                 self.debug_log(params,
-                                    'Missing keys found: {}'.format(
-                                        missing_keys),
-                                    'Original data: {}'.format(match.groups()),
-                                    'Parsed data: {}'.format(data)
-                                )
+                                               'Missing keys found: {}'.format(
+                                                   missing_keys),
+                                               'Original data: {}'.format(
+                                                   match.groups()),
+                                               'Parsed data: {}'.format(data)
+                                               )
                             # check whether to skip this message or not, based on its type
 
                             to_add = self.must_add_item(
@@ -1622,7 +1612,6 @@ class TwitchChatDownloader(BaseChatDownloader):
                             if not to_add:
                                 continue
 
-                            inactivity_timeout.reset()
                             message_count += 1
                             yield data
 
@@ -1648,7 +1637,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                         last_ping_time = current_time
 
                 except socket.timeout:
-                    inactivity_timeout.check_for_timeout()
+                    pass  # Allows for keyboard interrupts
 
                 except ConnectionError:
                     # Close old connection

@@ -2,7 +2,6 @@
 from .common import (
     BaseChatDownloader,
     Chat,
-    Timeout,
     Remapper as r
 )
 
@@ -39,7 +38,8 @@ from ..utils import (
     camel_case_split,
     ensure_seconds,
     log,
-    attempts
+    attempts,
+    interruptable_sleep
 )
 
 from datetime import datetime
@@ -106,6 +106,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
 
         # TESTING FOR CORRECT FUNCIONALITY
+        {
+            'name': 'Get chat messages from livestream',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'timeout': 5
+            }
+        },
         {
             'name': 'Get chat messages from live chat replay',
             'params': {
@@ -779,7 +786,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         downloader = YouTubeChatDownloader()
         items = downloader.get_testing_items()
 
-
         for item in items:
             yield YouTubeChatDownloader._YT_VIDEO_TEMPLATE.format(item['video_id'])
         # print('b')
@@ -829,7 +835,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 }
 
                 yield item
-
 
             # "continuationItemRenderer":{
             #     "trigger":"CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
@@ -1014,16 +1019,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
-        timeout = Timeout(params.get('timeout'))
-        inactivity_timeout = Timeout(params.get(
-            'inactivity_timeout'), Timeout.INACTIVITY)
-
         message_count = 0
         first_time = True
         while True:
             info = None
             for attempt_number in attempts(max_attempts):
-                timeout.check_for_timeout()
 
                 try:
 
@@ -1254,7 +1254,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     #     pass
                     # valid timing, add
 
-                    inactivity_timeout.reset()
                     message_count += 1
                     yield data
 
@@ -1266,8 +1265,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             else:
                 # otherwise, is live, so keep trying
                 log('debug', 'No actions to process.')
-
-            inactivity_timeout.check_for_timeout()
 
             # assume there are no more chat continuations
             no_continuation = True
@@ -1299,21 +1296,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                 # sometimes continuation contains timeout info
                 sleep_duration = continuation_info.get('timeoutMs')
-                if sleep_duration:  # and not actions:# and not force_no_timeout:
+                # and not actions:# and not force_no_timeout:
+                if sleep_duration and sleep_duration > 0:
                     # if there is timeout info, there were no actions and the user
                     # has not chosen to force no timeouts, then sleep.
                     # This is useful for streams with varying number of messages
                     # being sent per second. Timeouts help prevent 429 errors
                     # (caused by too many requests)
-                    sleep_duration = min(sleep_duration,
-                                         timeout.time_until_timeout_ms(),
-                                         inactivity_timeout.time_until_timeout_ms()
-                                         )
-                    # TODO ensure sleep_duration >= 0
 
                     log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
                     # print('time_until_timeout',timeout.time_until_timeout())
-                    time.sleep(sleep_duration / 1000)
+                    interruptable_sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
                 break

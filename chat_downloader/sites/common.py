@@ -8,7 +8,6 @@ from math import ceil
 
 from ..errors import (
     InvalidParameter,
-    TimeoutException,
     UnexpectedHTML,
     RetriesExceeded,
     CookieError,
@@ -46,50 +45,6 @@ class SiteDefault:
     # Used for site-default parameters
     def __init__(self, name):
         self.name = name
-
-
-class Timeout():
-
-    # Timeout types
-    NORMAL = 0
-    INACTIVITY = 1
-
-    _TIMEOUT_MESSAGES = {
-        NORMAL: 'Timeout occurred after {} seconds.',
-        INACTIVITY: 'No messages received after {}s. Timing out.'
-    }
-
-    def __init__(self, timeout, timeout_type=None):
-        self.timeout = timeout
-        self.reset()
-
-        self.error_message = Timeout._TIMEOUT_MESSAGES.get(
-            timeout_type, Timeout._TIMEOUT_MESSAGES[Timeout.NORMAL]).format(self.timeout)
-
-    def reset(self):
-        if isinstance(self.timeout, (int, float)):
-            self.end_time = time.time() + self.timeout
-        else:
-            self.end_time = None
-
-    def check_for_timeout(self):
-        if self.end_time is not None and time.time() > self.end_time:
-            raise TimeoutException(self.error_message)
-
-    def _calculate_remaining(self):
-        return self.end_time - time.time()
-
-    def time_until_timeout(self):
-        if self.end_time is None:
-            return float('inf')
-        else:
-            return self._calculate_remaining()
-
-    def time_until_timeout_ms(self):
-        if self.end_time is None:
-            return float('inf')
-        else:
-            return ceil(self._calculate_remaining() * 1000)
 
 
 class Chat():
@@ -260,7 +215,8 @@ class BaseChatDownloader:
             'name': 'Get a certain number of messages from a livestream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
-                'max_messages': 10
+                'max_messages': 10,
+                # 'timeout': 60, # As a fallback
             },
 
             'expected_result': {
