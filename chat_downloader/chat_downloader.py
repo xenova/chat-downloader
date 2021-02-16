@@ -1,20 +1,48 @@
 """Main module."""
-
+import sys
 import re
 import itertools
+import time
 
 from urllib.parse import urlparse
+
+from .metadata import __version__
 
 from .sites.common import SiteDefault
 from .sites import get_all_sites
 
+from .formatting.format import ItemFormatter
+from .utils import (
+    log,
+    get_logger,
+    safe_print,
+    set_log_level,
+    get_default_args,
+    update_dict_without_overwrite,
+    TimedGenerator
+)
+
+
+from .output.continuous_write import ContinuousWriter
+
+
+from requests.exceptions import (
+    RequestException,
+    ConnectionError
+)
+
 from .errors import (
     URLNotProvided,
     SiteNotSupported,
-    InvalidURL
+    LoginRequired,
+    VideoUnavailable,
+    NoChatReplay,
+    VideoUnplayable,
+    InvalidParameter,
+    InvalidURL,
+    RetriesExceeded,
+    NoContinuation
 )
-from .formatting.format import ItemFormatter
-from .utils import log
 
 
 class ChatDownloader():
@@ -48,6 +76,7 @@ class ChatDownloader():
 
                  logging='info',
                  pause_on_debug=False,
+                 exit_on_debug=False,
 
                  # If True, program will not sleep when a timeout instruction is given
                  # force_no_timeout=False,
@@ -100,8 +129,8 @@ class ChatDownloader():
         :param format_file: Specify the format file to choose formats from
 
         :param pause_on_debug: Pause on certain debug messages
+        :param exit_on_debug: Exit when something unexpected happens
         :param logging: Level of logging to display
-
 
         :param chat_type: Specify chat type, default is live
 
@@ -138,6 +167,27 @@ class ChatDownloader():
                 if isinstance(max_messages, int):
                     info.chat = itertools.islice(info.chat, max_messages)
 
+                if timeout is not None or inactivity_timeout is not None:
+                    # Generator requires timing functionality
+
+                    info.chat = TimedGenerator(
+                        info.chat, timeout, inactivity_timeout)
+
+                    if isinstance(timeout, (float, int)):
+                        start = time.time()
+
+                        def log_on_timeout():
+                            log('debug', 'Timeout occurred after {} seconds.'.format(
+                                time.time() - start))
+                        setattr(info.chat, 'on_timeout', log_on_timeout)
+
+                    if isinstance(inactivity_timeout, (float, int)):
+                        def log_on_inactivity_timeout():
+                            log('debug', 'Inactivity timeout occurred after {} seconds.'.format(
+                                inactivity_timeout))
+                        setattr(info.chat, 'on_inactivity_timeout',
+                                log_on_inactivity_timeout)
+
                 info.site = self.sessions[site.__name__]
 
                 formatter = ItemFormatter(params['format_file'])
@@ -166,3 +216,120 @@ class ChatDownloader():
             session.close()
 
         self.sessions = {}
+
+
+def run(**kwargs):
+    """
+    Create a single session and get the chat using the specified parameters.
+
+    e.g.
+    >>> run(url='https://www.youtube.com/watch?v=5qap5aO4i9A')
+
+    """
+
+    init_param_names = get_default_args(ChatDownloader.__init__)
+    program_param_names = get_default_args(ChatDownloader.get_chat)
+
+    update_dict_without_overwrite(kwargs, init_param_names)
+    update_dict_without_overwrite(kwargs, program_param_names)
+
+    if kwargs.get('testing'):
+        kwargs['logging'] = 'debug'
+        kwargs['pause_on_debug'] = True
+        # args.message_groups = 'all'
+        # program_params['timeout = 180
+
+    if kwargs.get('verbose'):
+        kwargs['logging'] = 'debug'
+
+    quiet = kwargs.get('quiet')
+    if quiet or kwargs['logging'] == 'none':
+        get_logger().disabled = True
+    else:
+        set_log_level(kwargs['logging'])
+
+    output = kwargs.get('output')
+
+    chat_params = {}
+    init_params = {}
+
+    for arg in kwargs:
+        value = kwargs[arg]
+
+        if arg in program_param_names:
+            chat_params[arg] = value
+        elif arg in init_param_names:
+            init_params[arg] = value
+
+    log('debug', 'Python version: {}'.format(sys.version))
+    log('debug', 'Program version: {}'.format(__version__))
+
+    log('debug', 'Initialisation parameters: {}'.format(init_params))
+
+    downloader = ChatDownloader(**init_params)
+
+    output_file = None
+    try:
+        chat = downloader.get_chat(**chat_params)
+
+        log('debug', 'Chat information: {}'.format(chat.__dict__))
+        log('info', 'Retrieving chat for "{}".'.format(chat.title))
+
+        def print_formatted(item):
+            if not quiet:
+                formatted = chat.format(item)
+                safe_print(formatted)
+
+        if output:
+            output_args = {
+                k: kwargs.get(k) for k in ('indent', 'sort_keys', 'overwrite')
+            }
+            output_file = ContinuousWriter(output, **output_args)
+
+            def write_to_file(item):
+                print_formatted(item)
+                output_file.write(item, flush=True)
+
+            callback = write_to_file
+        else:
+            callback = print_formatted
+
+        for message in chat:
+            callback(message)
+
+        log('info', 'Finished retrieving chat{}.'.format(
+            '' if chat.is_live else ' replay'))
+
+    except (
+        URLNotProvided,
+        SiteNotSupported,
+        LoginRequired,
+        VideoUnavailable,
+        NoChatReplay,
+        VideoUnplayable,
+        InvalidParameter,
+        InvalidURL,
+        RetriesExceeded,
+        NoContinuation
+    ) as e:  # Expected errors
+        log('error', e)
+        # log('error', e, logging_level)  # always show
+        # '{} ({})'.format(, e.__class__.__name__)
+
+    except ConnectionError as e:
+        log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
+
+    except RequestException as e:
+        log('error', e)
+
+    except KeyboardInterrupt as e:
+        if kwargs.get('interruptible'):
+            raise e
+        else:
+            log('error', 'Keyboard Interrupt')
+
+    finally:
+        downloader.close()
+
+        if output and output_file:
+            output_file.close()

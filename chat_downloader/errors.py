@@ -1,9 +1,11 @@
 """File for defining errors"""
 
 
-class TimeoutException(Exception):
-    """Raised after a timeout occurs."""
-    pass
+class UnexpectedError(Exception):
+    """Raised if something unexpected happens."""
+
+    def __init__(self, items):
+        super().__init__(str(items))
 
 
 class InvalidParameter(Exception):
@@ -14,24 +16,6 @@ class InvalidParameter(Exception):
 class RetriesExceeded(Exception):
     """Raised after the maximum number of retries has been reached."""
     pass
-
-# TODO change UnexpectedHTML/JSONParseError back to JSONDecode?
-
-
-class JSONParseError(Exception):
-    """Raised when unable to parse JSON."""
-    pass
-
-
-class UnexpectedHTML(Exception):
-    """
-    Raised when JSON is expected, but HTML is returned instead
-    This usually occurs when an internal service error occurs.
-    """
-
-    def __init__(self, message=None, html=None):
-        super().__init__(message)
-        self.html = html
 
 
 class VideoNotFound(Exception):
@@ -85,7 +69,7 @@ class TwitchError(Exception):
 
 
 class NoContinuation(Exception):
-    """Raised when there are no more messages to retrieve (in a live stream)."""
+    """Raised when no continuation can be found."""
     pass
 
 

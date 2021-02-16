@@ -2,16 +2,13 @@
 import requests
 from http.cookiejar import MozillaCookieJar
 import os
-import time
 from json import JSONDecodeError
-from math import ceil
 
 from ..errors import (
     InvalidParameter,
-    TimeoutException,
-    UnexpectedHTML,
     RetriesExceeded,
-    CookieError
+    CookieError,
+    UnexpectedError
 )
 
 from ..utils import (
@@ -45,50 +42,6 @@ class SiteDefault:
     # Used for site-default parameters
     def __init__(self, name):
         self.name = name
-
-
-class Timeout():
-
-    # Timeout types
-    NORMAL = 0
-    INACTIVITY = 1
-
-    _TIMEOUT_MESSAGES = {
-        NORMAL: 'Timeout occurred after {} seconds.',
-        INACTIVITY: 'No messages received after {}s. Timing out.'
-    }
-
-    def __init__(self, timeout, timeout_type=None):
-        self.timeout = timeout
-        self.reset()
-
-        self.error_message = Timeout._TIMEOUT_MESSAGES.get(
-            timeout_type, Timeout._TIMEOUT_MESSAGES[Timeout.NORMAL]).format(self.timeout)
-
-    def reset(self):
-        if isinstance(self.timeout, (int, float)):
-            self.end_time = time.time() + self.timeout
-        else:
-            self.end_time = None
-
-    def check_for_timeout(self):
-        if self.end_time is not None and time.time() > self.end_time:
-            raise TimeoutException(self.error_message)
-
-    def _calculate_remaining(self):
-        return self.end_time - time.time()
-
-    def time_until_timeout(self):
-        if self.end_time is None:
-            return float('inf')
-        else:
-            return self._calculate_remaining()
-
-    def time_until_timeout_ms(self):
-        if self.end_time is None:
-            return float('inf')
-        else:
-            return ceil(self._calculate_remaining() * 1000)
 
 
 class Chat():
@@ -259,13 +212,18 @@ class BaseChatDownloader:
             'name': 'Get a certain number of messages from a livestream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
-                'max_messages': 10
+                'max_messages': 10,
+                'timeout': 60, # As a fallback
             },
 
             'expected_result': {
                 'messages_condition': lambda messages: len(messages) <= 10,
             }
         }
+    ]
+
+    _URL_GENERATORS = [
+
     ]
 
     @staticmethod
@@ -287,6 +245,17 @@ class BaseChatDownloader:
             valid_message_types.append(message_type)
 
         return item.get('message_type') in valid_message_types
+
+    @staticmethod
+    def remap_dict(item, remapping_dict, keep_unknown_keys=False, replace_char_with_underscores=None):
+        info = {}
+        for key in item:
+            BaseChatDownloader.remap(
+                info, remapping_dict, key, item[key],
+                keep_unknown_keys=keep_unknown_keys,
+                replace_char_with_underscores=replace_char_with_underscores
+            )
+        return info
 
     @staticmethod
     def remap(info, remapping_dict, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
@@ -332,6 +301,19 @@ class BaseChatDownloader:
                 remap_key = remap_key.replace(
                     replace_char_with_underscores, '_')
             info[remap_key] = remap_input
+
+    @staticmethod
+    def debug_log(params, *items):
+        pause_on_debug = params.get('pause_on_debug')
+        exit_on_debug = params.get('exit_on_debug')
+
+        log(
+            'debug',
+            items,
+            pause_on_debug
+        )
+        if exit_on_debug:
+            raise UnexpectedError(items)
 
     def __init__(self,
                  **kwargs
@@ -407,15 +389,7 @@ class BaseChatDownloader:
 
     def _session_get_json(self, url, **kwargs):
         """Make a request using the current session and get json data."""
-        s = self._session_get(url, **kwargs)
-
-        try:
-            return s.json()
-        except JSONDecodeError:
-            # print(s.content)
-            # TODO determine if html
-            webpage_title = get_title_of_webpage(s.text)
-            raise UnexpectedHTML(webpage_title, s.text)
+        return self._session_get(url, **kwargs).json()
 
     def get_site_value(self, v):
         if isinstance(v, SiteDefault):
@@ -425,6 +399,10 @@ class BaseChatDownloader:
             return v
 
     def get_chat(self, **kwargs):
+        raise NotImplementedError
+
+    @staticmethod
+    def generate_urls():
         raise NotImplementedError
 
     @staticmethod
@@ -511,11 +489,14 @@ class BaseChatDownloader:
             text + [retry_text]
         )
 
-        if isinstance(error, UnexpectedHTML):
+        if isinstance(error, JSONDecodeError):
             log(
                 'debug',
-                error.html
+                error.__dict__
             )
+            page_title = get_title_of_webpage(error.doc)
+            if page_title:
+                log('debug', 'Title: {}'.format(page_title))
 
         if must_sleep:
             # time.sleep(time_to_sleep)
