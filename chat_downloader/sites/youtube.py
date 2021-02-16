@@ -443,8 +443,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if time_in_seconds is not None:
 
             if time_text is not None:
-                # all information was provided
-                # check if time_in_seconds is <= 0
+                # All information was provided, check if time_in_seconds is <= 0
+                # For some reason, YouTube sets the video offset to 0 if the message
+                # was sent before the stream started. This fixes that:
                 if time_in_seconds <= 0:
                     info['time_in_seconds'] = time_to_seconds(time_text)
             else:
@@ -459,9 +460,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             # (usually live video or a sub-item)
 
         return info
-
-    # _IMAGE_SIZE_REGEX = r'=s(\d+)'
-    # TODO move regex to inline where possible?
 
     @ staticmethod
     def parse_badges(badge_items):
@@ -782,7 +780,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _KNOWN_CONTINUATIONS = _KNOWN_SEEK_CONTINUATIONS + _KNOWN_CHAT_CONTINUATIONS
 
     @staticmethod
-    def generate_urls():
+    def generate_urls(**kwargs):
         downloader = YouTubeChatDownloader()
         items = downloader.get_testing_items()
 

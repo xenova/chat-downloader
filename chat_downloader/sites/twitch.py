@@ -879,7 +879,9 @@ class TwitchChatDownloader(BaseChatDownloader):
 
     @staticmethod
     def parse_user(item):
-        return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
+        if isinstance(item, dict):
+            return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
+        return None
 
     _GAME_REMAPPING = {
         'id': 'id',
@@ -1091,12 +1093,8 @@ class TwitchChatDownloader(BaseChatDownloader):
     _TWITCH_VIDEOS = 'https://www.twitch.tv/videos'
 
     @staticmethod
-    def generate_urls():
+    def generate_urls(livestream_limit = 10, vod_limit = 5, clip_limit = 5, **kwargs):
         downloader = TwitchChatDownloader()
-
-        livestream_limit = 10
-        vod_limit = 5
-        clip_limit = 5
 
         # max_tests = livestream_limit + livestream_limit*(vod_limit+clip_limit)
 
