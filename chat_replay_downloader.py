@@ -100,12 +100,12 @@ class ChatReplayDownloader:
         'message': [
             'liveChatTextMessageRenderer'  # normal message
         ],
-        'superchat_message': [  # superchat messages which appear in chat
+        'superchat': [
+            # superchat messages which appear in chat
             'liveChatMembershipItemRenderer',
             'liveChatPaidMessageRenderer',
             'liveChatPaidStickerRenderer'
-        ],
-        'superchat_ticker': [  # superchat messages which appear ticker (at the top)
+            # superchat messages which appear ticker (at the top)
             'liveChatTickerPaidStickerItemRenderer',
             'liveChatTickerPaidMessageItemRenderer',
             'liveChatTickerSponsorItemRenderer',
@@ -243,6 +243,10 @@ class ChatReplayDownloader:
         Ensure printing to standard output can be done safely (especially on Windows).
         There are usually issues with printing emojis and non utf-8 characters.
         """
+        # Don't print if it is a ticker message (prevents duplicates)
+        if 'ticker_duration' in item:
+            return
+
         message = emoji.demojize(self.message_to_string(item))
 
         try:
@@ -545,7 +549,7 @@ class ChatReplayDownloader:
                             pass
 
                         # user does not want superchat + message is superchat
-                        elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat_message'] + self.__TYPES_OF_MESSAGES['superchat_ticker']):
+                        elif(message_type != 'superchat' and index in self.__TYPES_OF_MESSAGES['superchat']):
                             continue
 
                         # user does not want normal messages + message is normal
@@ -564,9 +568,7 @@ class ChatReplayDownloader:
                             messages.append(data)
 
                             if(callback is None):
-                                # print if it is not a ticker message (prevents duplicates)
-                                if(index not in self.__TYPES_OF_MESSAGES['superchat_ticker']):
-                                    self.print_item(data)
+                                self.print_item(data)
 
                             elif(callable(callback)):
                                 try:
@@ -721,13 +723,16 @@ if __name__ == '__main__':
         def write_to_file(item):
             global num_of_messages
 
+            # Don't print if it is a ticker message (prevents duplicates)
+            if 'ticker_duration' in item:
+                return
+
             # only file format capable of appending properly
             with open(args.output, 'a', newline='', encoding='utf-8-sig') as f:
-                if('ticker_duration' not in item):  # needed for duplicates
-                    num_of_messages += 1
-                    print_item(item)
-                    text = chat_downloader.message_to_string(item)
-                    print(text, file=f)
+                num_of_messages += 1
+                print_item(item)
+                text = chat_downloader.message_to_string(item)
+                print(text, file=f)
 
         callback = None if args.output is None else print_item
         if(args.output is not None):
