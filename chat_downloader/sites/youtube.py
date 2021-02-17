@@ -542,7 +542,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         '₩': 'KRW',
         '€': 'EUR',
         '₹': 'INR',
-        '￥': 'JPY'
+
+        '¥': 'JPY',
+        '￥': 'JPY',
     }
 
     # All other currency symbols use the ISO 4217 format:
