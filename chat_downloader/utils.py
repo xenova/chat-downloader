@@ -10,6 +10,7 @@ import locale
 import collections.abc
 import io
 import time
+import json
 
 
 def timestamp_to_microseconds(timestamp):
@@ -125,6 +126,11 @@ def try_get_first_value(dictionary, default=None):
     except Exception:
         return default
 
+def try_parse_json(text):
+    try:
+        return json.loads(text)
+    except json.decoder.JSONDecodeError:
+        return None
 
 def remove_prefixes(text, prefixes):
     if not isinstance(prefixes, (list, tuple)):

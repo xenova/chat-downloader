@@ -39,7 +39,8 @@ from ..utils import (
     ensure_seconds,
     log,
     attempts,
-    interruptable_sleep
+    interruptable_sleep,
+    try_parse_json
 )
 
 from datetime import datetime
@@ -854,7 +855,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _get_initial_info(self, url):
         html = self._session_get(url).text
         yt = re.search(self._YT_INITIAL_DATA_RE, html)
-        yt_initial_data = json.loads(yt.group(1)) if yt else None
+        yt_initial_data = try_parse_json(yt.group(1)) if yt else None
         return html, yt_initial_data
 
     def _get_initial_video_info(self, video_id):
@@ -862,17 +863,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
         original_url = self._YT_VIDEO_TEMPLATE.format(video_id)
 
         html, yt_initial_data = self._get_initial_info(original_url)
-        player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
 
-        if not yt_initial_data:
-            log('debug', html)
+        if not yt_initial_data: # Fatal error
             raise ParsingError(
-                'Unable to parse video data. Please try again.')
+                'Unable to parse initial video data. {}'.format(html))
 
-        player_response_info = json.loads(player_response.group(1))
+        player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
+        player_response_info = try_parse_json(player_response.group(1)) if player_response else None
 
-        playability_status = player_response_info.get('playabilityStatus')
-        status = playability_status.get('status')
+        if not player_response_info:
+            log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
+            player_response_info = {}
 
         adaptive_formats = multi_get(
             player_response_info, 'streamingData', 'adaptiveFormats')
@@ -896,6 +897,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
             for x in sub_menu_items
         }
         details['is_live'] = 'Live chat' in details['continuation_info']
+
+        playability_status = player_response_info.get('playabilityStatus') or {}
+        status = playability_status.get('status')
         error_screen = playability_status.get('errorScreen')
 
         # Only raise an error if there is no continuation info. Sometimes you
@@ -934,8 +938,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    # print('UNKNOWN STATUS', status)
-                    # print(playability_status)
+                    log('debug', 'Unknown status: {}. {}'.format(status, playability_status))
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:
@@ -948,9 +951,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     'Video does not have a chat replay.'
                 raise NoChatReplay(error_message)
 
-        video_details = player_response_info.get('videoDetails')
+        video_details = player_response_info.get('videoDetails') or {}
         details['title'] = video_details.get('title')
-        details['duration'] = int(video_details.get('lengthSeconds')) or None
+        details['duration'] = int_or_none(video_details.get('lengthSeconds'))
         return details
 
     def _get_chat_messages(self, initial_info, params):
