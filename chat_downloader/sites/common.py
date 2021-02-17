@@ -402,7 +402,7 @@ class BaseChatDownloader:
         raise NotImplementedError
 
     @staticmethod
-    def generate_urls():
+    def generate_urls(**kwargs):
         raise NotImplementedError
 
     @staticmethod

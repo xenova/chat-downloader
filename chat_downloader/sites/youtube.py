@@ -39,7 +39,8 @@ from ..utils import (
     ensure_seconds,
     log,
     attempts,
-    interruptable_sleep
+    interruptable_sleep,
+    try_parse_json
 )
 
 from datetime import datetime
@@ -425,14 +426,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if renderer:
                 info.update(YouTubeChatDownloader._parse_item(renderer))
 
-        # amount is money with currency
-        amount = info.get('amount')
-        if amount:
-            # print('has amount', item_info)
-            pass  # TODO split amount into:
-            # currency type
-            # amount (float)
-
         BaseChatDownloader.move_to_dict(info, 'author')
 
         # TODO determine if youtube glitch has occurred
@@ -443,8 +436,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if time_in_seconds is not None:
 
             if time_text is not None:
-                # all information was provided
-                # check if time_in_seconds is <= 0
+                # All information was provided, check if time_in_seconds is <= 0
+                # For some reason, YouTube sets the video offset to 0 if the message
+                # was sent before the stream started. This fixes that:
                 if time_in_seconds <= 0:
                     info['time_in_seconds'] = time_to_seconds(time_text)
             else:
@@ -459,9 +453,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             # (usually live video or a sub-item)
 
         return info
-
-    # _IMAGE_SIZE_REGEX = r'=s(\d+)'
-    # TODO move regex to inline where possible?
 
     @ staticmethod
     def parse_badges(badge_items):
@@ -538,12 +529,57 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def get_simple_text(item):
         return item.get('simpleText')
 
+    _CURRENCY_SYMBOLS = {
+        '$': 'USD',
+        'A$': 'AUD',
+        'CA$': 'CAD',
+        'HK$': 'HKD',
+        'MX$': 'MXN',
+        'NT$': 'TWD',
+        'NZ$': 'NZD',
+        'R$': 'BRL',
+        '£': 'GBP',
+        '€': 'EUR',
+        '₹': 'INR',
+
+        '₩': 'KRW',
+        '￦':'KRW',
+
+        '¥': 'JPY',
+        '￥': 'JPY',
+    }
+
+    # All other currency symbols use the ISO 4217 format:
+    # https://en.wikipedia.org/wiki/ISO_4217
+    # e.g. 'CHF', 'COP', 'HUF', 'PHP', 'PLN', 'RUB', 'SEK', 'PEN', 'ARS', 'CLP', 'NOK', 'BAM', 'SGD'
+
+    @staticmethod
+    def parse_currency(item):
+        mixed_text = item.get('simpleText') or str(item)
+
+        info = re.split(r'([\d,\.]+)', mixed_text)
+        if len(info) >= 2: # Correct parse
+            currency_symbol = info[0].strip()
+            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(currency_symbol, currency_symbol)
+            amount = float(info[1].replace(',',''))
+
+        else: # Unable to get info
+            amount = float(re.sub(r'[^\d\.]+', '', mixed_text))
+            currency_symbol = currency_code = None
+
+        return {
+            'text': mixed_text,
+            'amount': amount,
+            'currency': currency_code, # ISO_4217
+            'currency_symbol': currency_symbol
+        }
+
     _REMAPPING = {
         'id': 'message_id',
         'authorExternalChannelId': 'author_id',
         'authorName': r('author_name', get_simple_text),
         # TODO author_display_name
-        'purchaseAmountText': r('amount', get_simple_text),
+        'purchaseAmountText': r('money', parse_currency),
         'message': r(None, parse_runs, True),
         'timestampText': r('time_text', get_simple_text),
         'timestampUsec': r('timestamp', int_or_none),
@@ -560,7 +596,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # ticker_paid_message_item
         'fullDurationSec': r('ticker_duration', int_or_none),
-        'amount': r('amount', get_simple_text),
+        'amount': r('money', parse_currency),
 
 
         # ticker_sponsor_item
@@ -782,7 +818,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _KNOWN_CONTINUATIONS = _KNOWN_SEEK_CONTINUATIONS + _KNOWN_CHAT_CONTINUATIONS
 
     @staticmethod
-    def generate_urls():
+    def generate_urls(**kwargs):
         downloader = YouTubeChatDownloader()
         items = downloader.get_testing_items()
 
@@ -856,7 +892,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _get_initial_info(self, url):
         html = self._session_get(url).text
         yt = re.search(self._YT_INITIAL_DATA_RE, html)
-        yt_initial_data = json.loads(yt.group(1)) if yt else None
+        yt_initial_data = try_parse_json(yt.group(1)) if yt else None
         return html, yt_initial_data
 
     def _get_initial_video_info(self, video_id):
@@ -864,17 +900,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
         original_url = self._YT_VIDEO_TEMPLATE.format(video_id)
 
         html, yt_initial_data = self._get_initial_info(original_url)
-        player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
 
-        if not yt_initial_data:
-            log('debug', html)
+        if not yt_initial_data: # Fatal error
             raise ParsingError(
-                'Unable to parse video data. Please try again.')
+                'Unable to parse initial video data. {}'.format(html))
 
-        player_response_info = json.loads(player_response.group(1))
+        player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
+        player_response_info = try_parse_json(player_response.group(1)) if player_response else None
 
-        playability_status = player_response_info.get('playabilityStatus')
-        status = playability_status.get('status')
+        if not player_response_info:
+            log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
+            player_response_info = {}
 
         adaptive_formats = multi_get(
             player_response_info, 'streamingData', 'adaptiveFormats')
@@ -898,6 +934,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
             for x in sub_menu_items
         }
         details['is_live'] = 'Live chat' in details['continuation_info']
+
+        playability_status = player_response_info.get('playabilityStatus') or {}
+        status = playability_status.get('status')
         error_screen = playability_status.get('errorScreen')
 
         # Only raise an error if there is no continuation info. Sometimes you
@@ -936,8 +975,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    # print('UNKNOWN STATUS', status)
-                    # print(playability_status)
+                    log('debug', 'Unknown status: {}. {}'.format(status, playability_status))
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:
@@ -950,9 +988,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     'Video does not have a chat replay.'
                 raise NoChatReplay(error_message)
 
-        video_details = player_response_info.get('videoDetails')
+        video_details = player_response_info.get('videoDetails') or {}
         details['title'] = video_details.get('title')
-        details['duration'] = int(video_details.get('lengthSeconds')) or None
+        details['duration'] = int_or_none(video_details.get('lengthSeconds'))
         return details
 
     def _get_chat_messages(self, initial_info, params):
