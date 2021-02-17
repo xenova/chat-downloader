@@ -539,9 +539,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'NZ$': 'NZD',
         'R$': 'BRL',
         '£': 'GBP',
-        '₩': 'KRW',
         '€': 'EUR',
         '₹': 'INR',
+
+        '₩': 'KRW',
+        '￦':'KRW',
 
         '¥': 'JPY',
         '￥': 'JPY',
