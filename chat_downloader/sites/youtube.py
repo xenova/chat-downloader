@@ -425,14 +425,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if renderer:
                 info.update(YouTubeChatDownloader._parse_item(renderer))
 
-        # amount is money with currency
-        amount = info.get('amount')
-        if amount:
-            # print('has amount', item_info)
-            pass  # TODO split amount into:
-            # currency type
-            # amount (float)
-
         BaseChatDownloader.move_to_dict(info, 'author')
 
         # TODO determine if youtube glitch has occurred
@@ -536,12 +528,53 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def get_simple_text(item):
         return item.get('simpleText')
 
+    _CURRENCY_SYMBOLS = {
+        '$': 'USD',
+        'A$': 'AUD',
+        'CA$': 'CAD',
+        'HK$': 'HKD',
+        'MX$': 'MXN',
+        'NT$': 'TWD',
+        'NZ$': 'NZD',
+        'R$': 'BRL',
+        '£': 'GBP',
+        '₩': 'KRW',
+        '€': 'EUR',
+        '₹': 'INR',
+        '￥': 'JPY'
+    }
+
+    # All other currency symbols use the ISO 4217 format:
+    # https://en.wikipedia.org/wiki/ISO_4217
+    # e.g. 'CHF', 'COP', 'HUF', 'PHP', 'PLN', 'RUB', 'SEK', 'PEN', 'ARS', 'CLP', 'NOK', 'BAM', 'SGD'
+
+    @staticmethod
+    def parse_currency(item):
+        mixed_text = item.get('simpleText') or str(item)
+
+        info = re.split(r'([\d,\.]+)', mixed_text)
+        if len(info) >= 2: # Correct parse
+            currency_symbol = info[0].strip()
+            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(currency_symbol, currency_symbol)
+            amount = float(info[1].replace(',',''))
+
+        else: # Unable to get info
+            amount = float(re.sub(r'[^\d\.]+', '', mixed_text))
+            currency_symbol = currency_code = None
+
+        return {
+            'text': mixed_text,
+            'amount': amount,
+            'currency': currency_code, # ISO_4217
+            'currency_symbol': currency_symbol
+        }
+
     _REMAPPING = {
         'id': 'message_id',
         'authorExternalChannelId': 'author_id',
         'authorName': r('author_name', get_simple_text),
         # TODO author_display_name
-        'purchaseAmountText': r('amount', get_simple_text),
+        'purchaseAmountText': r('money', parse_currency),
         'message': r(None, parse_runs, True),
         'timestampText': r('time_text', get_simple_text),
         'timestampUsec': r('timestamp', int_or_none),
@@ -558,7 +591,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # ticker_paid_message_item
         'fullDurationSec': r('ticker_duration', int_or_none),
-        'amount': r('amount', get_simple_text),
+        'amount': r('money', parse_currency),
 
 
         # ticker_sponsor_item

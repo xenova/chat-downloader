@@ -1,6 +1,6 @@
 {
     "default": {
-        "template": "{time_text|timestamp}{author.badges}{amount}{author.display_name|author.name}{message}",
+        "template": "{time_text|timestamp}{author.badges}{money.text}{author.display_name|author.name}{message}",
         "keys": {
             "time_text": "{} | ",
             "timestamp": {
@@ -11,7 +11,7 @@
                 "template": "({}) ",
                 "separator": ", "
             },
-            "amount": "*{}* ",
+            "money.text": "*{}* ",
             "message": ": {}"
         }
     },
