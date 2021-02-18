@@ -13,10 +13,11 @@ from ..errors import (
 
 from ..utils import (
     get_title_of_webpage,
-    log,
     pause,
     timed_input
 )
+
+from ..debugging import log
 
 
 class Remapper():

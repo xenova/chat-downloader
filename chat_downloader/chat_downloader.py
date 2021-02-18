@@ -13,15 +13,17 @@ from .sites import get_all_sites
 
 from .formatting.format import ItemFormatter
 from .utils import (
-    log,
-    get_logger,
     safe_print,
-    set_log_level,
     get_default_args,
     update_dict_without_overwrite,
     TimedGenerator
 )
 
+from .debugging import (
+    log,
+    disable_logger,
+    set_log_level
+)
 
 from .output.continuous_write import ContinuousWriter
 
@@ -67,6 +69,10 @@ class ChatDownloader():
 
         self.init_params = locals()
         self.init_params.pop('self')
+
+        log('debug', 'Python version: {}'.format(sys.version))
+        log('debug', 'Program version: {}'.format(__version__))
+        log('debug', 'Initialisation parameters: {}'.format(self.init_params))
 
         # Track sessions using a dictionary (allows for reusing)
         self.sessions = {}
@@ -195,15 +201,15 @@ class ChatDownloader():
                 log('info', 'Site: {}'.format(
                     self.sessions[site.__name__]._NAME))
                 log('debug', 'Program parameters: {}'.format(params))
-                info = self.sessions[site.__name__].get_chat(**params)
+                chat = self.sessions[site.__name__].get_chat(**params)
                 if isinstance(max_messages, int):
-                    info.chat = itertools.islice(info.chat, max_messages)
+                    chat.chat = itertools.islice(chat.chat, max_messages)
 
                 if timeout is not None or inactivity_timeout is not None:
                     # Generator requires timing functionality
 
-                    info.chat = TimedGenerator(
-                        info.chat, timeout, inactivity_timeout)
+                    chat.chat = TimedGenerator(
+                        chat.chat, timeout, inactivity_timeout)
 
                     if isinstance(timeout, (float, int)):
                         start = time.time()
@@ -211,13 +217,13 @@ class ChatDownloader():
                         def log_on_timeout():
                             log('debug', 'Timeout occurred after {} seconds.'.format(
                                 time.time() - start))
-                        setattr(info.chat, 'on_timeout', log_on_timeout)
+                        setattr(chat.chat, 'on_timeout', log_on_timeout)
 
                     if isinstance(inactivity_timeout, (float, int)):
                         def log_on_inactivity_timeout():
                             log('debug', 'Inactivity timeout occurred after {} seconds.'.format(
                                 inactivity_timeout))
-                        setattr(info.chat, 'on_inactivity_timeout',
+                        setattr(chat.chat, 'on_inactivity_timeout',
                                 log_on_inactivity_timeout)
 
                 if output:
@@ -227,17 +233,20 @@ class ChatDownloader():
                     def write_to_file(item):
                         output_file.write(item, flush=True)
 
-                    info.callback = write_to_file
+                    chat.callback = write_to_file
 
-                info.site = self.sessions[site.__name__]
+                chat.site = self.sessions[site.__name__]
 
-                formatter = ItemFormatter(params['format_file'])
-                info.format = lambda x: formatter.format(
-                    x, format_name=params['format'])
+                formatter = ItemFormatter(format_file)
 
-                return info
+                def f(item):
+                    return formatter.format(item, format_name=format)
+                chat.format = f
 
+                log('debug', 'Chat information: {}'.format(chat.__dict__))
+                log('info', 'Retrieving chat for "{}".'.format(chat.title))
 
+                return chat
 
         parsed = urlparse(url)
 
@@ -262,13 +271,9 @@ class ChatDownloader():
         self.sessions = {}
 
 
-def run(**kwargs):
+def run(testing=False, **kwargs):
     """
     Create a single session and get the chat using the specified parameters.
-
-    e.g.
-    >>> run(url='https://www.youtube.com/watch?v=5qap5aO4i9A')
-
     """
 
     init_param_names = get_default_args(ChatDownloader.__init__)
@@ -277,21 +282,18 @@ def run(**kwargs):
     update_dict_without_overwrite(kwargs, init_param_names)
     update_dict_without_overwrite(kwargs, program_param_names)
 
-    if kwargs.get('testing'):
+    if testing:
         kwargs['logging'] = 'debug'
         kwargs['pause_on_debug'] = True
-        # args.message_groups = 'all'
-        # program_params['timeout = 180
 
     if kwargs.get('verbose'):
         kwargs['logging'] = 'debug'
 
     quiet = kwargs.get('quiet')
     if quiet or kwargs['logging'] == 'none':
-        get_logger().disabled = True
+        disable_logger()
     else:
         set_log_level(kwargs['logging'])
-
 
     chat_params = {}
     init_params = {}
@@ -304,22 +306,20 @@ def run(**kwargs):
         elif arg in init_param_names:
             init_params[arg] = value
 
-    log('debug', 'Python version: {}'.format(sys.version))
-    log('debug', 'Program version: {}'.format(__version__))
-
-    log('debug', 'Initialisation parameters: {}'.format(init_params))
-
     downloader = ChatDownloader(**init_params)
 
     try:
         chat = downloader.get_chat(**chat_params)
 
-        log('debug', 'Chat information: {}'.format(chat.__dict__))
-        log('info', 'Retrieving chat for "{}".'.format(chat.title))
+        if quiet:  # Only check if quiet once
+            def callback(item):
+                pass
+        else:
+            def callback(item):
+                safe_print(chat.format(item))
 
         for message in chat:
-            if not quiet:
-                safe_print(chat.format(message))
+            callback(message)
 
         log('info', 'Finished retrieving chat{}.'.format(
             '' if chat.is_live else ' replay'))
@@ -354,5 +354,3 @@ def run(**kwargs):
 
     finally:
         downloader.close()
-
-

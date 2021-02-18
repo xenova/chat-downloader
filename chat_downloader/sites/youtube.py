@@ -5,10 +5,6 @@ from .common import (
     Remapper as r
 )
 
-from requests.exceptions import RequestException
-
-from json.decoder import JSONDecodeError
-
 from ..errors import (
     NoChatReplay,
     NoContinuation,
@@ -18,11 +14,6 @@ from ..errors import (
     VideoUnplayable,
     InvalidParameter
 )
-
-from urllib import parse
-
-import json
-import re
 
 from ..utils import (
     try_get,
@@ -37,12 +28,19 @@ from ..utils import (
     remove_suffixes,
     camel_case_split,
     ensure_seconds,
-    log,
     attempts,
     interruptable_sleep,
     try_parse_json
 )
 
+from ..debugging import log
+
+
+import json
+import re
+from requests.exceptions import RequestException
+from json.decoder import JSONDecodeError
+from urllib import parse
 from datetime import datetime
 from base64 import b64decode
 
@@ -409,7 +407,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return info
 
         for key in item_info:
-            r.remap(info, YouTubeChatDownloader._REMAPPING, key, item_info[key])
+            r.remap(info, YouTubeChatDownloader._REMAPPING,
+                    key, item_info[key])
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
@@ -542,7 +541,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         '₹': 'INR',
 
         '₩': 'KRW',
-        '￦':'KRW',
+        '￦': 'KRW',
 
         '¥': 'JPY',
         '￥': 'JPY',
@@ -557,19 +556,20 @@ class YouTubeChatDownloader(BaseChatDownloader):
         mixed_text = item.get('simpleText') or str(item)
 
         info = re.split(r'([\d,\.]+)', mixed_text)
-        if len(info) >= 2: # Correct parse
+        if len(info) >= 2:  # Correct parse
             currency_symbol = info[0].strip()
-            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(currency_symbol, currency_symbol)
-            amount = float(info[1].replace(',',''))
+            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(
+                currency_symbol, currency_symbol)
+            amount = float(info[1].replace(',', ''))
 
-        else: # Unable to get info
+        else:  # Unable to get info
             amount = float(re.sub(r'[^\d\.]+', '', mixed_text))
             currency_symbol = currency_code = None
 
         return {
             'text': mixed_text,
             'amount': amount,
-            'currency': currency_code, # ISO_4217
+            'currency': currency_code,  # ISO_4217
             'currency_symbol': currency_symbol
         }
 
@@ -900,12 +900,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         html, yt_initial_data = self._get_initial_info(original_url)
 
-        if not yt_initial_data: # Fatal error
+        if not yt_initial_data:  # Fatal error
             raise ParsingError(
                 'Unable to parse initial video data. {}'.format(html))
 
         player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
-        player_response_info = try_parse_json(player_response.group(1)) if player_response else None
+        player_response_info = try_parse_json(
+            player_response.group(1)) if player_response else None
 
         if not player_response_info:
             log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
@@ -934,7 +935,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         }
         details['is_live'] = 'Live chat' in details['continuation_info']
 
-        playability_status = player_response_info.get('playabilityStatus') or {}
+        playability_status = player_response_info.get(
+            'playabilityStatus') or {}
         status = playability_status.get('status')
         error_screen = playability_status.get('errorScreen')
 
@@ -974,7 +976,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    log('debug', 'Unknown status: {}. {}'.format(status, playability_status))
+                    log('debug', 'Unknown status: {}. {}'.format(
+                        status, playability_status))
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:

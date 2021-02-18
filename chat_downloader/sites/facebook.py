@@ -1,17 +1,8 @@
-import json
-from json.decoder import JSONDecodeError
-import xml.etree.ElementTree as ET
-import isodate
-import re
-
 from .common import (
     Chat,
     BaseChatDownloader,
     Remapper as r
 )
-
-from requests.exceptions import RequestException
-
 from ..utils import (
     remove_prefixes,
     multi_get,
@@ -22,8 +13,16 @@ from ..utils import (
     ensure_seconds,
     attempts,
     get_title_of_webpage,
-    log
 )
+
+from ..debugging import log
+
+import json
+import re
+import xml.etree.ElementTree as ET
+import isodate
+from json.decoder import JSONDecodeError
+from requests.exceptions import RequestException
 
 
 class FacebookChatDownloader(BaseChatDownloader):
@@ -240,7 +239,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             return item
 
         for key in original_item:
-            r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, original_item[key])
+            r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
+                    key, original_item[key])
 
         # VideoTipJarPayment
         quantity = item.get('quantity')
@@ -266,7 +266,8 @@ class FacebookChatDownloader(BaseChatDownloader):
                              lambda x: x['ranges'][0]['entity']) or {}
 
             for key in entity:
-                r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
+                r.remap(
+                    item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
             item['text'] = donation_comment_text.get('text')
 
         # DEBUGGING
@@ -341,7 +342,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         # set texts:
         for key in attachment:
-            r.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING, key, attachment[key])
+            r.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
+                    key, attachment[key])
 
         for key in ('target', 'media', 'style_infos'):
             if parsed.get(key) == {}:
@@ -485,7 +487,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         BaseChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
 
         for key in author_info:
-            r.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
+            r.remap(
+                info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
 
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []

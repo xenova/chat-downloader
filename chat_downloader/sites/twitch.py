@@ -1,18 +1,8 @@
-import re
-import json
-import time
-import socket
-import base64
-
 from .common import (
     Chat,
     BaseChatDownloader,
     Remapper as r
 )
-
-from requests.exceptions import RequestException
-from json.decoder import JSONDecodeError
-
 
 from ..errors import (
     TwitchError,
@@ -28,10 +18,21 @@ from ..utils import (
     int_or_none,
     replace_with_underscores,
     multi_get,
-    log,
     remove_prefixes,
     attempts
 )
+
+from ..debugging import log
+
+import re
+import json
+import time
+import socket
+import base64
+
+from requests.exceptions import RequestException
+from json.decoder import JSONDecodeError
+
 
 # TODO export as another module?
 

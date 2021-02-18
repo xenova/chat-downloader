@@ -1,7 +1,6 @@
 import inspect
 import threading
 import _thread
-import colorlog
 import datetime
 import re
 import sys
@@ -26,12 +25,6 @@ def time_to_seconds(time):
     """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
     return int(sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1))
 
-
-# def seconds_to_time(seconds):
-#     """Convert seconds to timestamp."""
-#     t = datetime.timedelta(0, abs(seconds))
-#     # time_string = t.days()
-#     return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', str(t))
 
 def seconds_to_time(seconds):
     """Convert seconds to timestamp."""
@@ -162,93 +155,8 @@ def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
 
 
-def supports_colour():
-    """
-    Return True if the running system's terminal supports colour,
-    and False otherwise.
-    """
-    def vt_codes_enabled_in_windows_registry():
-        """
-        Check the Windows Registry to see if VT code handling has been enabled
-        by default, see https://superuser.com/a/1300251/447564.
-        """
-        try:
-            # winreg is only available on Windows.
-            import winreg
-        except ImportError:
-            return False
-        else:
-            reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Console')
-            try:
-                reg_key_value, _ = winreg.QueryValueEx(
-                    reg_key, 'VirtualTerminalLevel')
-            except FileNotFoundError:
-                return False
-            else:
-                return reg_key_value == 1
-
-    # isatty is not always implemented, #6223.
-    is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
-
-    return is_a_tty and (
-        # Windows Terminal supports VT codes.
-        # Microsoft Visual Studio Code's built-in terminal supports colours.
-
-        (sys.platform != 'win32') or ('ANSICON' in os.environ) or ('WT_SESSION' in os.environ) or (
-            os.environ.get('TERM_PROGRAM') == 'vscode') or (vt_codes_enabled_in_windows_registry())
-    )
-
-
-if supports_colour():
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter(
-        '[%(log_color)s%(levelname)s%(reset)s] %(message)s',
-        log_colors={
-            'DEBUG': 'cyan',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'bold_red',
-        })
-    )
-    logger = colorlog.getLogger()  # 'root'
-else:  # fallback support
-    import logging
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-    logger = logging.getLogger()
-
-
-logger.addHandler(handler)
-
-
-def pause(text='Press Enter to continue...'):
-    input(text)
-
-
-def set_log_level(level):
-    logger.setLevel(level.upper())
-
-
-def get_logger():
-    return logger
-
-
-def log(level, items, to_pause=False):
-    logger_at_level = getattr(logger, level, None)
-    if logger_at_level:
-        if not isinstance(items, (tuple, list)):
-            items = [items]
-        for item in items:
-            logger_at_level(item)
-
-        if to_pause:
-            pause()
-
-
 def replace_with_underscores(text, sep='-'):
     return text.replace(sep, '_')
-
 
 def multi_get(dictionary, *keys, default=None):
     current = dictionary
@@ -409,6 +317,9 @@ def nested_update(d, u):
             d[k] = v
     return d
 
+
+def pause(text='Press Enter to continue...'):
+    input(text)
 
 # Inspired by https://github.com/hero24/TimedInput/
 
