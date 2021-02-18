@@ -141,16 +141,14 @@ def main():
     add_chat_param(on_debug_options, '--exit_on_debug', is_boolean_flag=True)
 
     debug_options = debug_group.add_mutually_exclusive_group()
+    get_chat_info['logging']['default'] = 'info' # overwrite default from method
     add_chat_param(debug_options, '--logging',
                    choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
 
-    # TODO add to get_chat?
-    debug_options.add_argument(
-        '--testing', help='Enable testing mode. This is equivalent to setting logging to debug and enabling pause_on_debug', action='store_true')
-    debug_options.add_argument(
-        '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
-    debug_options.add_argument(
-        '--quiet', '-q', help='Activate quiet mode (hide all output)', action='store_true')
+
+    add_chat_param(debug_options, '--testing', is_boolean_flag=True)
+    add_chat_param(debug_options, '--verbose', '-v', is_boolean_flag=True)
+    add_chat_param(debug_options, '--quiet', '-q', is_boolean_flag=True)
 
     # TODO Add --do_not_print option
 
@@ -166,6 +164,5 @@ def main():
 
     args = parser.parse_args()
 
-    # Finished parsing CLI arguments
     # Run with these arguments
     run(**args.__dict__)

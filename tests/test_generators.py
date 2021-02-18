@@ -70,11 +70,10 @@ def generator(site, url):
             'timeout': args['timeout'],
             'exit_on_debug': True,
             'quiet': True,
-            'interruptible': True,
         }
 
         print('\r ➤ ', url)
-        run(**params)
+        run(propagate_interrupt=True, **params)
 
     return test_template
 

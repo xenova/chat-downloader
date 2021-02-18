@@ -22,8 +22,10 @@ from ..debugging import log
 
 
 class Remapper():
+    """Class used to control the remapping of one dictionary to another dictionary."""
+
     def __init__(self, new_key=None, remap_function=None, to_unpack=False):
-        """[summary]
+        """Create a Remapper object
 
         :param new_key: [description], defaults to None
         :type new_key: [type], optional
@@ -49,7 +51,6 @@ class Remapper():
 
         self.remap_function = remap_function
         self.to_unpack = to_unpack
-
 
     @staticmethod
     def remap(info, remapping_dict, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
@@ -133,6 +134,7 @@ class Remapper():
             )
         return info
 
+
 class SiteDefault:
     # Used for site-default parameters
     def __init__(self, name):
@@ -179,27 +181,37 @@ class Chat():
     def __iter__(self):
         """Allows the object to be iterable
 
-        :return: The generator method which retrieves chat messages
-        :rtype: generator
+        :return: This object
+        :rtype: Chat
         """
         return self
 
     def __next__(self):
+        """Get the next chat message from the generator
+
+        :return: The next chat item
+        :rtype: dict
+        """
         item = next(self.chat)
         if self.callback:
             self.callback(item)
         return item
 
     def print_formatted(self, item):
+        """Safely print the formatted message
+
+        :param item: The chat item to be printed
+        :type item: dict
+        """
         formatted = self.format(item)
         safe_print(formatted)
 
     def format(self, item):
-        """[summary]
+        """Format chat messages
 
-        :param item: [description]
-        :type item: [type]
-        :raises NotImplementedError: [description]
+        :param item: The chat item to be formatted
+        :type item: dict
+        :raises NotImplementedError: if this method has not been overridden later
         """
         raise NotImplementedError
 
@@ -208,9 +220,7 @@ class BaseChatDownloader:
     """Base class for chat downloaders. Each supported site should have its
     own chat downloader. Subclasses should redefine the `get_chat()` method
     and `_VALID_URL` regexp. Optionally, subclasses should also redefine
-    `_NAME`, `_SITE_DEFAULT_PARAMS` and `_TESTS` fields.
-
-    """
+    `_NAME`, `_SITE_DEFAULT_PARAMS` and `_TESTS` fields."""
 
     _NAME = None
     _VALID_URL = None

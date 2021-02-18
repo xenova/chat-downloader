@@ -29,6 +29,14 @@ chat\_downloader.cli module
     :undoc-members:
     :show-inheritance:
 
+chat\_downloader.debugging module
+---------------------------------
+
+.. automodule:: chat_downloader.debugging
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 chat\_downloader.errors module
 ------------------------------
 

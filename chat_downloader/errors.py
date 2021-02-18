@@ -57,6 +57,9 @@ class InvalidURL(Exception):
     """Raised when the url is invalid."""
     pass
 
+class ChatGeneratorError(Exception):
+    """Raised when no valid generator method for a site can be found."""
+    pass
 
 class SiteNotSupported(Exception):
     """Raised when the url is valid, but the site is not supported."""

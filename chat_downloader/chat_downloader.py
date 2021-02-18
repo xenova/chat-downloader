@@ -43,11 +43,13 @@ from .errors import (
     InvalidParameter,
     InvalidURL,
     RetriesExceeded,
-    NoContinuation
+    NoContinuation,
+    ChatGeneratorError
 )
 
 
 class ChatDownloader():
+    """Class used to create sessions and download chats."""
 
     def __init__(self,
                  headers=None,
@@ -55,15 +57,16 @@ class ChatDownloader():
                  proxy=None,
                  ):
         """Initialise a new session for making requests. Parameters are saved
-        and are sent to the constructor when creating a new session.
+        and are sent to the relevant constructor when creating a new session.
 
         :param headers: Headers to use for subsequent requests, defaults to None
         :type headers: dict, optional
         :param cookies: Path of cookies file, defaults to None
         :type cookies: str, optional
-        :param proxy: Use the specified HTTP/HTTPS/SOCKS proxy. To enable SOCKS proxy,
-            specify a proper scheme. For example socks5://127.0.0.1:1080/. Pass in an
-            empty string (--proxy "") for direct connection. Default to None
+        :param proxy: Use the specified HTTP/HTTPS/SOCKS proxy. To enable SOCKS
+            proxy, specify a proper scheme. For example socks5://127.0.0.1:1080/.
+            Pass in an empty string (--proxy "") for direct connection. Defaults
+            to None
         :type proxy: str, optional
         """
 
@@ -83,11 +86,17 @@ class ChatDownloader():
                  max_attempts=15,
                  retry_timeout=None,
                  timeout=None,
+                 inactivity_timeout=None,
                  max_messages=None,
-                 logging='info',
+
+                 # Logging/debugging
+                 logging='none',
                  pause_on_debug=False,
                  exit_on_debug=False,
-                 inactivity_timeout=None,
+                 testing=False,
+                 verbose=False,
+                 quiet=False,
+
                  message_groups=SiteDefault('message_groups'),
                  message_types=None,
 
@@ -126,39 +135,53 @@ class ChatDownloader():
             this to a negative number will wait for user input. Default is None
             (use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)
         :type retry_timeout: float, optional
-        :param timeout: Stop retrieving chat after a certain duration (in seconds),
-            defaults to None
+        :param timeout: Stop retrieving chat after a certain duration
+            (in seconds), defaults to None
         :type timeout: float, optional
-        :param max_messages: Maximum number of messages to retrieve, defaults
-            to None (unlimited)
-        :type max_messages: int, optional
-        :param logging: Level of logging to display, defaults to 'info'
-        :type logging: str, optional
-        :param pause_on_debug: Pause on certain debug messages, defaults to False
-        :type pause_on_debug: bool, optional
-        :param exit_on_debug: Exit when something unexpected happens, defaults to False
-        :type exit_on_debug: bool, optional
         :param inactivity_timeout: Stop getting messages after not receiving
             anything for a certain duration (in seconds), defaults to None
         :type inactivity_timeout: float, optional
+        :param max_messages: Maximum number of messages to retrieve, defaults
+            to None (unlimited)
+        :type max_messages: int, optional
+        :param logging: Level of logging to display, defaults to 'none'
+            ('info' if run from the CLI)
+        :type logging: str, optional
+        :param pause_on_debug: Pause on certain debug messages, defaults to False
+        :type pause_on_debug: bool, optional
+        :param exit_on_debug: Exit when something unexpected happens, defaults
+            to False
+        :type exit_on_debug: bool, optional
+        :param testing: Enable testing mode. This is equivalent to setting
+            logging to debug and enabling pause_on_debug. Defaults to False
+        :type testing: bool, optional
+        :param verbose: Print various debugging information. This is equivalent
+            to setting logging to debug. Defaults to False
+        :type verbose: bool, optional
+        :param quiet: Activate quiet mode (hide all output), defaults to False
+        :type quiet: bool, optional
         :param message_groups: List of messages groups (a predefined,
             site-specific collection of message types) to include
         :type message_groups: SiteDefault, optional
         :param message_types: List of messages types to include, defaults to None
         :type message_types: list, optional
-        :param output: Path of the output file, defaults to None (print to standard output)
+        :param output: Path of the output file, defaults to None (print to
+            standard output)
         :type output: str, optional
-        :param overwrite: Overwrite output file if it exists. Otherwise, append to the end of the file. Defaults to False
+        :param overwrite: Overwrite output file if it exists. Otherwise,
+            append to the end of the file. Defaults to False
         :type overwrite: bool, optional
         :param sort_keys: Sort keys when outputting to a file, defaults to True
         :type sort_keys: bool, optional
-        :param indent: Number of spaces to indent JSON objects by. If nonnumerical input is provided, this will be used to indent the objects. Defaults to 4
+        :param indent: Number of spaces to indent JSON objects by. If
+            nonnumerical input is provided, this will be used to indent
+            the objects. Defaults to 4
         :type indent: Union[int, str], optional
         :param format: Specify how messages should be formatted for printing,
             defaults to the site's default value
         :type format: SiteDefault, optional
-        :param format_file: Specify the path of the format file to choose formats
-            from, defaults to None
+        :param format_file: Specify the path of the format file to choose
+            formats from, defaults to None
         :type format_file: str, optional
         :param chat_type: Specify chat type, defaults to 'live'
         :type chat_type: str, optional
@@ -168,6 +191,12 @@ class ChatDownloader():
         :param buffer_size: Specify a buffer size for retrieving messages,
             defaults to 4096
         :type buffer_size: int, optional
+        :raises URLNotProvided: if no URL is provided
+        :raises ChatGeneratorError: if no valid generator can be found for a site
+        :raises SiteNotSupported: if no matching site can be found
+        :raises InvalidURL: if the URL provided is not valid
+        :return: The appropriate Chat object, given these parameters
+        :rtype: Chat
         """
 
         # TODO params to add
@@ -179,6 +208,18 @@ class ChatDownloader():
         if not url:
             raise URLNotProvided('No URL provided.')
 
+        if testing:
+            logging = 'debug'
+            pause_on_debug = True
+
+        if verbose:
+            logging = 'debug'
+
+        if quiet or logging == 'none':
+            disable_logger()
+        else:
+            set_log_level(logging)
+
         original_params = locals()
         original_params.pop('self')
 
@@ -187,7 +228,8 @@ class ChatDownloader():
         # based on matching url with predefined regex
         for site in get_all_sites():
             regex = getattr(site, '_VALID_URL')
-            if isinstance(regex, str) and re.search(regex, url):  # regex has been set (not None)
+            if isinstance(regex, str) and re.search(regex, url):
+                # regex has been set (not None)
 
                 # Create new session if not already created
                 if site.__name__ not in self.sessions:
@@ -202,6 +244,11 @@ class ChatDownloader():
                     self.sessions[site.__name__]._NAME))
                 log('debug', 'Program parameters: {}'.format(params))
                 chat = self.sessions[site.__name__].get_chat(**params)
+
+                if chat is None:
+                    raise ChatGeneratorError(
+                        'No valid generator found in {} for url "{}"'.format(site.__name__, url))
+
                 if isinstance(max_messages, int):
                     chat.chat = itertools.islice(chat.chat, max_messages)
 
@@ -239,9 +286,7 @@ class ChatDownloader():
 
                 formatter = ItemFormatter(format_file)
 
-                def f(item):
-                    return formatter.format(item, format_name=format)
-                chat.format = f
+                chat.format = lambda x: formatter.format(x, format_name=format)
 
                 log('debug', 'Chat information: {}'.format(chat.__dict__))
                 log('info', 'Retrieving chat for "{}".'.format(chat.title))
@@ -249,18 +294,17 @@ class ChatDownloader():
                 return chat
 
         parsed = urlparse(url)
+        log('debug', str(parsed))
 
-        if parsed.scheme:
-            log('debug', str(parsed))
+        if parsed.netloc:
             raise SiteNotSupported(
                 'Site not supported: {}'.format(parsed.netloc))
-        else:
-            original_params['url'] = 'https://' + url  # try to correct
+        elif not parsed.scheme:  # No scheme, try to correct
+            original_params['url'] = 'https://' + url
             chat = self.get_chat(**original_params)
             if chat:
                 return chat
-
-            log('debug', parsed)
+        else:
             raise InvalidURL('Invalid URL: "{}"'.format(url))
 
     def close(self):
@@ -271,7 +315,7 @@ class ChatDownloader():
         self.sessions = {}
 
 
-def run(testing=False, **kwargs):
+def run(propagate_interrupt=False, **kwargs):
     """
     Create a single session and get the chat using the specified parameters.
     """
@@ -281,19 +325,6 @@ def run(testing=False, **kwargs):
 
     update_dict_without_overwrite(kwargs, init_param_names)
     update_dict_without_overwrite(kwargs, program_param_names)
-
-    if testing:
-        kwargs['logging'] = 'debug'
-        kwargs['pause_on_debug'] = True
-
-    if kwargs.get('verbose'):
-        kwargs['logging'] = 'debug'
-
-    quiet = kwargs.get('quiet')
-    if quiet or kwargs['logging'] == 'none':
-        disable_logger()
-    else:
-        set_log_level(kwargs['logging'])
 
     chat_params = {}
     init_params = {}
@@ -311,7 +342,7 @@ def run(testing=False, **kwargs):
     try:
         chat = downloader.get_chat(**chat_params)
 
-        if quiet:  # Only check if quiet once
+        if kwargs.get('quiet'):  # Only check if quiet once
             def callback(item):
                 pass
         else:
@@ -337,8 +368,11 @@ def run(testing=False, **kwargs):
         NoContinuation
     ) as e:  # Expected errors
         log('error', e)
-        # log('error', e, logging_level)  # always show
-        # '{} ({})'.format(, e.__class__.__name__)
+    except (
+        ChatGeneratorError
+    ) as e:  # Errors which may be bugs
+        log('error', '{}. {}'.format(
+            e, 'Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'))
 
     except ConnectionError as e:
         log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
@@ -347,7 +381,7 @@ def run(testing=False, **kwargs):
         log('error', e)
 
     except KeyboardInterrupt as e:
-        if kwargs.get('interruptible'):
+        if propagate_interrupt:
             raise e
         else:
             log('error', 'Keyboard Interrupt')
