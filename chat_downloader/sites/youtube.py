@@ -912,10 +912,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
             log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
             player_response_info = {}
 
-        adaptive_formats = multi_get(
-            player_response_info, 'streamingData', 'adaptiveFormats')
+        streaming_data = player_response_info.get('streamingData') or {}
+        formats = streaming_data.get(
+            'adaptiveFormats') or streaming_data.get('formats')
         last_modified = try_get(
-            adaptive_formats, lambda x: float(x[0]['lastModified']))
+            formats, lambda x: float(x[0]['lastModified']))
 
         details = {
             'start_time': last_modified,
