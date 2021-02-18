@@ -409,8 +409,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return info
 
         for key in item_info:
-            BaseChatDownloader.remap(
-                info, YouTubeChatDownloader._REMAPPING, key, item_info[key])
+            r.remap(info, YouTubeChatDownloader._REMAPPING, key, item_info[key])
 
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:

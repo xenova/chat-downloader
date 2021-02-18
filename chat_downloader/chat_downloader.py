@@ -52,45 +52,47 @@ class ChatDownloader():
                  cookies=None,
                  proxy=None,
                  ):
-        """
-        Initialise a new session for making requests.
+        """Initialise a new session for making requests. Parameters are saved
+        and are sent to the constructor when creating a new session.
 
-        :param headers: Test headers
-        :param cookies: Path of cookies file
-        :param proxy: Use the specified HTTP/HTTPS/SOCKS proxy. To enable SOCKS proxy, specify a proper scheme. For example socks5://127.0.0.1:1080/. Pass in an empty string (--proxy "") for direct connection. Default is None (i.e. do not use a proxy)
-
+        :param headers: Headers to use for subsequent requests, defaults to None
+        :type headers: dict, optional
+        :param cookies: Path of cookies file, defaults to None
+        :type cookies: str, optional
+        :param proxy: Use the specified HTTP/HTTPS/SOCKS proxy. To enable SOCKS proxy,
+            specify a proper scheme. For example socks5://127.0.0.1:1080/. Pass in an
+            empty string (--proxy "") for direct connection. Default to None
+        :type proxy: str, optional
         """
+
         self.init_params = locals()
         self.init_params.pop('self')
 
-        # Track a dict of sessions
+        # Track sessions using a dictionary (allows for reusing)
         self.sessions = {}
 
     def get_chat(self, url=None,
                  start_time=None,
                  end_time=None,
-                 max_attempts=15,  # ~ 2^15s ~ 9 hours
+                 max_attempts=15,
                  retry_timeout=None,
                  timeout=None,
                  max_messages=None,
-
                  logging='info',
                  pause_on_debug=False,
                  exit_on_debug=False,
-
-                 # If True, program will not sleep when a timeout instruction is given
-                 # force_no_timeout=False,
-                 # :param force_no_timeout: Force no timeout between subsequent requests
-                 #  force_encoding=None, # use default
-
                  inactivity_timeout=None,
-
                  message_groups=SiteDefault('message_groups'),
-                 message_types=None,  # SiteDefault('message_types'),
+                 message_types=None,
 
+                 # Output
+                 output=None,
+                 overwrite=False,
+                 sort_keys=True,
+                 indent=4,
 
                  # Formatting
-                 format=SiteDefault('format'),  # Use default
+                 format=SiteDefault('format'),
                  format_file=None,
 
                  # YouTube
@@ -100,43 +102,73 @@ class ChatDownloader():
                  message_receive_timeout=0.1,
                  buffer_size=4096
                  ):
+        """Used to get chat messages from a livestream, video, clip or past broadcast.
+
+        :param url: The URL of the livestream, video, clip or past broadcast,
+            defaults to None
+        :type url: str, optional
+        :param start_time: Start time in seconds or hh:mm:ss, defaults
+            to None (as early as possible)
+        :type start_time: float, optional
+        :param end_time: End time in seconds or hh:mm:ss, defaults to
+            None (until the end)
+        :type end_time: float, optional
+        :param max_attempts: Maximum number of attempts to retrieve chat
+            messages, defaults to 15
+        :type max_attempts: int, optional
+        :param retry_timeout: Number of seconds to wait before retrying. Setting
+            this to a negative number will wait for user input. Default is None
+            (use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)
+        :type retry_timeout: float, optional
+        :param timeout: Stop retrieving chat after a certain duration (in seconds),
+            defaults to None
+        :type timeout: float, optional
+        :param max_messages: Maximum number of messages to retrieve, defaults
+            to None (unlimited)
+        :type max_messages: int, optional
+        :param logging: Level of logging to display, defaults to 'info'
+        :type logging: str, optional
+        :param pause_on_debug: Pause on certain debug messages, defaults to False
+        :type pause_on_debug: bool, optional
+        :param exit_on_debug: Exit when something unexpected happens, defaults to False
+        :type exit_on_debug: bool, optional
+        :param inactivity_timeout: Stop getting messages after not receiving
+            anything for a certain duration (in seconds), defaults to None
+        :type inactivity_timeout: float, optional
+        :param message_groups: List of messages groups (a predefined,
+            site-specific collection of message types) to include
+        :type message_groups: SiteDefault, optional
+        :param message_types: List of messages types to include, defaults to None
+        :type message_types: list, optional
+        :param output: Path of the output file, defaults to None (print to standard output)
+        :type output: str, optional
+        :param overwrite: Overwrite output file if it exists. Otherwise, append to the end of the file. Defaults to False
+        :type overwrite: bool, optional
+        :param sort_keys: Sort keys when outputting to a file, defaults to True
+        :type sort_keys: bool, optional
+        :param indent: Number of spaces to indent JSON objects by. If nonnumerical input is provided, this will be used to indent the objects. Defaults to 4
+        :type indent: Union[int, str], optional
+        :param format: Specify how messages should be formatted for printing,
+            defaults to the site's default value
+        :type format: SiteDefault, optional
+        :param format_file: Specify the path of the format file to choose formats
+            from, defaults to None
+        :type format_file: str, optional
+        :param chat_type: Specify chat type, defaults to 'live'
+        :type chat_type: str, optional
+        :param message_receive_timeout: Time before requesting for new messages,
+            defaults to 0.1
+        :type message_receive_timeout: float, optional
+        :param buffer_size: Specify a buffer size for retrieving messages,
+            defaults to 4096
+        :type buffer_size: int, optional
         """
-        Short description
 
-        Long description spanning multiple lines
-        - First line
-        - Second line
-        - Third line
-
-        :param url: The URL of the livestream, video, clip or past broadcast
-        :param start_time: Start time in seconds or hh:mm:ss, default is None (as early as possible)
-        :param end_time: End time in seconds or hh:mm:ss, default is None (until the end)
-
-        :param message_types: List of messages types to include
-        :param message_groups: List of messages groups (a predefined, site-specific collection of message types) to include
-
-
-
-        :param max_attempts: Maximum number of attempts to retrieve chat messages
-        :param retry_timeout: Number of seconds to wait before retrying. Setting this to a negative number will wait for user input.
-        Default is None (use exponential backoff, i.e. immediate, 1s, 2s, 4s, 8s, ...)
-
-        :param max_messages: Maximum number of messages to retrieve, default is None (unlimited)
-        :param inactivity_timeout: Stop getting messages after not receiving anything for a certain duration (in seconds)
-        :param timeout: Stop retrieving chat after a certain duration (in seconds)
-
-        :param format: Specify how messages should be formatted for printing, default uses site default
-        :param format_file: Specify the format file to choose formats from
-
-        :param pause_on_debug: Pause on certain debug messages
-        :param exit_on_debug: Exit when something unexpected happens
-        :param logging: Level of logging to display
-
-        :param chat_type: Specify chat type, default is live
-
-        :param message_receive_timeout: Time before requesting for new messages
-        :param buffer_size: Specify a buffer size for retrieving messages
-        """
+        # TODO params to add
+        # If True, program will not sleep when a timeout instruction is given
+        # force_no_timeout=False,
+        # :param force_no_timeout: Force no timeout between subsequent requests
+        #  force_encoding=None, # use default
 
         if not url:
             raise URLNotProvided('No URL provided.')
@@ -188,6 +220,15 @@ class ChatDownloader():
                         setattr(info.chat, 'on_inactivity_timeout',
                                 log_on_inactivity_timeout)
 
+                if output:
+                    output_file = ContinuousWriter(
+                        output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
+
+                    def write_to_file(item):
+                        output_file.write(item, flush=True)
+
+                    info.callback = write_to_file
+
                 info.site = self.sessions[site.__name__]
 
                 formatter = ItemFormatter(params['format_file'])
@@ -212,6 +253,7 @@ class ChatDownloader():
             raise InvalidURL('Invalid URL: "{}"'.format(url))
 
     def close(self):
+        """Close all sessions associated with the object"""
         for session in self.sessions.values():
             session.close()
 
@@ -248,7 +290,6 @@ def run(**kwargs):
     else:
         set_log_level(kwargs['logging'])
 
-    output = kwargs.get('output')
 
     chat_params = {}
     init_params = {}
@@ -268,34 +309,15 @@ def run(**kwargs):
 
     downloader = ChatDownloader(**init_params)
 
-    output_file = None
     try:
         chat = downloader.get_chat(**chat_params)
 
         log('debug', 'Chat information: {}'.format(chat.__dict__))
         log('info', 'Retrieving chat for "{}".'.format(chat.title))
 
-        def print_formatted(item):
-            if not quiet:
-                formatted = chat.format(item)
-                safe_print(formatted)
-
-        if output:
-            output_args = {
-                k: kwargs.get(k) for k in ('indent', 'sort_keys', 'overwrite')
-            }
-            output_file = ContinuousWriter(output, **output_args)
-
-            def write_to_file(item):
-                print_formatted(item)
-                output_file.write(item, flush=True)
-
-            callback = write_to_file
-        else:
-            callback = print_formatted
-
         for message in chat:
-            callback(message)
+            if not quiet:
+                safe_print(chat.format(message))
 
         log('info', 'Finished retrieving chat{}.'.format(
             '' if chat.is_live else ' replay'))

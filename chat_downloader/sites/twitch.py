@@ -247,8 +247,8 @@ class TwitchChatDownloader(BaseChatDownloader):
     def parse_commenter(commenter):
         info = {}
         for key in commenter or []:
-            BaseChatDownloader.remap(
-                info, TwitchChatDownloader._AUTHOR_REMAPPING, key, commenter[key])
+            r.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
+                    key, commenter[key])
         return info
 
     @staticmethod
@@ -798,8 +798,8 @@ class TwitchChatDownloader(BaseChatDownloader):
     def _parse_item(item, offset):
         info = {}
         for key in item:
-            BaseChatDownloader.remap(
-                info, TwitchChatDownloader._COMMENT_REMAPPING, key, item[key])  # , True
+            r.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
+                    key, item[key])  # , True
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -817,8 +817,8 @@ class TwitchChatDownloader(BaseChatDownloader):
         user_notice_params = info.pop('user_notice_params', {})
 
         for key in user_notice_params:
-            BaseChatDownloader.remap(
-                info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING, key, user_notice_params[key], True)
+            r.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
+                    key, user_notice_params[key], True)
 
         # TODO add user colour to author dict
         # TODO check this works
@@ -880,7 +880,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     @staticmethod
     def parse_user(item):
         if isinstance(item, dict):
-            return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
+            return r.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
         return None
 
     _GAME_REMAPPING = {
@@ -893,7 +893,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     @staticmethod
     def parse_game(item):
         if isinstance(item, dict):
-            return BaseChatDownloader.remap_dict(item, TwitchChatDownloader._GAME_REMAPPING)
+            return r.remap_dict(item, TwitchChatDownloader._GAME_REMAPPING)
         return None
 
     _CLIP_REMAPPING = {
@@ -954,7 +954,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             for edge in edges:
                 node = edge['node'] or {}
-                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._CLIP_REMAPPING)
+                yield r.remap_dict(node, TwitchChatDownloader._CLIP_REMAPPING)
 
             if not clips['pageInfo']['hasNextPage']:
                 break
@@ -1023,7 +1023,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             for edge in edges:
                 node = edge['node'] or {}
-                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._VIDEO_REMAPPING)
+                yield r.remap_dict(node, TwitchChatDownloader._VIDEO_REMAPPING)
 
             if not videos['pageInfo']['hasNextPage']:
                 break
@@ -1087,13 +1087,13 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             for edge in edges:
                 node = edge['node'] or {}
-                yield BaseChatDownloader.remap_dict(node, TwitchChatDownloader._LIVESTREAM_REMAPPING)
+                yield r.remap_dict(node, TwitchChatDownloader._LIVESTREAM_REMAPPING)
 
     _TWITCH_HOME = 'https://www.twitch.tv'
     _TWITCH_VIDEOS = 'https://www.twitch.tv/videos'
 
     @staticmethod
-    def generate_urls(livestream_limit = 10, vod_limit = 5, clip_limit = 5, **kwargs):
+    def generate_urls(livestream_limit=10, vod_limit=5, clip_limit=5, **kwargs):
         downloader = TwitchChatDownloader()
 
         # max_tests = livestream_limit + livestream_limit*(vod_limit+clip_limit)
@@ -1419,9 +1419,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 ])
                 continue
 
-            BaseChatDownloader.remap(info, TwitchChatDownloader._IRC_REMAPPING, keys[0], keys[1],
-                                     keep_unknown_keys=True,
-                                     replace_char_with_underscores='-')
+            r.remap(info, TwitchChatDownloader._IRC_REMAPPING,
+                    keys[0], keys[1], keep_unknown_keys=True, replace_char_with_underscores='-')
 
         message_match = match.group(3)
         if message_match:

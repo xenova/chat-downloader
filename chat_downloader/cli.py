@@ -9,7 +9,10 @@ from .chat_downloader import (
     run
 )
 
-from .metadata import __version__
+from .metadata import (
+    __version__,
+    __summary__
+)
 
 from .utils import (
     get_default_args,
@@ -20,16 +23,12 @@ from .utils import (
 def main():
 
     parser = argparse.ArgumentParser(
-        description='A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!',
-        formatter_class=argparse.RawTextHelpFormatter,
+        description=__summary__,
+        # formatter_class=argparse.RawTextHelpFormatter,
     )
 
     parser.add_argument('--version', action='version',
                         version=__version__)
-
-    # PROGRAM PARAMS
-    parser.add_argument(
-        'url', help='The URL of the livestream, video, clip or past broadcast')
 
     def get_info(function):
         info = {}
@@ -72,6 +71,8 @@ def main():
 
     def add_init_param(group, *keys, **kwargs):
         add_param('init', group, *keys, **kwargs)
+
+    add_chat_param(parser, 'url')
 
     time_group = parser.add_argument_group('Timing Arguments')
 
@@ -128,14 +129,10 @@ def main():
     add_chat_param(twitch_group, '--buffer_size', type=int)
 
     output_group = parser.add_argument_group('Output Arguments')
-    output_group.add_argument(
-        '--output', '-o', help='Path of the output file, default is None (i.e. print to standard output)', default=None)
-    output_group.add_argument(
-        '--sort_keys', help='Sort keys when outputting to a file', action='store_false')
-    output_group.add_argument('--indent', type=lambda x: int_or_none(x, x),
-                              help='Number of spaces to indent JSON objects by. If nonnumerical input is provided, this will be used to indent the objects.', default=4)
-    output_group.add_argument(
-        '--overwrite', help='Overwrite output file if it exists. Otherwise, append to the end of the file.', action='store_true')
+    add_chat_param(output_group, '--output', '-o')
+    add_chat_param(output_group, '--overwrite', is_boolean_flag=True)
+    add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
+    add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')
 
@@ -147,12 +144,15 @@ def main():
     add_chat_param(debug_options, '--logging',
                    choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
 
+    # TODO add to get_chat?
     debug_options.add_argument(
         '--testing', help='Enable testing mode. This is equivalent to setting logging to debug and enabling pause_on_debug', action='store_true')
     debug_options.add_argument(
         '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
     debug_options.add_argument(
         '--quiet', '-q', help='Activate quiet mode (hide all output)', action='store_true')
+
+    # TODO Add --do_not_print option
 
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')

@@ -240,8 +240,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             return item
 
         for key in original_item:
-            BaseChatDownloader.remap(
-                item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, original_item[key])
+            r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, original_item[key])
 
         # VideoTipJarPayment
         quantity = item.get('quantity')
@@ -267,8 +266,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                              lambda x: x['ranges'][0]['entity']) or {}
 
             for key in entity:
-                BaseChatDownloader.remap(
-                    item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
+                r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
             item['text'] = donation_comment_text.get('text')
 
         # DEBUGGING
@@ -343,8 +341,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         # set texts:
         for key in attachment:
-            BaseChatDownloader.remap(
-                parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING, key, attachment[key])
+            r.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING, key, attachment[key])
 
         for key in ('target', 'media', 'style_infos'):
             if parsed.get(key) == {}:
@@ -482,15 +479,13 @@ class FacebookChatDownloader(BaseChatDownloader):
         info = {}
 
         for key in node:
-            BaseChatDownloader.remap(
-                info, FacebookChatDownloader._REMAPPING, key, node[key])
+            r.remap(info, FacebookChatDownloader._REMAPPING, key, node[key])
 
         author_info = info.pop('author', {})
         BaseChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
 
         for key in author_info:
-            BaseChatDownloader.remap(
-                info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
+            r.remap(info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
 
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []
