@@ -543,7 +543,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         '₹': 'INR',
 
         '₩': 'KRW',
-        '￦':'KRW',
+        '￦': 'KRW',
 
         '¥': 'JPY',
         '￥': 'JPY',
@@ -558,19 +558,20 @@ class YouTubeChatDownloader(BaseChatDownloader):
         mixed_text = item.get('simpleText') or str(item)
 
         info = re.split(r'([\d,\.]+)', mixed_text)
-        if len(info) >= 2: # Correct parse
+        if len(info) >= 2:  # Correct parse
             currency_symbol = info[0].strip()
-            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(currency_symbol, currency_symbol)
-            amount = float(info[1].replace(',',''))
+            currency_code = YouTubeChatDownloader._CURRENCY_SYMBOLS.get(
+                currency_symbol, currency_symbol)
+            amount = float(info[1].replace(',', ''))
 
-        else: # Unable to get info
+        else:  # Unable to get info
             amount = float(re.sub(r'[^\d\.]+', '', mixed_text))
             currency_symbol = currency_code = None
 
         return {
             'text': mixed_text,
             'amount': amount,
-            'currency': currency_code, # ISO_4217
+            'currency': currency_code,  # ISO_4217
             'currency_symbol': currency_symbol
         }
 
@@ -901,21 +902,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         html, yt_initial_data = self._get_initial_info(original_url)
 
-        if not yt_initial_data: # Fatal error
+        if not yt_initial_data:  # Fatal error
             raise ParsingError(
                 'Unable to parse initial video data. {}'.format(html))
 
         player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
-        player_response_info = try_parse_json(player_response.group(1)) if player_response else None
+        player_response_info = try_parse_json(
+            player_response.group(1)) if player_response else None
 
         if not player_response_info:
             log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
             player_response_info = {}
 
-        adaptive_formats = multi_get(
-            player_response_info, 'streamingData', 'adaptiveFormats')
-        last_modified = try_get(
-            adaptive_formats, lambda x: float(x[0]['lastModified']))
+        streaming_data = player_response_info.get('streamingData') or {}
+        formats = streaming_data.get(
+            'adaptiveFormats') or streaming_data.get('formats')
+        last_modified = try_get(formats, lambda x: float(x[0]['lastModified']))
 
         details = {
             'start_time': last_modified,
@@ -935,7 +937,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         }
         details['is_live'] = 'Live chat' in details['continuation_info']
 
-        playability_status = player_response_info.get('playabilityStatus') or {}
+        playability_status = player_response_info.get(
+            'playabilityStatus') or {}
         status = playability_status.get('status')
         error_screen = playability_status.get('errorScreen')
 
@@ -975,7 +978,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    log('debug', 'Unknown status: {}. {}'.format(status, playability_status))
+                    log('debug', 'Unknown status: {}. {}'.format(
+                        status, playability_status))
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:
