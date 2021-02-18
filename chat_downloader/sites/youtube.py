@@ -1338,15 +1338,26 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 # sometimes continuation contains timeout info
                 sleep_duration = continuation_info.get('timeoutMs')
                 # and not actions:# and not force_no_timeout:
-                if sleep_duration and sleep_duration > 0:
-                    # if there is timeout info, there were no actions and the user
-                    # has not chosen to force no timeouts, then sleep.
-                    # This is useful for streams with varying number of messages
-                    # being sent per second. Timeouts help prevent 429 errors
-                    # (caused by too many requests)
+                if sleep_duration:
+                    # Timeouts help prevent 429 errors (caused by too many requests).
+                    #
+                    # A single request to the YouTube live chat endpoint seems to only
+                    # go back around 10 seconds (only retrieving around 150-200 messages
+                    # at any given time).
+                    #
+                    # For very large livestreams, YouTube sometimes sets timeouts to be
+                    # more than 10 seconds (most likely to alleviate server stress).
+                    # This means that, normally, users will not be able to see all chat
+                    # messages (leaving a gap of timeout - 10 seconds).
+                    #
+                    # To get around this, we clamp the timeout to be between 0 and 8000
+                    # milliseconds (a 2 second window for making the next request).
+                    # This ensures that no messages are missed and we do spam YouTube
+                    # with requests (which may lead to 429 errors or IP blocking).
+
+                    sleep_duration = max(min(sleep_duration, 8000), 0)
 
                     log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
-                    # print('time_until_timeout',timeout.time_until_timeout())
                     interruptable_sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
