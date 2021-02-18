@@ -237,6 +237,8 @@ class ChatDownloader():
 
                 return info
 
+
+
         parsed = urlparse(url)
 
         if parsed.scheme:
@@ -353,5 +355,4 @@ def run(**kwargs):
     finally:
         downloader.close()
 
-        if output and output_file:
-            output_file.close()
+
