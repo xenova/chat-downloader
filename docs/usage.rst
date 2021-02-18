@@ -27,6 +27,6 @@ Python:
    url = 'https://www.youtube.com/watch?v=5qap5aO4i9A'
    chat = ChatDownloader().get_chat(url)       # create a generator
    for message in chat:                        # iterate over messages
-       print(chat.format(message))             # print the formatted message
+       chat.print_formatted(message)           # print the formatted message
 
 For advanced python use-cases and examples, consult the `Python Wiki`_.

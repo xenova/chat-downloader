@@ -14,7 +14,8 @@ from ..errors import (
 from ..utils import (
     get_title_of_webpage,
     pause,
-    timed_input
+    timed_input,
+    safe_print
 )
 
 from ..debugging import log
@@ -189,7 +190,10 @@ class Chat():
             self.callback(item)
         return item
 
-    # Must be set later
+    def print_formatted(self, item):
+        formatted = self.format(item)
+        safe_print(formatted)
+
     def format(self, item):
         """[summary]
 
