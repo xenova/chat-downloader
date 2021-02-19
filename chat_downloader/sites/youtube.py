@@ -915,8 +915,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         streaming_data = player_response_info.get('streamingData') or {}
         formats = streaming_data.get(
             'adaptiveFormats') or streaming_data.get('formats')
-        last_modified = try_get(
-            formats, lambda x: float(x[0]['lastModified']))
+        last_modified = try_get(formats, lambda x: float(x[0]['lastModified']))
 
         details = {
             'start_time': last_modified,
