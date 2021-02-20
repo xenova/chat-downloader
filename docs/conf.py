@@ -50,8 +50,9 @@ release = metadata['__version__']
 
 
 extensions = [
-    'sphinx.ext.autodoc',
     'sphinx_rtd_theme',
+    'sphinx.ext.autodoc',
+    'sphinxcontrib.programoutput'
     # 'm2r'
 ]
 
@@ -192,3 +193,11 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+
+def skip(app, what, name, obj, would_skip, options):
+    if name == '__init__':
+        return False
+    return would_skip
+
+def setup(app):
+    app.connect('autodoc-skip-member', skip)

@@ -30,15 +30,91 @@ Chat Downloader
 `Chat Downloader`_ is a simple tool used to retrieve chat messages from livestreams,
 videos, clips and past broadcasts. No authentication needed!
 
+The tool aims to ... across all sites, allowing for a
+
 .. _Chat Downloader: https://github.com/xenova/chat-downloader
 
 .. include:: installing.rst
 
-.. include:: usage.rst
+#####
+Usage
+#####
 
-#####
+
+Command line
+------------
+
+.. program-output:: cd .. && python -m chat_downloader -h | awk '{print} /url/ {exit}'
+    :shell:
+
+For example, to save messages from a livestream to a JSON file, you can use:
+
+.. code:: console
+
+   $ chat_downloader https://www.youtube.com/watch?v=5qap5aO4i9A --output chat.json
+
+
+
+
+
+For a description of these options, as well as advanced command line use-cases and examples, consult the `Advanced Command
+Guide`_.
+
+
+Python
+------
+
+.. code:: python
+
+   from chat_downloader import ChatDownloader
+
+   url = 'https://www.youtube.com/watch?v=5qap5aO4i9A'
+   chat = ChatDownloader().get_chat(url)       # create a generator
+   for message in chat:                        # iterate over messages
+       chat.print_formatted(message)           # print the formatted message
+
+
+For advanced python use-cases and examples, consult the `Python Wiki`_.
+source/index
+
+
+##########
+Chat Items
+##########
+
+Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and should follow a format similar to this:
+
+.. code-block:: json
+
+    {
+        ...
+        "message_id": "xxxxxxxxxx",
+        "message": "actual message goes here",
+        "message_type": "text_message",
+        "timestamp": 1613761152565924,
+        "time_in_seconds": 1234.56,
+        "time_text": "20:34",
+        "author": {
+            "id": "UCxxxxxxxxxxxxxxxxxxxxxxx",
+            "name": "username_of_sender",
+            "images": [
+                ...
+            ],
+            "badges": [
+                ...
+            ]
+        },
+        ...
+    }
+
+
+
+For an extensive, documented list of included fields, consult the `Chat Item Wiki`_.
+
+
+######
 Issues
-#####
+######
 
 Found a bug or have a suggestion? File an issue `here`_. To assist the
 developers in fixing the issue, please follow the issue template as

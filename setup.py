@@ -60,7 +60,7 @@ setup(
             'pytest',
             'sphinx',
             'sphinx-rtd-theme',
-            # 'm2r'
+            'sphinxcontrib-programoutput'
         ]
     },
     license='MIT license',
