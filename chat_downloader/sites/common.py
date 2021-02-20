@@ -422,8 +422,7 @@ class BaseChatDownloader:
         """
         raise NotImplementedError
 
-    @staticmethod
-    def generate_urls(**kwargs):
+    def generate_urls(self, **kwargs):
         """This method should be implemented in a subclass and should return
         a generator which yields URLs for testing.
 

@@ -8,7 +8,10 @@ from urllib.parse import urlparse
 
 from .metadata import __version__
 
-from .sites.common import SiteDefault
+from .sites.common import (
+    SiteDefault,
+    BaseChatDownloader
+)
 from .sites import get_all_sites
 
 from .formatting.format import ItemFormatter
@@ -231,9 +234,8 @@ class ChatDownloader():
             if isinstance(regex, str) and re.search(regex, url):
                 # regex has been set (not None)
 
-                # Create new session if not already created
-                if site.__name__ not in self.sessions:
-                    self.sessions[site.__name__] = site(**self.init_params)
+                # Create new session
+                self.create_session(site)
 
                 # Parse site-defaults
                 params = {}
@@ -307,6 +309,26 @@ class ChatDownloader():
                 return chat
         else:
             raise InvalidURL('Invalid URL: "{}"'.format(url))
+
+    def create_session(self, chat_downloader_class, overwrite=False):
+        if not issubclass(chat_downloader_class, BaseChatDownloader):
+            raise TypeError('Unable to create session, class must extend BaseChatDownloader. Class given: {}'.format(
+                chat_downloader_class))
+        elif chat_downloader_class == BaseChatDownloader:
+            raise TypeError(
+                'Unable to create session, class may not be BaseChatDownloader.')
+
+        session_name = chat_downloader_class.__name__
+        log('debug', 'Create session ({}).'.format(session_name))
+
+        if session_name not in self.sessions or overwrite:
+            self.sessions[session_name] = chat_downloader_class(
+                **self.init_params)
+
+        return self.sessions[session_name]
+
+    def get_session(self, chat_downloader_class):
+        return self.sessions.get(chat_downloader_class.__name__)
 
     def close(self):
         """Close all sessions associated with the object"""

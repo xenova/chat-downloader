@@ -815,13 +815,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _KNOWN_CONTINUATIONS = _KNOWN_SEEK_CONTINUATIONS + _KNOWN_CHAT_CONTINUATIONS
 
-    @staticmethod
-    def generate_urls(**kwargs):
-        downloader = YouTubeChatDownloader()
-        items = downloader._get_testing_items()
+    def generate_urls(self, **kwargs):
+        items = self._get_testing_items()
 
         for item in items:
-            yield YouTubeChatDownloader._YT_VIDEO_TEMPLATE.format(item['video_id'])
+            yield self._YT_VIDEO_TEMPLATE.format(item['video_id'])
         # print('b')
 
         # downloader.get_playlist_items
@@ -850,25 +848,62 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             yield from self.get_playlist_items(playlist_url)
 
+
+    @staticmethod
+    def _get_rendered_content(yt_info, tab_index=0):
+        return yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][tab_index]['tabRenderer']['content'][
+            'sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]
+
+    _VIDEO_REMAPPING = {
+        'videoId': 'video_id',
+        'title': r('title', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+        'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+        'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+
+        # 'videoId', 'thumbnail', 'title', 'viewCountText', 'navigationEndpoint', 'ownerBadges', 'trackingParams', 'shortViewCountText', 'menu', 'thumbnailOverlays'
+    }
+
+    @staticmethod
+    def _parse_video(video_renderer):
+        return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
+
+
+    _VIDEO_URL_TEMPLATE = 'https://www.youtube.com/channel/{}/videos?view=2&live_view={}'
+    _VIDEO_TYPE_REMAPPING = {
+        'live': 501,
+        'upcoming': 502,
+        'past': 503
+    }
+    def get_user_videos(self, channel_id, video_type='live'):
+        code = self._VIDEO_TYPE_REMAPPING.get(video_type)
+        if not code:
+            raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(set(self._VIDEO_TYPE_REMAPPING.keys())))
+        # live, past, upcoming
+
+        user_url = self._VIDEO_URL_TEMPLATE.format(channel_id, code)
+        html, yt_info = self._get_initial_info(user_url)
+
+        items = self._get_rendered_content(yt_info, 1)['gridRenderer']['items']
+
+        for item in items:
+            vid = item.get('gridVideoRenderer')
+            if vid:
+                yield self._parse_video(vid)
+            else:
+                print(item)
+
     def get_playlist_items(self, playlist_url):
 
         html, yt_info = self._get_initial_info(playlist_url)
 
-        items = yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content'][
-            'sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]['playlistVideoListRenderer']['contents']
+        items = self._get_rendered_content(yt_info)['playlistVideoListRenderer']['contents']
+
 
         for item in items:
             playlist_video = item.get('playlistVideoRenderer')
 
             if playlist_video:
-                # print(playlist_video)
-
-                item = {
-                    'video_id': playlist_video.get('videoId'),
-                    'title': self._parse_runs(playlist_video.get('title'))['message'],
-                }
-
-                yield item
+                yield self._parse_video(playlist_video)
 
             # "continuationItemRenderer":{
             #     "trigger":"CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
@@ -1011,16 +1046,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Live chat replay - All messages are visible
         chat_type = params.get('chat_type').title()  # Live or Top
 
-        continuation_values = list(initial_continuation_info.values())
-        continuation_keys = list(initial_continuation_info.keys())
-        if len(continuation_values) < 2:
+        continuation_items = list(initial_continuation_info.items())
+        if len(continuation_items) < 2:
             raise NoContinuation(
                 'Initial continuation information could not be found.'.format(initial_continuation_info))
 
         continuation_index = 0 if chat_type == 'Top' else 1
-        continuation = continuation_values[continuation_index]
+        continuation = continuation_items[continuation_index][1]
         log('debug', 'Getting {} chat ({}).'.format(
-            chat_type, continuation_keys[continuation_index]))
+            chat_type, continuation_items[continuation_index][0]))
 
         api_type = 'live_chat'
         if not is_live:
@@ -1100,7 +1134,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             actions = info.get('actions') or []
 
-            # print(actions)
 
             if actions:
                 for action in actions:

@@ -1094,25 +1094,22 @@ class TwitchChatDownloader(BaseChatDownloader):
     _TWITCH_HOME = 'https://www.twitch.tv'
     _TWITCH_VIDEOS = 'https://www.twitch.tv/videos'
 
-    @staticmethod
-    def generate_urls(livestream_limit=10, vod_limit=5, clip_limit=5, **kwargs):
-        downloader = TwitchChatDownloader()
-
+    def generate_urls(self, livestream_limit=10, vod_limit=5, clip_limit=5, **kwargs):
         # max_tests = livestream_limit + livestream_limit*(vod_limit+clip_limit)
 
-        livestreams = downloader.get_top_livestreams(livestream_limit)
+        livestreams = self.get_top_livestreams(livestream_limit)
         for livestream in livestreams:
             name = livestream['broadcaster']['name']
 
             # e.g. https://www.twitch.tv/shroud
-            yield '{}/{}'.format(TwitchChatDownloader._TWITCH_HOME, name)
+            yield '{}/{}'.format(self._TWITCH_HOME, name)
 
-            vods = downloader.get_user_videos(name, vod_limit)
+            vods = self.get_user_videos(name, vod_limit)
             for vod in vods:
                 # e.g. https://www.twitch.tv/videos/12345678
-                yield '{}/{}'.format(TwitchChatDownloader._TWITCH_VIDEOS, vod['id'])
+                yield '{}/{}'.format(self._TWITCH_VIDEOS, vod['id'])
 
-            clips = downloader.get_user_clips(name, clip_limit)
+            clips = self.get_user_clips(name, clip_limit)
             for clip in clips:
                 # e.g. https://clips.twitch.tv/FastThankfulLobsterEagleEye-SFi4SJWaTkAYu-B3
                 yield clip['url']

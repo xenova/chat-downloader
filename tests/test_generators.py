@@ -6,7 +6,7 @@ import itertools
 # Allow direct execution
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # noqa
 
-from chat_downloader import run
+from chat_downloader import (run, ChatDownloader)
 from chat_downloader.sites import get_all_sites
 
 args = {
@@ -39,9 +39,6 @@ try:
     parser.add_argument(
         '--max_tests_per_site', default=args['max_tests_per_site'], type=int, help='The maximum number of tests that any site can generate.')
 
-
-
-
     parser.add_argument(
         '--livestream_limit', default=args['livestream_limit'], type=int, help='The maximum number of livestreams to generate.')
     parser.add_argument(
@@ -53,6 +50,7 @@ try:
 
 except ValueError:
     pass
+
 
 class TestURLGenerators(unittest.TestCase):
     """
@@ -78,14 +76,14 @@ def generator(site, url):
     return test_template
 
 
+downloader = ChatDownloader()
+
 print('Arguments:', args)
 for site in get_all_sites():
-    url_generator = getattr(site, 'generate_urls', None)
-
     try:
         print('Generating', args['max_tests_per_site'],
               'tests for', site.__name__)
-        urls = itertools.islice(url_generator(), args['max_tests_per_site'])
+        urls = itertools.islice(downloader.create_session(site).generate_urls(), args['max_tests_per_site'])
         list_of_urls = list(urls)
         num_tests = len(list_of_urls)
         padding = len(str(num_tests))
