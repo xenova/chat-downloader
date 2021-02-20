@@ -996,7 +996,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def _get_chat_messages(self, initial_info, params):
 
-        initial_continuation_info = initial_info.get('continuation_info')
+        initial_continuation_info = initial_info.get('continuation_info') or {}
 
         # stream_start_time = initial_info.get('start_time')
         is_live = initial_info.get('is_live')
@@ -1010,17 +1010,21 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
         chat_type = params.get('chat_type').title()  # Live or Top
-        continuation_title = '{} chat'.format(chat_type)
+
+        continuation_values = list(initial_continuation_info.values())
+        continuation_keys = list(initial_continuation_info.keys())
+        if len(continuation_values) < 2:
+            raise NoContinuation(
+                'Initial continuation information could not be found.'.format(initial_continuation_info))
+
+        continuation_index = 0 if chat_type == 'Top' else 1
+        continuation = continuation_values[continuation_index]
+        log('debug', 'Getting {} chat ({}).'.format(
+            chat_type, continuation_keys[continuation_index]))
 
         api_type = 'live_chat'
         if not is_live:
-            continuation_title += ' replay'
             api_type += '_replay'
-
-        continuation = initial_continuation_info.get(continuation_title)
-        if not continuation:
-            raise NoContinuation(
-                'Initial continuation information could not be found for {}.'.format(continuation_title))
 
         init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
             api_type, continuation)
@@ -1074,7 +1078,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
-                        log('debug', 'Continuation params: {}'.format(continuation_params))
+                        log('debug', 'Continuation params: {}'.format(
+                            continuation_params))
 
                         yt_info = self._session_post(
                             continuation_url, json=continuation_params).json()
