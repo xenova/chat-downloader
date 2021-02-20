@@ -44,8 +44,6 @@ def supports_colour():
     )
 
 
-
-
 if supports_colour():
     handler = colorlog.StreamHandler()
     handler.setFormatter(colorlog.ColoredFormatter(
@@ -74,6 +72,7 @@ logger = log_module.getLogger(logger_name)
 loggers = [log_module.getLogger(name) for name in (logger_name, 'urllib3')]
 for logger in loggers:
     logger.addHandler(handler)
+
 
 def set_log_level(level):
     level_name = level.upper()

@@ -11,7 +11,8 @@ from .chat_downloader import (
 
 from .metadata import (
     __version__,
-    __summary__
+    __summary__,
+    __program__
 )
 
 from .utils import (
@@ -26,9 +27,9 @@ def main():
         description=__summary__,
         # formatter_class=argparse.RawTextHelpFormatter,
     )
+    parser.prog = __program__
 
-    parser.add_argument('--version', action='version',
-                        version=__version__)
+    parser.add_argument('--version', action='version', version=__version__)
 
     def get_info(function):
         info = {}
@@ -141,10 +142,12 @@ def main():
     add_chat_param(on_debug_options, '--exit_on_debug', is_boolean_flag=True)
 
     debug_options = debug_group.add_mutually_exclusive_group()
-    get_chat_info['logging']['default'] = 'info' # overwrite default from method
+
+    # overwrite default from method
+    get_chat_info['logging']['default'] = 'info'
+
     add_chat_param(debug_options, '--logging',
                    choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
-
 
     add_chat_param(debug_options, '--testing', is_boolean_flag=True)
     add_chat_param(debug_options, '--verbose', '-v', is_boolean_flag=True)

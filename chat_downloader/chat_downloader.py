@@ -247,7 +247,8 @@ class ChatDownloader():
 
                 if chat is None:
                     raise ChatGeneratorError(
-                        'No valid generator found in {} for url "{}"'.format(site.__name__, url))
+                        'No valid generator found in {} for url "{}"'.format(
+                            site.__name__, url))
 
                 if isinstance(max_messages, int):
                     chat.chat = itertools.islice(chat.chat, max_messages)
