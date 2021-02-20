@@ -1,7 +1,8 @@
 from .common import (
     Chat,
     BaseChatDownloader,
-    Remapper as r
+    Remapper as r,
+    Image
 )
 from ..utils import (
     remove_prefixes,
@@ -217,15 +218,15 @@ class FacebookChatDownloader(BaseChatDownloader):
         return new_feedback
 
     @staticmethod
-    def get_text(item):
+    def _get_text(item):
         return item.get('text') if item else None
 
     @staticmethod
-    def parse_image(item):
-        return BaseChatDownloader.create_image(item.get('uri'), item.get('width'), item.get('height'))
+    def _parse_image(item):
+        return Image(item.get('uri'), item.get('width'), item.get('height')).json()
 
     @staticmethod
-    def get_uri(item):
+    def _get_uri(item):
         return item.get('uri')
 
     @staticmethod
@@ -253,11 +254,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         massive_image = item.pop('massive_image', None)
 
         if blurred_image and massive_image:
-            item['text'] = BaseChatDownloader.create_image(
-                blurred_image,
-                massive_image.get('width'),
-                massive_image.get('height')
-            )
+            item['text'] = Image(blurred_image, massive_image.get(
+                'width'), massive_image.get('height')).json()
 
         # style_infos
         donation_comment_text = item.pop('donation_comment_text', None)
@@ -291,10 +289,11 @@ class FacebookChatDownloader(BaseChatDownloader):
     def _parse_author_badges(item):
 
         keys = (('badge_asset', 'small'), ('information_asset', 'colour'))
-        icons = list(map(lambda x: BaseChatDownloader.create_image(
-            FacebookChatDownloader._FB_HOMEPAGE + item.get(x[0]), 24, 24, x[1]), keys))
-        icons.append(BaseChatDownloader.create_image(
-            item.get('multiple_badge_asset'), 36, 36, 'large'))
+        icons = list(map(lambda x: Image(
+            FacebookChatDownloader._FB_HOMEPAGE + item.get(x[0]), 24, 24, x[1]).json(), keys))
+
+        icons.append(
+            Image(item.get('multiple_badge_asset'), 36, 36, 'large').json())
 
         return {
             'title': item.get('text'),
@@ -312,14 +311,14 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _ATTACHMENT_REMAPPING = {
         'url': 'url',  # facebook redirect url,
-        'source': r('source', get_text),
-        'title_with_entities': r('title', get_text),
+        'source': r('source', _get_text),
+        'title_with_entities': r('title', _get_text),
 
         'target': r('target', _parse_attachment_info),
         'media': r('media', _parse_attachment_info),
         'style_infos': r('style_infos', _parse_attachment_info),
 
-        'attachment_text': r('text', get_text),
+        'attachment_text': r('text', _get_text),
     }
 
     _IGNORE_ATTACHMENT_KEYS = [
@@ -361,7 +360,7 @@ class FacebookChatDownloader(BaseChatDownloader):
     _TARGET_MEDIA_REMAPPING = {
         'id': 'id',
         '__typename': r('type', camel_case_split),
-        'fallback_image': r('image', parse_image),
+        'fallback_image': r('image', _parse_image),
         'is_playable': 'is_playable',
         'url': 'url',
 
@@ -371,7 +370,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         # Sticker
         'pack': 'pack',
         'label': 'label',
-        'image': r('image', parse_image),
+        'image': r('image', _parse_image),
 
         # VideoTipJarPayment
 
@@ -386,12 +385,12 @@ class FacebookChatDownloader(BaseChatDownloader):
         'address': 'address',
         'overall_star_rating': 'overall_star_rating',
 
-        'profile_picture': r('profile_picture', get_uri),
+        'profile_picture': r('profile_picture', _get_uri),
 
         # Photo
         'accessibility_caption': 'accessibility_caption',
 
-        'blurred_image': r('blurred_image', get_uri),
+        'blurred_image': r('blurred_image', _get_uri),
         'massive_image': 'massive_image',
 
 
@@ -454,7 +453,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         'url': 'message_url',
 
-        'body': r('message', get_text),
+        'body': r('message', _get_text),
 
         'identity_badges_web': r('author_badges', lambda x: list(map(FacebookChatDownloader._parse_author_badges, x))),
 
@@ -484,7 +483,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             r.remap(info, FacebookChatDownloader._REMAPPING, key, node[key])
 
         author_info = info.pop('author', {})
-        BaseChatDownloader.move_to_dict(info, 'author', create_when_empty=True)
+        BaseChatDownloader._move_to_dict(
+            info, 'author', create_when_empty=True)
 
         for key in author_info:
             r.remap(
@@ -496,7 +496,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 url = multi_get(
                     author_info, 'profile_picture_depth_{}'.format(size[0]), 'uri')
                 info['author']['images'].append(
-                    BaseChatDownloader.create_image(url, size[1], size[1]))
+                    Image(url, size[1], size[1]).json())
 
         # author_badges = info.pop('author_badges', None)
         # if author_badges:

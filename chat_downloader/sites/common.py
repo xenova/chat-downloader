@@ -21,6 +21,25 @@ from ..utils import (
 from ..debugging import log
 
 
+class Image():
+    def __init__(self, url, width=None, height=None, image_id=None):
+        self.url = url
+
+        if self.url.startswith('//'):
+            self.url = 'https:' + self.url
+
+        self.width = width
+        self.height = height
+
+        if width and height and not image_id:
+            self.id = '{}x{}'.format(width, height)
+        elif image_id:
+            self.id = image_id
+
+    def json(self):
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+
 class Remapper():
     """Class used to control the remapping of one dictionary to another dictionary."""
 
@@ -136,8 +155,16 @@ class Remapper():
 
 
 class SiteDefault:
-    # Used for site-default parameters
+    """Allows for sites to specify default parameters. Additionally, different
+    sites can specify different values for the same input parameter."""
+
     def __init__(self, name):
+        """Create a SiteDefault object
+
+        :param name: The key which will be checked in the `_SITE_DEFAULT_PARAMS`
+        dictionary to get the site's default value
+        :type name: str
+        """
         self.name = name
 
 
@@ -248,7 +275,7 @@ class BaseChatDownloader:
     ]
 
     @staticmethod
-    def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
+    def _must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
 
         # Force mutual exclusion
         if messages_types_to_add:
@@ -268,7 +295,7 @@ class BaseChatDownloader:
         return item.get('message_type') in valid_message_types
 
     @staticmethod
-    def debug_log(params, *items):
+    def _debug_log(params, *items):
         """Method which simplifies the logging of debugging messages
 
         :param params: Dictionary of parameters sent to the `get_chat` method
@@ -333,39 +360,63 @@ class BaseChatDownloader:
         self.session.headers.update(new_headers)
 
     def clear_cookies(self):
+        """Clear the session's cookies."""
         self.session.cookies.clear()
 
-    def get_cookies_dict(self):
+    def _get_cookies_dict(self):
+        """Returns a key/value dictionary from the session's CookieJar
+
+        :return: Dictionary of cookies
+        :rtype: dict
+        """
         return requests.utils.dict_from_cookiejar(self.session.cookies)
 
     def get_cookie_value(self, name, default=None):
-        return self.get_cookies_dict().get(name, default)
+        """Return the value for key if key is in the cookie dictionary, else default.
+
+        :param name: The key of the cookie
+        :type name: str
+        :param default: Return this value if the specified cookie cannot be found, defaults to None
+        :type default: object, optional
+        :return: The cookie value, or default
+        :rtype: Union[str, object, None]
+        """
+        return self._get_cookies_dict().get(name, default)
 
     def close(self):
+        """Close the session. Once this has been called, no more requests can be made."""
         self.session.close()
         log('debug', 'Session closed.')
 
     def _session_post(self, url, **kwargs):
-        """Make a request using the current session."""
+        """Make a post request using the current session."""
         return self.session.post(url, **kwargs)
 
     def _session_get(self, url, **kwargs):
-        """Make a request using the current session."""
+        """Make a get request using the current session."""
         return self.session.get(url, **kwargs)
 
     def _session_get_json(self, url, **kwargs):
-        """Make a request using the current session and get json data."""
+        """Make a get request using the current session and return as JSON."""
         return self._session_get(url, **kwargs).json()
 
-    def get_site_value(self, v):
-        if isinstance(v, SiteDefault):
+    def get_site_value(self, value):
+        """Get the site's default value for a certain parameter
+
+        :param value: The value
+        :type value: Union[SiteDefault, object]
+        :return: The site's default value
+        :rtype: object
+        """
+        if isinstance(value, SiteDefault):
             return self._SITE_DEFAULT_PARAMS.get(
-                v.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(v.name))
+                value.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(value.name))
         else:
-            return v
+            return value
 
     def get_chat(self, **kwargs):
-        """[summary]
+        """This method should be implemented in a subclass and should return
+        the appropriate `Chat` object with respect to the specified parameters.
 
         :raises NotImplementedError: if not implemented and called from a subclass
         """
@@ -373,34 +424,15 @@ class BaseChatDownloader:
 
     @staticmethod
     def generate_urls(**kwargs):
-        """[summary]
+        """This method should be implemented in a subclass and should return
+        a generator which yields URLs for testing.
 
         :raises NotImplementedError: if not implemented and called from a subclass
         """
         raise NotImplementedError
 
     @staticmethod
-    def create_image(url, width=None, height=None, image_id=None):
-        if url.startswith('//'):
-            url = 'https:' + url
-        image = {
-            'url': url,
-        }
-        if width:
-            image['width'] = width
-        if height:
-            image['height'] = height
-
-        # TODO remove id?
-        if width and height and not image_id:
-            image['id'] = '{}x{}'.format(width, height)
-        elif image_id:
-            image['id'] = image_id
-
-        return image
-
-    @staticmethod
-    def move_to_dict(info, dict_name, replace_key=None, create_when_empty=False, *info_keys):
+    def _move_to_dict(info, dict_name, replace_key=None, create_when_empty=False, *info_keys):
         """
         Move all items with keys that contain some text to a separate dictionary.
 
@@ -429,18 +461,19 @@ class BaseChatDownloader:
 
     @staticmethod
     def retry(attempt_number, max_attempts, error, retry_timeout=None, text=None):
-        """[summary]
+        """Retry to occur after an error occurs
 
-        :param attempt_number: [description]
-        :type attempt_number: [type]
-        :param max_attempts: [description]
-        :type max_attempts: [type]
-        :param error: [description]
-        :type error: [type]
-        :param retry_timeout: [description], defaults to None
-        :type retry_timeout: [type], optional
-        :param text: [description], defaults to None
-        :type text: [type], optional
+        :param attempt_number: The current attempt number
+        :type attempt_number: int
+        :param max_attempts: The maximum number of attempts allowed
+        :type max_attempts: int
+        :param error: The error which was raised
+        :type error: Exception
+        :param retry_timeout: The number of seconds to sleep after failing,
+            defaults to None (i.e. use exponential back-off)
+        :type retry_timeout: float, optional
+        :param text: Items to display on retry, defaults to None
+        :type text: object, optional
         :raises RetriesExceeded: if the maximum number of retries has been exceeded
         """
         if attempt_number >= max_attempts:
@@ -494,12 +527,12 @@ class BaseChatDownloader:
 
     @staticmethod
     def check_for_invalid_types(messages_types_to_add, allowed_message_types):
-        """[summary]
+        """Used to check for invalid message types
 
-        :param messages_types_to_add: [description]
-        :type messages_types_to_add: [type]
-        :param allowed_message_types: [description]
-        :type allowed_message_types: [type]
+        :param messages_types_to_add: List of message types to add
+        :type messages_types_to_add: list
+        :param allowed_message_types: List of allowed message type
+        :type allowed_message_types: list
         :raises InvalidParameter: if invalid types are specified
         """
         invalid_types = set(messages_types_to_add) - set(allowed_message_types)
