@@ -1040,7 +1040,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         }
 
         offset_milliseconds = (
-            start_time * 1000) if isinstance(start_time, int) else None
+            start_time * 1000) if isinstance(start_time, (float, int)) else None
 
         # force_no_timeout = params.get('force_no_timeout')
 
@@ -1074,8 +1074,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
-
-                        log('debug', 'Continuation: {}'.format(continuation))
+                        log('debug', 'Continuation params: {}'.format(continuation_params))
 
                         yt_info = self._session_post(
                             continuation_url, json=continuation_params).json()

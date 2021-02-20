@@ -44,7 +44,7 @@ def ensure_seconds(time, default=None):
         return default
 
     try:
-        return int(time)
+        return float(time)
     except ValueError:
         return time_to_seconds(time)
     except Exception:
