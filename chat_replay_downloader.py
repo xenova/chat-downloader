@@ -162,12 +162,11 @@ class ChatReplayDownloader:
     def __session_get(self, url, post_payload=None):
         """Make a request using the current session."""
         if post_payload is None:
-            if self.debug_logger: self.debug_logger("HTTP GET {}", url)
+            #if self.debug_logger: self.debug_logger("HTTP GET {}", url)
             response = self.session.get(url, timeout=10)
             if self.debug_logger: self.debug_logger("HTTP GET {} => status={} len(text)={}", url, response.status_code, len(response.text))
         else:
             post_payload = json.dumps(post_payload)
-            if self.debug_logger: self.debug_logger("HTTP POST {} len(payload)={}", url, len(post_payload))
             #if self.debug_logger: self.debug_logger("HTTP POST {}\n{}", url, post_payload) # too verbose
             response = self.session.post(url, data=post_payload, timeout=10)
             if self.debug_logger: self.debug_logger("HTTP POST {} len(payload)={} => status={} len(text)={}", url, len(post_payload), response.status_code, len(response.text))
@@ -176,11 +175,11 @@ class ChatReplayDownloader:
     def __session_get_json(self, url, post_payload=None):
         """Make a request using the current session and get json data."""
         try:
-            json = self.__session_get(url, post_payload).json()
+            ret = self.__session_get(url, post_payload).json()
         except json.JSONDecodeError as e:
             raise ParsingError("Could not parse JSON from response to '{}':\n{}".format(url, e.doc)) from e
-        #if self.debug_logger: self.debug_logger("=> JSON:\n{}", json)
-        return json
+        #if self.debug_logger: self.debug_logger("=> JSON:\n{}", json.dumps(ret))
+        return ret
 
     def __timestamp_to_microseconds(self, timestamp):
         """
@@ -229,7 +228,7 @@ class ChatReplayDownloader:
         [datetime] (author_type) *money* author: message,
         where (author_type) and *money* are optional.
         """
-        return '[{}] {}{}{}: {}'.format(
+        return '[{}] {}{}{}:\t{}'.format(
             item['datetime'] if 'datetime' in item else (
                 item['time_text'] if 'time_text' in item else ''),
             '({}) '.format(item['author_type'].lower()) if 'author_type' in item else '',
@@ -305,7 +304,7 @@ class ChatReplayDownloader:
         if not m:
             raise ParsingError('Unable to parse video data. Please try again.')
         ytcfg, _ = json_decoder.raw_decode(m.group(1))
-        if self.debug_logger: self.debug_logger("ytcfg:\n{}", json.dumps(ytcfg, indent=4))
+        #if self.debug_logger: self.debug_logger("ytcfg:\n{}", json.dumps(ytcfg, indent=4)) # too verbose
 
         config = {
             'api_version': ytcfg['INNERTUBE_API_VERSION'],
@@ -319,7 +318,7 @@ class ChatReplayDownloader:
             raise ParsingError('Unable to parse video data. Please try again.')
 
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
-        if self.debug_logger: self.debug_logger("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4))
+        #if self.debug_logger: self.debug_logger("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4)) # too verbose
 
         contents = ytInitialData.get('contents')
         if(not contents):
