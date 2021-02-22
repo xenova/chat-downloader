@@ -181,30 +181,29 @@ class TwitchChatDownloader(BaseChatDownloader):
         'format': 'twitch',
     }
 
-    _VALID_URL = r'https?://(?:(?:www|go|m|clips)\.)?twitch\.tv'
-
-    # e.g. 'http://www.twitch.tv/riotgames/v/6528877?t=5m10s'
-    _VALID_VOD_URL = r'''(?x)
+    _VALID_URLS = {
+        # e.g. 'http://www.twitch.tv/riotgames/v/6528877?t=5m10s'
+        'get_chat_by_vod_id': r'''(?x)
                     https?://
                         (?:
                             (?:(?:www|go|m)\.)?twitch\.tv/(?:[^/]+/v(?:ideo)?|videos)/|
                             player\.twitch\.tv/\?.*?\bvideo=v?
                         )
                         (?P<id>\d+)
-                    '''
+                    ''',
 
-    # e.g. 'https://clips.twitch.tv/FaintLightGullWholeWheat'
-    _VALID_CLIPS_URL = r'''(?x)
+        # e.g. 'https://clips.twitch.tv/FaintLightGullWholeWheat'
+        'get_chat_by_clip_id': r'''(?x)
                         https?://
                             (?:
                                 clips\.twitch\.tv/(?:embed\?.*?\bclip=|(?:[^/]+/)*)|
                                 (?:(?:www|go|m)\.)?twitch\.tv/[^/]+/clip/
                             )
                             (?P<id>[^/?#&]+)
-                        '''
+                        ''',
 
-    # e.g. 'http://www.twitch.tv/shroomztv'
-    _VALID_STREAM_URL = r'''(?x)
+        # e.g. 'http://www.twitch.tv/shroomztv'
+        'get_chat_by_stream_id': r'''(?x)
                         https?://
                             (?:
                                 (?:(?:www|go|m)\.)?twitch\.tv/|
@@ -212,6 +211,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                             )
                             (?P<id>[^/#?]+)
                         '''
+    }
 
     _CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
 
@@ -1114,13 +1114,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 # e.g. https://clips.twitch.tv/FastThankfulLobsterEagleEye-SFi4SJWaTkAYu-B3
                 yield clip['url']
 
-    _REGEX_FUNCTION_MAP = [
-        (_VALID_VOD_URL, 'get_chat_by_vod_id'),
-        (_VALID_CLIPS_URL, 'get_chat_by_clip_id'),
-        (_VALID_STREAM_URL, 'get_chat_by_stream_id'),
-    ]
-
     # offset and max_duration are used by clips
+
     def _get_chat_messages_by_vod_id(self, vod_id, params, max_duration, offset=None):
 
         # twitch does not provide messages before the stream starts,
@@ -1216,7 +1211,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             if not cursor:
                 return
 
-    def get_chat_by_vod_id(self, vod_id, params):
+    def get_chat_by_vod_id(self, vod_id, **params):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
@@ -1254,7 +1249,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             is_live=False
         )
 
-    def get_chat_by_clip_id(self, clip_id, params):
+    def get_chat_by_clip_id(self, clip_id, **params):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -1501,7 +1496,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # :tmi.twitch.tv HOSTTARGET #gothamchess :anna_chess 6612
         return info
 
-    def _get_chat_messages_by_stream_id(self, stream_id, params):
+    def _get_chat_messages_by_stream_id(self, stream_id, **params):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
@@ -1642,7 +1637,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         finally:
             twitch_chat_irc.close_connection()
 
-    def get_chat_by_stream_id(self, stream_id, params):
+    def get_chat_by_stream_id(self, stream_id, **params):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -1667,23 +1662,23 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         return Chat(
             self._get_chat_messages_by_stream_id(
-                stream_id, params),
+                stream_id, **params),
             title=title,
             duration=None,
             is_live=is_live
         )
 
-    def get_chat(self,
-                 **kwargs
-                 ):
+    # def get_chat(self,
+    #              **kwargs
+    #              ):
 
-        # get video id
-        url = kwargs.get('url')
+    #     # get video id
+    #     url = kwargs.get('url')
 
-        for regex, function_name in self._REGEX_FUNCTION_MAP:
-            match = re.search(regex, url)
-            if match:
-                return getattr(self, function_name)(match.group('id'), kwargs)
+    #     for regex, function_name in self._REGEX_FUNCTION_MAP:
+    #         match = re.search(regex, url)
+    #         if match:
+    #             return getattr(self, function_name)(match.group('id'), kwargs)
 
         # if(match):
         #     match.group('id')

@@ -230,22 +230,28 @@ class ChatDownloader():
         # get corresponding website parser
         # based on matching url with predefined regex
         for site in get_all_sites():
-            regex = getattr(site, '_VALID_URL')
-            if isinstance(regex, str) and re.search(regex, url):
-                # regex has been set (not None)
+            match_info = site.matches(url)
+            if match_info: # match found
+
+                function_name, match_id= match_info
 
                 # Create new session
                 self.create_session(site)
+                site_object = self.sessions[site.__name__]
 
                 # Parse site-defaults
                 params = {}
                 for k, v in original_params.items():
-                    params[k] = self.sessions[site.__name__].get_site_value(v)
+                    params[k] = site_object.get_site_value(v)
 
-                log('info', 'Site: {}'.format(
-                    self.sessions[site.__name__]._NAME))
+                log('info', 'Site: {}'.format(site_object._NAME))
                 log('debug', 'Program parameters: {}'.format(params))
-                chat = self.sessions[site.__name__].get_chat(**params)
+
+                generator_function = getattr(site_object, function_name, None)
+                if not generator_function:
+                    raise NotImplementedError('{} has not been implemented in {}.'.format(function_name, site.__name__))
+                chat = generator_function(match_id, **params)
+                log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(match_id, function_name, site.__name__))
 
                 if chat is None:
                     raise ChatGeneratorError(
@@ -285,7 +291,7 @@ class ChatDownloader():
 
                     chat.callback = write_to_file
 
-                chat.site = self.sessions[site.__name__]
+                chat.site = site_object
 
                 formatter = ItemFormatter(format_file)
 
@@ -319,7 +325,7 @@ class ChatDownloader():
                 'Unable to create session, class may not be BaseChatDownloader.')
 
         session_name = chat_downloader_class.__name__
-        log('debug', 'Create session ({}).'.format(session_name))
+        log('debug', 'Created {} session.'.format(session_name))
 
         if session_name not in self.sessions or overwrite:
             self.sessions[session_name] = chat_downloader_class(

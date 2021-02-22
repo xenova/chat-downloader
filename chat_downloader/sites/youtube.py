@@ -30,7 +30,7 @@ from ..utils import (
     camel_case_split,
     ensure_seconds,
     attempts,
-    interruptable_sleep,
+    interruptible_sleep,
     try_parse_json
 )
 
@@ -56,36 +56,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'format': 'youtube',
     }
 
-    # Regex provided by youtube-dl
-    _VALID_URL = r'''(?x)^
-                     (
-                         # http(s):// or protocol-independent URL
-                         (?:https?://|//)
-                         (?:(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com/|
-                            youtube\.googleapis\.com/)                        # the various hostnames, with wildcard subdomains
-                         (?:.*?\#/)?                                          # handle anchor (#/) redirect urls
-                         (?:                                                  # the various things that can precede the ID:
-                             # v/ or embed/ or e/
-                             (?:(?:v|embed|e)/(?!videoseries))
-                             |(?:                                             # or the v= param in all its forms
-                                 # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
-                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?
-                                 (?:\?|\#!?)                                  # the params delimiter ? or # or #!
-                                 # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
-                                 (?:.*?[&;])??
-                                 v=
-                             )
-                         ))
-                         |(?:
-                            youtu\.be                                        # just youtu.be/xxxx
-                         )/)
-                     )?                                                       # all until now is optional -> you can pass the naked ID
-                     # here is it! the YouTube video ID
-                     (?P<id>[0-9A-Za-z_-]{11})
-                     # if we found the ID, everything can follow
-                     (?(1).+)?
-                     $'''
-
     _TESTS = [
         # Get top live streams
         # https://www.youtube.com/results?search_query&sp=CAMSAkAB
@@ -108,6 +78,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'name': 'Get chat messages from livestream',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'timeout': 5
+            }
+        },
+        {
+            'name': 'Get chat messages from livestream, using channel id.',
+            'params': {
+                'url': 'https://www.youtube.com/channel/UCSJ4gkVC6NrvII8umztf0Ow',
                 'timeout': 5
             }
         },
@@ -198,6 +175,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
+
 
         # TESTING FOR ERRORS
         {
@@ -318,6 +296,48 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _MESSAGE_TYPES = ['all']
     for _group in _MESSAGE_GROUPS:
         _MESSAGE_TYPES += _MESSAGE_GROUPS[_group]
+
+    # Regex provided by youtube-dl
+
+    # TODO differentiate /user/x, /c/y and /channel/UC...
+    _VALID_URLS = {
+        'get_chat_by_video_id': r'''(?x)^
+                     (
+                         # http(s):// or protocol-independent URL
+                         (?:https?://|//)
+                         (?:(?:(?:(?:\w+\.)?[yY][oO][uU][tT][uU][bB][eE](?:-nocookie|kids)?\.com/|
+                            youtube\.googleapis\.com/)                        # the various hostnames, with wildcard subdomains
+                         (?:.*?\#/)?                                          # handle anchor (#/) redirect urls
+                         (?:                                                  # the various things that can precede the ID:
+                             # v/ or embed/ or e/
+                             (?:(?:v|embed|e)/(?!videoseries))
+                             |(?:                                             # or the v= param in all its forms
+                                 # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
+                                 (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?
+                                 (?:\?|\#!?)                                  # the params delimiter ? or # or #!
+                                 # any other preceding param (like /?s=tuff&v=xxxx or ?s=tuff&amp;v=V36LpHqtcDY)
+                                 (?:.*?[&;])??
+                                 v=
+                             )
+                         ))
+                         |(?:
+                            youtu\.be                                        # just youtu.be/xxxx
+                         )/)
+                     )?                                                       # all until now is optional -> you can pass the naked ID
+                     # here is it! the YouTube video ID
+                     (?P<id>[0-9A-Za-z_-]{11})$''',
+
+        'get_chat_by_channel_id': r'''(?x)
+                (?:https?://|//)
+                    (?:\w+\.)?
+                    (?:
+                        youtube(?:kids)?\.com
+                    )/
+                    (?:
+                        (?:channel|c|user)/
+                    )
+                    (?P<id>[a-zA-Z0-9_-]+)'''
+    }
 
     @staticmethod
     def _get_source_image_url(url):
@@ -848,7 +868,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             yield from self.get_playlist_items(playlist_url)
 
-
     @staticmethod
     def _get_rendered_content(yt_info, tab_index=0):
         return yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][tab_index]['tabRenderer']['content'][
@@ -867,23 +886,41 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _parse_video(video_renderer):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
-
-    _VIDEO_URL_TEMPLATE = 'https://www.youtube.com/channel/{}/videos?view=2&live_view={}'
+    _CHANNEL_REGEX = r'https?://(?:www\.)?youtube\.com/channel/([^/?#&])+'
+    _CHANNEL_URL_TEMPLATE = 'https://www.youtube.com/channel/{}/videos?view=2&live_view={}'
     _VIDEO_TYPE_REMAPPING = {
-        'live': 501,
-        'upcoming': 502,
-        'past': 503
+        'live': (501, 'Live now'),
+        'upcoming': (502, 'Upcoming live streams'),
+        'past': (503, 'Past live streams')
     }
+
     def get_user_videos(self, channel_id, video_type='live'):
-        code = self._VIDEO_TYPE_REMAPPING.get(video_type)
-        if not code:
-            raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(set(self._VIDEO_TYPE_REMAPPING.keys())))
+        vid_type = self._VIDEO_TYPE_REMAPPING.get(video_type.lower())
+
+        if not vid_type:
+            raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(
+                set(self._VIDEO_TYPE_REMAPPING.keys())))
         # live, past, upcoming
 
-        user_url = self._VIDEO_URL_TEMPLATE.format(channel_id, code)
+        user_url = self._CHANNEL_URL_TEMPLATE.format(channel_id, vid_type[0])
         html, yt_info = self._get_initial_info(user_url)
 
-        items = self._get_rendered_content(yt_info, 1)['gridRenderer']['items']
+        section = yt_info  # Check that section matches
+
+        section_list_renderer = yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][1]['tabRenderer']['content'][
+            'sectionListRenderer']
+
+        # Check that the returned grid is what was asked for
+        # YouTube tries to correct your mistake by selecting the uploads tab
+        # if you try to access a tab that is not visible.
+        sub_menu_items = section_list_renderer['subMenu']['channelSubMenuRenderer']['contentTypeSubMenuItems']
+        selected = list(filter(lambda x: x['selected'], sub_menu_items))
+        if not selected or selected[0]['title'] != vid_type[1]:
+            log('debug', '"{}" tab is not visible for this channel (i.e. there are no such videos).'.format(
+                vid_type[1]))
+            return
+
+        items = section_list_renderer['contents'][0]['itemSectionRenderer']['contents'][0]['gridRenderer']['items']
 
         for item in items:
             vid = item.get('gridVideoRenderer')
@@ -896,8 +933,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         html, yt_info = self._get_initial_info(playlist_url)
 
-        items = self._get_rendered_content(yt_info)['playlistVideoListRenderer']['contents']
-
+        items = self._get_rendered_content(
+            yt_info)['playlistVideoListRenderer']['contents']
 
         for item in items:
             playlist_video = item.get('playlistVideoRenderer')
@@ -1029,7 +1066,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         details['duration'] = int_or_none(video_details.get('lengthSeconds'))
         return details
 
-    def _get_chat_messages(self, initial_info, params):
+    def _get_chat_messages(self, initial_info, **params):
 
         initial_continuation_info = initial_info.get('continuation_info') or {}
 
@@ -1133,7 +1170,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     continue
 
             actions = info.get('actions') or []
-
 
             if actions:
                 for action in actions:
@@ -1394,7 +1430,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     sleep_duration = max(min(sleep_duration, 8000), 0)
 
                     log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
-                    interruptable_sleep(sleep_duration / 1000)
+                    interruptible_sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
                 break
@@ -1402,7 +1438,43 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if first_time:
                 first_time = False
 
-    def get_chat_by_video_id(self, video_id, params):
+    def get_chat_by_channel_id(self, channel_id, **params):
+
+        # TODO add param for wait time
+        params['retry_timeout'] = 30
+        params['exit_on_fail'] = True
+
+        index = 0
+        while True:
+
+            videos = []
+            for video_type in ('live', 'upcoming'):
+                # prioritise live videos
+
+                for video in self.get_user_videos(channel_id, video_type):
+                    video_id = video['video_id']
+                    try:
+                        chat = self.get_chat_by_video_id(video_id, **params)
+                        log('debug', 'Found a video of type "{}".'.format(self._VIDEO_TYPE_REMAPPING.get(video_type)[1]))
+                        return chat
+                    except Exception as e:
+                        # For some reason, doesn't work
+                        log('warning', 'Unable to get chat for "{}" ({}) due to an error: "{}"'.format(video['title'], video_id, e))
+                        # TODO exit on error?
+
+            sleep_amount = 30
+            if isinstance(params['retry_timeout'], (float, int)):
+                sleep_amount = params['retry_timeout']
+
+            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying again in {} seconds.'.format(sleep_amount))
+            interruptible_sleep(sleep_amount)
+
+
+
+            # continue forever, until reaching a video with valid chat
+
+
+    def get_chat_by_video_id(self, video_id, **params):
         """ Get chat messages for a YouTube video, given its ID. """
 
         initial_info = self._get_initial_video_info(video_id)
@@ -1413,28 +1485,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         is_live = initial_info.get('is_live')
 
         return Chat(
-            self._get_chat_messages(initial_info, params),
+            self._get_chat_messages(initial_info, **params),
             title=title,
             duration=duration,
             is_live=is_live,
             start_time=start_time
         )
-
-    def get_chat(self,
-                 **kwargs
-                 ):
-
-        # get video id
-        url = kwargs.get('url')
-        match = re.search(self._VALID_URL, url)
-
-        if match:
-            video_id = match.group('id')
-            if video_id:  # normal youtube video
-                return self.get_chat_by_video_id(match.group('id'), kwargs)
-
-        #     else:  # TODO add profile, etc.
-        #         pass
-        # else:
-        #     pass
-            # Raise unsupported URL type

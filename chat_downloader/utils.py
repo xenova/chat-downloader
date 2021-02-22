@@ -462,7 +462,7 @@ def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
         return TimedInput(timeout, prompt, default, *args, **kwargs).read()
 
 
-def interruptable_sleep(secs, poll_time=0.1):
+def interruptible_sleep(secs, poll_time=0.1):
     start_time = time.time()
 
     while time.time() - start_time <= secs:

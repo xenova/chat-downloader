@@ -2,6 +2,7 @@
 import requests
 from http.cookiejar import MozillaCookieJar
 import os
+import re
 from json import JSONDecodeError
 
 from ..errors import (
@@ -245,12 +246,12 @@ class Chat():
 
 class BaseChatDownloader:
     """Base class for chat downloaders. Each supported site should have its
-    own chat downloader. Subclasses should redefine the `get_chat()` method
-    and `_VALID_URL` regexp. Optionally, subclasses should also redefine
-    `_NAME`, `_SITE_DEFAULT_PARAMS` and `_TESTS` fields."""
+    own chat downloader. Subclasses should redefine the `_VALID_URLS`
+    dictionary which creates a mapping between functions and their matching
+    regular expressions. Optionally, subclasses should also redefine `_NAME`,
+    `_SITE_DEFAULT_PARAMS` and `_TESTS` fields."""
 
     _NAME = None
-    _VALID_URL = None
 
     _SITE_DEFAULT_PARAMS = {
         # MAY NOT specify message_types. must always be empty
@@ -413,6 +414,30 @@ class BaseChatDownloader:
                 value.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(value.name))
         else:
             return value
+
+    _VALID_URLS = {
+        # function_name: regex
+    }
+
+    @classmethod
+    def matches(cls, url):
+        """Get the chat of a video if the url matches one of
+        the specified regular expressions in `_VALID_URLS`.
+
+        :return: If a match is found, the Chat item is returned,
+            otherwise None
+        :rtype: (str, str)
+        """
+        for function_name, regex in cls._VALID_URLS.items():
+
+            if isinstance(regex, str):
+                match = re.search(regex, url)
+                if match:
+                    match_id = match.group('id')
+                    if match_id:
+                        return function_name, match_id
+
+        return None
 
     def get_chat(self, **kwargs):
         """This method should be implemented in a subclass and should return

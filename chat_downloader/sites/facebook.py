@@ -84,7 +84,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _NAME = 'facebook.com'
     # Regex provided by youtube-dl
-    _VALID_URL = r'''(?x)
+
+    _VALID_URLS = {
+        'get_chat_by_video_id': r'''(?x)
             (?:
                 https?://
                     (?:[\w-]+\.)?(?:facebook\.com)/
@@ -93,6 +95,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             )
             (?P<id>[0-9]+)
             '''
+    }
 
     _TESTS = [
 
@@ -127,7 +130,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             except RequestException as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
-    def _get_initial_info(self, video_id, params):
+    def _get_initial_info(self, video_id, **params):
         info = {}
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -529,7 +532,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         return info
 
-    def _get_live_chat_messages_by_video_id(self, video_id, params):
+    def _get_live_chat_messages_by_video_id(self, video_id, **params):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
@@ -625,7 +628,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
-    def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, params):
+    def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, **params):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -717,9 +720,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
                 yield temp
 
-    def get_chat_by_video_id(self, video_id, params):
+    def get_chat_by_video_id(self, video_id, **params):
 
-        initial_info = self._get_initial_info(video_id, params)
+        initial_info = self._get_initial_info(video_id, **params)
 
         start_time = params.get('start_time')
         end_time = params.get('end_time')
@@ -732,11 +735,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         # if is live stream and no start/end time specified
         if is_live and not start_time and not end_time:
             generator = self._get_live_chat_messages_by_video_id(
-                video_id, params)
+                video_id, **params)
         else:
             max_duration = initial_info.get('duration', float('inf'))
             generator = self._get_chat_replay_messages_by_video_id(
-                video_id, max_duration, params)
+                video_id, max_duration, **params)
 
         return Chat(
             generator,
@@ -745,16 +748,3 @@ class FacebookChatDownloader(BaseChatDownloader):
             is_live=is_live,
             author=initial_info.get('author'),
         )
-
-    def get_chat(self, **kwargs):
-
-        url = kwargs.get('url')
-        match = re.search(self._VALID_URL, url)
-
-        if match:
-
-            if match.group('id'):  # normal youtube video
-                return self.get_chat_by_video_id(match.group('id'), kwargs)
-
-            else:  # TODO add profile, etc.
-                pass
