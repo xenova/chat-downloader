@@ -119,6 +119,7 @@ def main():
         '[Site Specific] YouTube Arguments')
     add_chat_param(youtube_group, '--chat_type',
                    choices=['live', 'top'])
+    add_chat_param(youtube_group, '--ignore', type=splitter)
     # add_chat_param(
     #     youtube_group, '--force_no_timeout', action='store_true')
 

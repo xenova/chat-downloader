@@ -7,13 +7,15 @@ from .common import (
 )
 
 from ..errors import (
+    ChatDownloaderError,
     NoChatReplay,
     NoContinuation,
     ParsingError,
     VideoUnavailable,
     LoginRequired,
     VideoUnplayable,
-    InvalidParameter
+    InvalidParameter,
+    UserNotFound
 )
 
 from ..utils import (
@@ -88,6 +90,30 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'timeout': 5
             }
         },
+        {
+            'name': 'Get chat messages from livestream, using custom url (1).',
+            'params': {
+                'url': 'https://www.youtube.com/c/ChilledCow',
+                'timeout': 5
+            }
+        },
+        {
+            'name': 'Get chat messages from livestream, using custom url (2).',
+            'params': {
+                'url': 'https://www.youtube.com/ChilledCow',
+                'timeout': 5
+            }
+        },
+        {
+            'name': 'Get chat messages from livestream, using user id.',
+            'params': {
+                'url': 'https://www.youtube.com/user/YellowBrickCinema',
+                'timeout': 5
+            }
+        },
+
+
+
         {
             'name': 'Get chat messages from live chat replay',
             'params': {
@@ -300,8 +326,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
     # Regex provided by youtube-dl
 
     # TODO differentiate /user/x, /c/y and /channel/UC...
+
     _VALID_URLS = {
-        'get_chat_by_video_id': r'''(?x)^
+        '_get_chat_by_video_id': r'''(?x)^
                      (
                          # http(s):// or protocol-independent URL
                          (?:https?://|//)
@@ -327,15 +354,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
                      # here is it! the YouTube video ID
                      (?P<id>[0-9A-Za-z_-]{11})$''',
 
-        'get_chat_by_channel_id': r'''(?x)
+
+        # while this does match 'watch' urls, it will never
+        # return this since the above regex is run before this
+        '_get_chat_by_user': r'''(?x)
                 (?:https?://|//)
                     (?:\w+\.)?
                     (?:
                         youtube(?:kids)?\.com
                     )/
                     (?:
-                        (?:channel|c|user)/
-                    )
+                        (?P<type>channel|c|user)/
+                    )?
                     (?P<id>[a-zA-Z0-9_-]+)'''
     }
 
@@ -886,29 +916,57 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _parse_video(video_renderer):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
-    _CHANNEL_REGEX = r'https?://(?:www\.)?youtube\.com/channel/([^/?#&])+'
-    _CHANNEL_URL_TEMPLATE = 'https://www.youtube.com/channel/{}/videos?view=2&live_view={}'
     _VIDEO_TYPE_REMAPPING = {
         'live': (501, 'Live now'),
         'upcoming': (502, 'Upcoming live streams'),
         'past': (503, 'Past live streams')
     }
 
-    def get_user_videos(self, channel_id, video_type='live'):
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='live'):
+        """[summary]
+        If more than one of `channel_id`, `user_id` and `custom_username`
+        are specifed, the first one specified will be returned.
+
+        :param channel_id: [description], defaults to None
+        :type channel_id: [type], optional
+        :param user_id: [description], defaults to None
+        :type user_id: [type], optional
+        :param custom_username: [description], defaults to None
+        :type custom_username: [type], optional
+        :raises ValueError: [description]
+        """
+
+        _id = ''
+        _type = ''
+        if channel_id:
+            _id = channel_id
+            _type = 'channel'
+        elif user_id:
+            _id = user_id
+            _type = 'user'
+        elif custom_username:
+            _id = custom_username
+            _type = 'c'
+        else:
+            raise ValueError('No user type specified.')
+
+        # live, past, upcoming
         vid_type = self._VIDEO_TYPE_REMAPPING.get(video_type.lower())
 
         if not vid_type:
             raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(
                 set(self._VIDEO_TYPE_REMAPPING.keys())))
-        # live, past, upcoming
 
-        user_url = self._CHANNEL_URL_TEMPLATE.format(channel_id, vid_type[0])
-        html, yt_info = self._get_initial_info(user_url)
+        user_url = 'https://www.youtube.com/{}/{}'.format(_type, _id)
 
-        section = yt_info  # Check that section matches
+        html, yt_info = self._get_initial_info(
+            '{}/videos?view=2&live_view={}'.format(user_url, vid_type[0]))
 
-        section_list_renderer = yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][1]['tabRenderer']['content'][
-            'sectionListRenderer']
+        section_list_renderer = multi_get(
+            yt_info, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
+
+        if not section_list_renderer:
+            raise UserNotFound('Unable to find user: "{}"'.format(user_url))
 
         # Check that the returned grid is what was asked for
         # YouTube tries to correct your mistake by selecting the uploads tab
@@ -1066,7 +1124,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         details['duration'] = int_or_none(video_details.get('lengthSeconds'))
         return details
 
-    def _get_chat_messages(self, initial_info, **params):
+    def _get_chat_messages(self, initial_info, params):
 
         initial_continuation_info = initial_info.get('continuation_info') or {}
 
@@ -1106,8 +1164,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         continuation_params = {
             'context': {
                 'client': {
-                    'visitorData': visitor_data,
-                    'userAgent': self.get_session_headers('User-Agent'),
+                    # TODO test without these params
+                    # 'visitorData': visitor_data,
+                    # 'userAgent': self.get_session_headers('User-Agent'),
                     'clientName': 'WEB',
                     'clientVersion': '2.{}.01.00'.format(datetime.today().strftime('%Y%m%d'))
                 }
@@ -1159,6 +1218,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         yt_info, 'continuationContents', 'liveChatContinuation')
 
                     if not info:
+                        log('debug', 'No continuation information found: {}'.format(
+                            yt_info))
                         return
 
                     break  # successful retrieve
@@ -1438,45 +1499,110 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if first_time:
                 first_time = False
 
-    def get_chat_by_channel_id(self, channel_id, **params):
+    # def get_chat_by_user(self, channel_id=None, user_id=None, custom_username=None):
+    #     def get_user_videos(self, video_type='live'):
 
+    def _get_chat_by_user(self, match, params):
+        match_id = match.group('id')
+        user_type = match.group('type')  # channel|c|user
+
+        if user_type == 'channel':
+            return self.get_chat_by_channel_id(match_id, params)
+
+        if user_type == 'user':
+            return self.get_chat_by_user_id(match_id, params)
+
+        # Otherwise assume custom username
+        return self.get_chat_by_custom_username(match_id, params)
+
+    def get_chat_by_channel_id(self, channel_id, params):
+        return self._get_chat_by_user_args({
+            'channel_id': channel_id
+        }, params)
+
+    def get_chat_by_user_id(self, user_id, params):
+        """
+        Such as NASAtelevision in https://www.youtube.com/user/NASAtelevision
+
+        :param user_id:
+        :type user_id: [type]
+        """
+        return self._get_chat_by_user_args({
+            'user_id': user_id
+        }, params)
+
+    def get_chat_by_custom_username(self, custom_username, params):
+        return self._get_chat_by_user_args({
+            'custom_username': custom_username
+        }, params)
+
+    def _get_chat_by_user_args(self, user_video_args, params):
         # TODO add param for wait time
         params['retry_timeout'] = 30
         params['exit_on_fail'] = True
 
-        index = 0
-        while True:
+        title = try_get_first_value(user_video_args)
 
-            videos = []
+        chat_item = Chat(title=title)  # Create empty chat object
+        chat_item.chat = self._get_chat_messages_by_user_args(
+            user_video_args, chat_item, params)
+
+        return chat_item
+
+    def _get_chat_messages_by_user_args(self, user_video_args, chat_item, params):
+        # chat_item allows to change title and info based on new info
+
+        list_of_vids_to_ignore = params.get('ignore') or []
+
+        while True:
             for video_type in ('live', 'upcoming'):
                 # prioritise live videos
-
-                for video in self.get_user_videos(channel_id, video_type):
+                for video in self.get_user_videos(**user_video_args, video_type=video_type):
                     video_id = video['video_id']
+                    video_title = video['title']
+
+                    if video_id in list_of_vids_to_ignore:
+                        log('debug', 'Skipping video with ID: "{}"'.format(video_id))
+                        continue
+
                     try:
-                        chat = self.get_chat_by_video_id(video_id, **params)
-                        log('debug', 'Found a video of type "{}".'.format(self._VIDEO_TYPE_REMAPPING.get(video_type)[1]))
-                        return chat
-                    except Exception as e:
+                        chat = self.get_chat_by_video_id(video_id, params)
+
+                        log('info', 'Found a{} livestream: "{}" ({}).'.format(
+                            'n upcoming' if video_type == 'upcoming' else '', video_title, video_id))
+
+                        # update chat item by copying over
+                        chat_dict = {k: v for k,
+                                     v in chat.__dict__.items() if k != 'chat'}
+                        for i in chat_dict:
+                            setattr(chat_item, i, chat_dict[i])
+
+                        yield from chat.chat
+
+                    except ChatDownloaderError as e:
                         # For some reason, doesn't work
-                        log('warning', 'Unable to get chat for "{}" ({}) due to an error: "{}"'.format(video['title'], video_id, e))
+                        log('warning', 'Unable to get chat for "{}" ({}) due to an error: "{}"'.format(
+                            video['title'], video_id, e))
                         # TODO exit on error?
 
             sleep_amount = 30
             if isinstance(params['retry_timeout'], (float, int)):
                 sleep_amount = params['retry_timeout']
 
-            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying again in {} seconds.'.format(sleep_amount))
+            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying again in {} seconds.'.format(
+                sleep_amount))
             interruptible_sleep(sleep_amount)
-
-
 
             # continue forever, until reaching a video with valid chat
 
+    def get_chat_by_video_id(self, video_id, params):
+        """Get chat messages for a YouTube video, given its ID.
 
-    def get_chat_by_video_id(self, video_id, **params):
-        """ Get chat messages for a YouTube video, given its ID. """
-
+        :param video_id: YouTube video ID
+        :type video_id: str
+        :return: Chat object for the corresponding YouTube video
+        :rtype: Chat
+        """
         initial_info = self._get_initial_video_info(video_id)
 
         title = initial_info.get('title')
@@ -1485,9 +1611,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         is_live = initial_info.get('is_live')
 
         return Chat(
-            self._get_chat_messages(initial_info, **params),
+            self._get_chat_messages(initial_info, params),
             title=title,
             duration=duration,
             is_live=is_live,
             start_time=start_time
         )
+
+    def _get_chat_by_video_id(self, match, params):
+        return self.get_chat_by_video_id(match.group('id'), params)

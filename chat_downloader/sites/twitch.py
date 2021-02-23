@@ -8,7 +8,8 @@ from .common import (
 from ..errors import (
     TwitchError,
     NoChatReplay,
-    VideoUnavailable
+    VideoUnavailable,
+    UserNotFound
 )
 
 from ..utils import (
@@ -183,7 +184,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
     _VALID_URLS = {
         # e.g. 'http://www.twitch.tv/riotgames/v/6528877?t=5m10s'
-        'get_chat_by_vod_id': r'''(?x)
+        '_get_chat_by_vod_id': r'''(?x)
                     https?://
                         (?:
                             (?:(?:www|go|m)\.)?twitch\.tv/(?:[^/]+/v(?:ideo)?|videos)/|
@@ -193,7 +194,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     ''',
 
         # e.g. 'https://clips.twitch.tv/FaintLightGullWholeWheat'
-        'get_chat_by_clip_id': r'''(?x)
+        '_get_chat_by_clip_id': r'''(?x)
                         https?://
                             (?:
                                 clips\.twitch\.tv/(?:embed\?.*?\bclip=|(?:[^/]+/)*)|
@@ -203,7 +204,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                         ''',
 
         # e.g. 'http://www.twitch.tv/shroomztv'
-        'get_chat_by_stream_id': r'''(?x)
+        '_get_chat_by_stream_id': r'''(?x)
                         https?://
                             (?:
                                 (?:(?:www|go|m)\.)?twitch\.tv/|
@@ -1211,7 +1212,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             if not cursor:
                 return
 
-    def get_chat_by_vod_id(self, vod_id, **params):
+    def _get_chat_by_vod_id(self, match, params):
+        return self.get_chat_by_vod_id(match.group('id'), params)
+
+    def get_chat_by_vod_id(self, vod_id, params):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
@@ -1249,7 +1253,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             is_live=False
         )
 
-    def get_chat_by_clip_id(self, clip_id, **params):
+    def _get_chat_by_clip_id(self, match, params):
+        return self.get_chat_by_clip_id(match.group('id'), params)
+
+    def get_chat_by_clip_id(self, clip_id, params):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -1496,7 +1503,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # :tmi.twitch.tv HOSTTARGET #gothamchess :anna_chess 6612
         return info
 
-    def _get_chat_messages_by_stream_id(self, stream_id, **params):
+    def _get_chat_messages_by_stream_id(self, stream_id, params):
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
@@ -1637,7 +1644,10 @@ class TwitchChatDownloader(BaseChatDownloader):
         finally:
             twitch_chat_irc.close_connection()
 
-    def get_chat_by_stream_id(self, stream_id, **params):
+    def _get_chat_by_stream_id(self, match, params):
+        return self.get_chat_by_stream_id(match.group('id'), params)
+
+    def get_chat_by_stream_id(self, stream_id, params):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
@@ -1654,6 +1664,9 @@ class TwitchChatDownloader(BaseChatDownloader):
             except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
+        if not stream_info:
+            raise UserNotFound('Unable to find user: "{}"'.format(stream_id))
+
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
         title = multi_get(stream_info, 'lastBroadcast',
                           'title') if is_live else None
@@ -1662,7 +1675,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         return Chat(
             self._get_chat_messages_by_stream_id(
-                stream_id, **params),
+                stream_id, params),
             title=title,
             duration=None,
             is_live=is_live
@@ -1684,11 +1697,11 @@ class TwitchChatDownloader(BaseChatDownloader):
         #     match.group('id')
         #     return self.get_chat_by_video_id(match.group('id'), params)
 
-            # if(match.group('id')):  # normal youtube video
-            #     return
+        # if(match.group('id')):  # normal youtube video
+        #     return
 
-            # else:  # TODO add profile, etc.
-            #     pass
+        # else:  # TODO add profile, etc.
+        #     pass
 
     # def get_chat_messages(self, url):
     #     pass

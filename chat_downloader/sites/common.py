@@ -177,11 +177,11 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat, callback=None, title=None, duration=None, is_live=None, start_time=None, **kwargs):
+    def __init__(self, chat=None, callback=None, title=None, duration=None, is_live=None, start_time=None, **kwargs):
         """Create a Chat object
 
-        :param chat: Generator method for retrieving chat messages
-        :type chat: generator
+        :param chat: Generator method for retrieving chat messages, defaults to None
+        :type chat: generator, optional
         :param callback: Function to call on every message, defaults to None
         :type callback: function, optional
         :param title: Stream or video title, defaults to None
@@ -327,7 +327,7 @@ class BaseChatDownloader:
         if headers is None:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
-                'Accept-Language': 'en-US, en, *' #'de-CH'#'fr-CH'#
+                'Accept-Language': 'en-US, en, *'  # 'de-CH'#'fr-CH'#
             }
         self.session.headers = headers
 
@@ -421,21 +421,20 @@ class BaseChatDownloader:
 
     @classmethod
     def matches(cls, url):
-        """Get the chat of a video if the url matches one of
-        the specified regular expressions in `_VALID_URLS`.
+        """Used to check if a url matches any of the
+        regular expressions specified in the classes
+        `_VALID_URLS` dictionary.
 
-        :return: If a match is found, the Chat item is returned,
-            otherwise None
-        :rtype: (str, str)
+        :return: If a match is found, the function name and
+            match object is returned, otherwise None.
+        :rtype: (str, re.Match)
         """
         for function_name, regex in cls._VALID_URLS.items():
 
             if isinstance(regex, str):
                 match = re.search(regex, url)
                 if match:
-                    match_id = match.group('id')
-                    if match_id:
-                        return function_name, match_id
+                    return function_name, match
 
         return None
 

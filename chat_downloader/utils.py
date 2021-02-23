@@ -416,10 +416,6 @@ class TimedGenerator:
             next_item = next(self.generator)
             self.reset_inactivity_timer()
             return next_item
-        except StopIteration as e:
-            # No more items to get. Temporarily save exception so that
-            # we can close the timers before exiting
-            to_raise = e
 
         except KeyboardInterrupt as e:
 
@@ -443,6 +439,12 @@ class TimedGenerator:
 
             else:  # both timers are still active, user sent a keyboard interrupt
                 to_raise = e
+
+        except Exception as e:
+            # Some other error. Always propogate.
+            # If e is StopIteration, there are no more items to get.
+            # We can close the timers before exiting
+            to_raise = e
 
         if to_raise:  # Something happened which will cause the generator to exit, cancel timers
             for timer in set_timers:

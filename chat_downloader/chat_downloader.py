@@ -47,6 +47,7 @@ from .errors import (
     InvalidURL,
     RetriesExceeded,
     NoContinuation,
+    UserNotFound,
     ChatGeneratorError
 )
 
@@ -115,6 +116,7 @@ class ChatDownloader():
 
                  # YouTube
                  chat_type='live',
+                 ignore=None,
 
                  # Twitch
                  message_receive_timeout=0.1,
@@ -188,6 +190,8 @@ class ChatDownloader():
         :type format_file: str, optional
         :param chat_type: Specify chat type, defaults to 'live'
         :type chat_type: str, optional
+        :param ignore: Ignore a list of video ids, defaults to None
+        :type ignore: list, optional
         :param message_receive_timeout: Time before requesting for new messages,
             defaults to 0.1
         :type message_receive_timeout: float, optional
@@ -231,9 +235,9 @@ class ChatDownloader():
         # based on matching url with predefined regex
         for site in get_all_sites():
             match_info = site.matches(url)
-            if match_info: # match found
+            if match_info:  # match found
 
-                function_name, match_id= match_info
+                function_name, match = match_info
 
                 # Create new session
                 self.create_session(site)
@@ -247,11 +251,13 @@ class ChatDownloader():
                 log('info', 'Site: {}'.format(site_object._NAME))
                 log('debug', 'Program parameters: {}'.format(params))
 
-                generator_function = getattr(site_object, function_name, None)
-                if not generator_function:
-                    raise NotImplementedError('{} has not been implemented in {}.'.format(function_name, site.__name__))
-                chat = generator_function(match_id, **params)
-                log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(match_id, function_name, site.__name__))
+                get_chat = getattr(site_object, function_name, None)
+                if not get_chat:
+                    raise NotImplementedError(
+                        '{} has not been implemented in {}.'.format(function_name, site.__name__))
+                chat = get_chat(match, params)
+                log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(
+                    match, function_name, site.__name__))
 
                 if chat is None:
                     raise ChatGeneratorError(
@@ -394,7 +400,8 @@ def run(propagate_interrupt=False, **kwargs):
         InvalidParameter,
         InvalidURL,
         RetriesExceeded,
-        NoContinuation
+        NoContinuation,
+        UserNotFound
     ) as e:  # Expected errors
         log('error', e)
     except (
