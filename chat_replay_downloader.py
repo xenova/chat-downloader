@@ -711,10 +711,11 @@ if __name__ == '__main__':
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
+    num_of_messages = 0
+    chat_messages = []
+
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies, debug_output=args.debug_output)
-
-        num_of_messages = 0
 
         def print_item(item):
             chat_downloader.print_item(item)
@@ -743,52 +744,53 @@ if __name__ == '__main__':
                 open(args.output, 'w').close()  # empty the file
                 callback = write_to_file
 
-        chat_messages = []
-        try:
-            chat_messages = chat_downloader.get_chat_replay(
-                args.url,
-                start_time=args.start_time,
-                end_time=args.end_time,
-                message_type=args.message_type,
-                chat_type=args.chat_type,
-                callback=callback
-            )
-        finally:
-            if chat_messages and args.output:
-                if(args.output.endswith('.json')):
-                    num_of_messages = len(chat_messages)
-                    with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                        json.dump(chat_messages, f, sort_keys=True)
-
-                elif(args.output.endswith('.csv')):
-                    num_of_messages = len(chat_messages)
-                    fieldnames = []
-                    for message in chat_messages:
-                        fieldnames = list(set(fieldnames + list(message.keys())))
-                    fieldnames.sort()
-
-                    with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                        fc = csv.DictWriter(f, fieldnames=fieldnames)
-                        fc.writeheader()
-                        fc.writerows(chat_messages)
-
-                print('Finished writing', num_of_messages,
-                    'messages to', args.output, flush=True)
+        chat_messages = chat_downloader.get_chat_replay(
+            args.url,
+            start_time=args.start_time,
+            end_time=args.end_time,
+            message_type=args.message_type,
+            chat_type=args.chat_type,
+            callback=callback
+        )
 
     except InvalidURL as e:
-        print('[Invalid URL]', e)
+        print('[Invalid URL]', e, flush=True)
     except ParsingError as e:
-        print('[Parsing Error]', e)
+        print('[Parsing Error]', e, flush=True)
     except NoChatReplay as e:
-        print('[No Chat Replay]', e)
+        print('[No Chat Replay]', e, flush=True)
     except VideoUnavailable as e:
-        print('[Video Unavailable]', e)
+        print('[Video Unavailable]', e, flush=True)
     except TwitchError as e:
-        print('[Twitch Error]', e)
+        print('[Twitch Error]', e, flush=True)
     except (LoadError, CookieError) as e:
-        print('[Cookies Error]', e)
+        print('[Cookies Error]', e, flush=True)
+    except requests.exceptions.RequestException:
+        print('[HTTP Request Error]', e, flush=True)
     except KeyboardInterrupt:
-        print('Interrupted.')
+        print('Interrupted.', flush=True)
+
+    finally:
+        if chat_messages and args.output:
+            if(args.output.endswith('.json')):
+                num_of_messages = len(chat_messages)
+                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                    json.dump(chat_messages, f, sort_keys=True)
+
+            elif(args.output.endswith('.csv')):
+                num_of_messages = len(chat_messages)
+                fieldnames = []
+                for message in chat_messages:
+                    fieldnames = list(set(fieldnames + list(message.keys())))
+                fieldnames.sort()
+
+                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                    fc = csv.DictWriter(f, fieldnames=fieldnames)
+                    fc.writeheader()
+                    fc.writerows(chat_messages)
+
+            print('Finished writing', num_of_messages,
+                'messages to', args.output, flush=True)
 
 else:
     # when used as a module
