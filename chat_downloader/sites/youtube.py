@@ -353,7 +353,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                          )/)
                      )?                                                       # all until now is optional -> you can pass the naked ID
                      # here is it! the YouTube video ID
-                     (?P<id>[0-9A-Za-z_-]{11})$''',
+                     (?P<id>[0-9A-Za-z_-]{11})''',
 
 
         # while this does match 'watch' urls, it will never
