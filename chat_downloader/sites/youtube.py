@@ -262,6 +262,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;'
     _YT_INITIAL_PLAYER_RESPONSE_RE = r'ytInitialPlayerResponse\s*=\s*({.+?})\s*;'
+    _YT_CFG_RE = r'ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;'
 
     _YT_HOME = 'https://www.youtube.com'
     _YT_VIDEO_TEMPLATE = _YT_HOME + '/watch?v={}'
@@ -1048,7 +1049,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         details = {
             'start_time': last_modified,
-            'visitor_data': multi_get(yt_initial_data, 'responseContext', 'webResponseContextExtensionData', 'ytConfigData', 'visitorData')
         }
 
         # Try to get continuation info
@@ -1130,7 +1130,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # stream_start_time = initial_info.get('start_time')
         is_live = initial_info.get('is_live')
-        visitor_data = initial_info.get('visitor_data')
 
         # duration = initial_info.get('duration')
 
@@ -1160,19 +1159,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # must run to get first few messages, otherwise might miss some
         html, yt_info = self._get_initial_info(init_page)
 
-        continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(api_type)
+        cfg = re.search(self._YT_CFG_RE, html)
+        yt_cfg_data = try_parse_json(cfg.group(1)) if cfg else {}
+
         continuation_params = {
-            'context': {
-                'client': {
-                    # TODO test without these params
-                    # 'visitorData': visitor_data,
-                    # 'userAgent': self.get_session_headers('User-Agent'),
-                    'clientName': 'WEB',
-                    'clientVersion': '2.{}.01.00'.format(datetime.today().strftime('%Y%m%d'))
-                }
-            }
+            'context': yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
         }
 
+        continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(api_type)
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, (float, int)) else None
 
@@ -1208,8 +1202,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
-                        log('debug', 'Continuation params: {}'.format(
-                            continuation_params))
+                        log('debug', 'Continuation: {}'.format(continuation))
 
                         yt_info = self._session_post(
                             continuation_url, json=continuation_params).json()
