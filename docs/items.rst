@@ -1,2 +1,2 @@
-Chat Items
-==========
+Chat Items Documentation
+========================
