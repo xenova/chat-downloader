@@ -32,7 +32,28 @@ videos, clips and past broadcasts. No authentication needed!
 
 .. _Chat Downloader: https://github.com/xenova/chat-downloader
 
-.. include:: installing.rst
+############
+Installation
+############
+
+This tool is distributed on PyPI_ and can be installed with ``pip``:
+
+.. _PyPI: https://pypi.org/project/chat-downloader/
+
+.. code:: console
+
+   $ pip install chat-downloader
+
+To update to the latest version, add the ``--upgrade`` flag to the above command.
+
+Alternatively, the tool can be installed with ``git``:
+
+.. code:: console
+
+   $ git clone https://github.com/xenova/chat-downloader.git
+   $ cd chat-downloader
+   $ python setup.py install
+
 
 #####
 Usage
@@ -50,8 +71,6 @@ For example, to save messages from a livestream to a JSON file, you can use:
 .. code:: console
 
    $ chat_downloader https://www.youtube.com/watch?v=5qap5aO4i9A --output chat.json
-
-
 
 
 
