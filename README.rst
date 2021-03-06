@@ -63,23 +63,24 @@ Usage
 Command line
 ------------
 
-usage: chat_downloader [-h] [--version] [--start_time START_TIME]
-                       [--end_time END_TIME]
-                       [--message_types MESSAGE_TYPES | --message_groups MESSAGE_GROUPS]
-                       [--max_attempts MAX_ATTEMPTS]
-                       [--retry_timeout RETRY_TIMEOUT]
-                       [--max_messages MAX_MESSAGES]
-                       [--inactivity_timeout INACTIVITY_TIMEOUT]
-                       [--timeout TIMEOUT] [--format FORMAT]
-                       [--format_file FORMAT_FILE] [--chat_type {live,top}]
-                       [--ignore IGNORE]
-                       [--message_receive_timeout MESSAGE_RECEIVE_TIMEOUT]
-                       [--buffer_size BUFFER_SIZE] [--output OUTPUT]
-                       [--overwrite] [--sort_keys] [--indent INDENT]
-                       [--pause_on_debug | --exit_on_debug]
-                       [--logging {none,debug,info,warning,error,critical} | --testing | --verbose | --quiet]
-                       [--cookies COOKIES] [--proxy PROXY]
-                       url
+.. code:: console
+    usage: chat_downloader [-h] [--version] [--start_time START_TIME]
+                           [--end_time END_TIME]
+                           [--message_types MESSAGE_TYPES | --message_groups MESSAGE_GROUPS]
+                           [--max_attempts MAX_ATTEMPTS]
+                           [--retry_timeout RETRY_TIMEOUT]
+                           [--max_messages MAX_MESSAGES]
+                           [--inactivity_timeout INACTIVITY_TIMEOUT]
+                           [--timeout TIMEOUT] [--format FORMAT]
+                           [--format_file FORMAT_FILE] [--chat_type {live,top}]
+                           [--ignore IGNORE]
+                           [--message_receive_timeout MESSAGE_RECEIVE_TIMEOUT]
+                           [--buffer_size BUFFER_SIZE] [--output OUTPUT]
+                           [--overwrite] [--sort_keys] [--indent INDENT]
+                           [--pause_on_debug | --exit_on_debug]
+                           [--logging {none,debug,info,warning,error,critical} | --testing | --verbose | --quiet]
+                           [--cookies COOKIES] [--proxy PROXY]
+                           url
 
 
 For example, to save messages from a livestream to a JSON file, you can use:
@@ -90,7 +91,7 @@ For example, to save messages from a livestream to a JSON file, you can use:
 
 
 
-For a description of these options, as well as advanced command line use-cases and examples, consult the :ref:`Command Line Usage` page.
+For a description of these options, as well as advanced command line use-cases and examples, consult the `Command Line Usage <https://chat-downloader.readthedocs.io/en/docs/cli.html#command-line-usage>`_ page.
 
 
 Python
@@ -106,7 +107,7 @@ Python
        chat.print_formatted(message)           # print the formatted message
 
 
-For advanced python use-cases and examples, consult the :ref:`Python Documentation`.
+For advanced python use-cases and examples, consult the `Python Documentation <https://chat-downloader.readthedocs.io/en/docs/source/index.html#python-documentation>`_.
 
 
 ##########
@@ -139,7 +140,7 @@ Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and shoul
     }
 
 
-For an extensive, documented list of included fields, consult the :ref:`Chat Items` page.
+For an extensive, documented list of included fields, consult the `Chat Items <https://chat-downloader.readthedocs.io/en/docs/index.html#chat-items>`_ page.
 
 ##########################
 Frequently Asked Questions
