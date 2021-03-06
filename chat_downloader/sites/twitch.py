@@ -16,7 +16,6 @@ from ..utils import (
     ensure_seconds,
     timestamp_to_microseconds,
     seconds_to_time,
-    try_get,
     int_or_none,
     replace_with_underscores,
     multi_get,
@@ -1318,10 +1317,9 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         # prioritise custom emotes (e.g. subscriber and bits)
         channel_id = int(channel_id)
-        new_badge_info = try_get(TwitchChatDownloader._SUBSCRIBER_BADGE_INFO,
-                                 lambda x: x[channel_id][name]['versions'][version]
-                                 ) or try_get(
-                                     TwitchChatDownloader._BADGE_INFO, lambda x: x[name]['versions'][version])
+        new_badge_info = multi_get(
+            TwitchChatDownloader._SUBSCRIBER_BADGE_INFO, channel_id, name, 'versions', version) or multi_get(
+            TwitchChatDownloader._BADGE_INFO, name, 'versions', version)
 
         if new_badge_info:
             for key in TwitchChatDownloader._BADGE_KEYS:

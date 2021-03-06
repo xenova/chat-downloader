@@ -11,12 +11,18 @@ from copy import deepcopy
 
 
 class ItemFormatter:
+    """Class used to control the formatting of chat items."""
 
     _INDEX_REGEX = r'(?<!\\){(.+?)(?<!\\)}'
 
     # 'always_show': True (default False)
 
     def __init__(self, path=None):
+        """Create an ItemFormatter object
+
+        :param path: Path of the format file, defaults to None
+        :type path: str, optional
+        """
 
         if path is None or not os.path.exists(path):
             path = os.path.join(os.path.dirname(
@@ -25,51 +31,79 @@ class ItemFormatter:
         with open(path) as custom_formats:
             self.format_file = json.load(custom_formats)
 
-    def replace(self, result, item, format_object):
-        split = result.group(1).split('|')
+    def _replace(self, match, item, format_object):
+        """Replace a match object with
+
+        :param match: The match object
+        :type match: re.Match
+        :param item: The chat item to choose the value to replace the key with
+        :type item: dict
+        :param format_object: The format object which defines how the
+            replacement should be done
+        :type format_object: dict
+        :return: The replacement value as a string
+        :rtype: str
+        """
+
+        split = match.group(1).split('|')
 
         for index in split:
             value = multi_get(item, *index.split('.'))
 
-            if value is not None:
-                formatting_info = format_object.get(index)
-                if formatting_info is not None:
-                    template = ''
-                    if isinstance(formatting_info, str):
-                        template = formatting_info
-                    elif isinstance(formatting_info, dict):
-                        template = formatting_info.get('template') or ''
+            if value is None:
+                continue
 
-                        formatting = formatting_info.get('format')
-                        if formatting:
-                            if index == 'timestamp':
-                                value = microseconds_to_timestamp(
-                                    value, formatting)
-                            elif index == '...':
-                                pass
+            formatting_info = format_object.get(index)
+            if formatting_info is None:
+                return str(value)
 
-                        # Apply separator
-                        separator = formatting_info.get('separator')
-                        if separator:
-                            if index == 'author.badges':
-                                value = separator.join(
-                                    map(lambda key: key.get('title'), value))
-                            elif isinstance(value, (tuple, list)):
-                                value = separator.join(
-                                    map(lambda x: str(x), value))
-                            else:
-                                pass
-                    else:
+            template = ''
+            if isinstance(formatting_info, str):
+                template = formatting_info
+            elif isinstance(formatting_info, dict):
+                template = formatting_info.get('template') or ''
+
+                formatting = formatting_info.get('format')
+                if formatting:
+                    if index == 'timestamp':
+                        value = microseconds_to_timestamp(
+                            value, formatting)
+                    elif index == '...': # TODO add others
                         pass
 
-                    return template.format(value)
+                # Apply separator
+                separator = formatting_info.get('separator')
+                if separator:
+                    if index == 'author.badges':
+                        value = separator.join(
+                            map(lambda key: key.get('title'), value))
+                    elif isinstance(value, (tuple, list)):
+                        value = separator.join(
+                            map(lambda x: str(x), value))
+                    else:
+                        pass
+            else:
+                pass
 
-                else:
-                    return str(value)
+            return template.format(value)
 
         return ''  # no match, return empty
 
     def format(self, item, format_name='default', format_object=None):
+        """Format a chat item according to a format (specified by its name),
+            found in the format_object
+
+        :param item: The chat item to be formatted
+        :type item: dict
+        :param format_name: The name of the format to be applied, defaults
+            to 'default'
+        :type format_name: str, optional
+        :param format_object: The format object from which the format will
+            be chosen, defaults to None
+        :type format_object: dict, optional
+        :return: The string representation of the chat item
+        :rtype: str
+        """
         default_format_object = self.format_file.get('default')
         if format_object is None:
             format_object = self.format_file.get(
@@ -105,11 +139,10 @@ class ItemFormatter:
             parent = self.format_file.get(inherit) or {}
             format_object = nested_update(deepcopy(parent), format_object)
 
-        # print('after',format_object)
         template = format_object.get('template') or ''
         keys = format_object.get('keys') or {}
 
-        substitution = re.sub(self._INDEX_REGEX, lambda result: self.replace(
-            result, item, keys), template)
+        substitution = re.sub(self._INDEX_REGEX, lambda match: self._replace(
+            match, item, keys), template)
 
         return substitution

@@ -8,7 +8,6 @@ from ..utils import (
     remove_prefixes,
     multi_get,
     try_get_first_value,
-    try_get,
     seconds_to_time,
     camel_case_split,
     ensure_seconds,
@@ -171,7 +170,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         video_data = {}
         for item in instances:
-            if try_get(item, lambda x: x[1][0]) == 'VideoConfig':
+            if multi_get(item, 1, 0) == 'VideoConfig':
                 video_item = item[2][0]
                 if video_item.get('video_id'):
                     video_data = video_item['videoData'][0]
@@ -263,8 +262,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         # style_infos
         donation_comment_text = item.pop('donation_comment_text', None)
         if donation_comment_text:
-            entity = try_get(donation_comment_text,
-                             lambda x: x['ranges'][0]['entity']) or {}
+            entity = multi_get(donation_comment_text, 'ranges', 0, 'entity') or {}
 
             for key in entity:
                 r.remap(
@@ -699,7 +697,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                     continue
 
                 # ['comments'][0]['body']['text']
-                comment = try_get(ufipayload, lambda x: x['comments'][0])
+                comment = multi_get(ufipayload, 'comments', 0)
                 if not comment:
                     # TODO debug
                     continue

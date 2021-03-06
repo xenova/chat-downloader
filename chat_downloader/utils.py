@@ -12,21 +12,41 @@ import json
 
 
 def timestamp_to_microseconds(timestamp):
+    """Convert RFC3339 timestamp to microseconds. This is needed since
+        ``datetime.datetime.strptime()`` does not support nanosecond precision.
+
+    :param timestamp: RFC3339 timestamp
+    :type timestamp: str
+    :return: The number of microseconds of the timestamp
+    :rtype: int
     """
-    Convert RFC3339 timestamp to microseconds.
-    This is needed as datetime.datetime.strptime() does not support nanosecond precision.
-    """
+
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
     return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1]))) * 1e6)
 
 
 def time_to_seconds(time):
-    """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
+    """Convert timestamp string of the form 'hh:mm:ss' to seconds.
+
+    :param time: Timestamp of the form 'hh:mm:ss'
+    :type time: str
+    :return: The corresponding number of seconds
+    :rtype: int
+    """
+    if not time:
+        return 0
     return int(sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1))
 
 
 def seconds_to_time(seconds):
-    """Convert seconds to timestamp."""
+    """Convert seconds to timestamp. Note that leading zeroes are omitted
+        when seconds > 60
+
+    :param seconds: Number of seconds
+    :type seconds: int
+    :return: The corresponding timestamp string
+    :rtype: str
+    """
     h, remainder = divmod(abs(seconds), 3600)
     m, s = divmod(remainder, 60)
     time_string = '{}:{:02}:{:02}'.format(int(h), int(m), int(s))
@@ -34,12 +54,30 @@ def seconds_to_time(seconds):
 
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
-    """Convert unix time to human-readable timestamp."""
+    """Convert unix time to human-readable timestamp.
+
+    :param microseconds: UNIX microseconds
+    :type microseconds: float
+    :param format: The format string, defaults to '%Y-%m-%d %H:%M:%S'. For
+        information on supported codes, see https://strftime.org/ and
+        https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+    :type format: str, optional
+    :return: Human readable timestamp corresponding to the format
+    :rtype: str
+    """
     return datetime.datetime.fromtimestamp(microseconds // 1000000).strftime(format)
 
 
 def ensure_seconds(time, default=None):
-    """Ensure time is returned in seconds."""
+    """Ensure time is returned in seconds.
+
+    :param time: The time, in seconds or 'hh:mm:ss'.
+    :type time: Union[float, str]
+    :param default: Returns this if unable to parse the time, defaults to None
+    :type default: object, optional
+    :return: The corresponding number of seconds
+    :rtype: float
+    """
     if time is None:  # if time is none, return default
         return default
 
@@ -52,7 +90,13 @@ def ensure_seconds(time, default=None):
 
 
 def arbg_int_to_rgba(argb_int):
-    """Convert ARGB integer to RGBA array."""
+    """Convert ARGB integer to RGBA array.
+
+    :param argb_int: ARGB integer
+    :type argb_int: int
+    :return: RGBA array
+    :rtype: list[int]
+    """
     red = (argb_int >> 16) & 255
     green = (argb_int >> 8) & 255
     blue = argb_int & 255
@@ -61,29 +105,21 @@ def arbg_int_to_rgba(argb_int):
 
 
 def rgba_to_hex(colours):
-    """Convert RGBA array to hex colour."""
+    """Convert RGBA array to hex colour.
+
+    :param colours: RGBA array
+    :type colours: list[int]
+    :return: Corresponding hexadecimal representation
+    :rtype: str
+    """
     return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
 
-def get_colours(argb_int):
-    """Given an ARGB integer, return both RGBA and hex values."""
-    rgba_colour = arbg_int_to_rgba(argb_int)
-    hex_colour = rgba_to_hex(rgba_colour)
-    return {
-        'argb_int': argb_int,
-        'rgba': rgba_colour,
-        'hex': hex_colour
-    }
-
 # from youtube-dl
-
-
 def try_get(src, getter, expected_type=None):
     # used when a method is needed
     # or list/number index retrieval
-    if not isinstance(getter, (list, tuple)):
-        getter = [getter]
-    for get in getter:
+    for get in wrap_as_list(getter):
         try:
             v = get(src)
         except (AttributeError, KeyError, TypeError, IndexError):
@@ -104,6 +140,11 @@ def int_or_none(v, default=None):
     except (ValueError, TypeError):
         return default
 
+def float_or_none(v, default=None):
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return default
 
 def try_get_first_key(dictionary, default=None):
     try:
@@ -125,31 +166,35 @@ def try_parse_json(text):
     except json.decoder.JSONDecodeError:
         return None
 
+def wrap_as_list(item):
+    """Wraps an item in a list, if it is not already iterable
+
+    :param item: The item to wrap
+    :type item: object
+    :return: The wrapped item
+    :rtype: Union[list, tuple]
+    """
+    if not isinstance(item, (list, tuple)):
+        item = [item]
+    return item
 
 def remove_prefixes(text, prefixes):
-    if not isinstance(prefixes, (list, tuple)):
-        prefixes = [prefixes]
-
-    for prefix in prefixes:
+    for prefix in wrap_as_list(prefixes):
         if text.startswith(prefix):
             text = text[len(prefix):]
-
     return text
 
 
 def remove_suffixes(text, suffixes):
-    if not isinstance(suffixes, (list, tuple)):
-        suffixes = [suffixes]
-
-    for suffix in suffixes:
+    for suffix in wrap_as_list(suffixes):
         if text.endswith(suffix):
             text = text[0:-len(suffix):]
-
     return text
 
 
 def update_dict_without_overwrite(original, new):
     original.update({key: new[key] for key in new if key not in original})
+    return original
 
 
 def camel_case_split(word):
@@ -289,8 +334,8 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
     """
     Ensure printing to standard output can be done safely (especially on Windows).
     There are usually issues with printing emojis and non utf-8 characters.
-
     """
+
     output_string = sep.join(map(lambda x: str(x), objects)) + end
 
     if out is None:
@@ -476,7 +521,5 @@ def get_default_args(func):
     return {
         k: v.default
         for k, v in signature.parameters.items()
-        # if k != 'self'
         if v.default is not inspect.Parameter.empty
     }
-    # TODO get required args

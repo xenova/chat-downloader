@@ -6,7 +6,7 @@ import colorlog
 
 import chat_downloader
 
-
+# Source: https://github.com/django/django/blob/master/django/core/management/color.py
 def supports_colour():
     """
     Return True if the running system's terminal supports colour,

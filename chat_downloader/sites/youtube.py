@@ -24,7 +24,9 @@ from ..utils import (
     time_to_seconds,
     seconds_to_time,
     int_or_none,
-    get_colours,
+    float_or_none,
+    arbg_int_to_rgba,
+    rgba_to_hex,
     try_get_first_key,
     try_get_first_value,
     remove_prefixes,
@@ -392,19 +394,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     @ staticmethod
     def _parse_navigation_endpoint(navigation_endpoint, default_text=''):
-
-        url = try_get(navigation_endpoint, lambda x: YouTubeChatDownloader._parse_youtube_link(
-            x['commandMetadata']['webCommandMetadata']['url'])) or default_text
-
-        return url
+        try:
+            return YouTubeChatDownloader._parse_youtube_link(
+                navigation_endpoint['commandMetadata']['webCommandMetadata']['url'])
+        except Exception:
+            return default_text
 
     @ staticmethod
     def _parse_runs(run_info, parse_links=True):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
-
         message_info = {
             'message': ''
         }
+
+        if not isinstance(run_info, dict):
+            return message_info
+
         message_emotes = {}
 
         runs = run_info.get('runs') or []
@@ -463,8 +468,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # check for colour information
         for colour_key in YouTubeChatDownloader._COLOUR_KEYS:
             if colour_key in item_info:  # if item has colour information
-                info[camel_case_split(colour_key.replace('Color', 'Colour'))] = get_colours(
-                    item_info[colour_key]).get('hex')
+                rgba_colour = arbg_int_to_rgba(item_info[colour_key])
+                hex_colour = rgba_to_hex(rgba_colour)
+                new_key = camel_case_split(
+                    colour_key.replace('Color', 'Colour'))
+                info[new_key] = hex_colour
 
         item_endpoint = item_info.get('showItemEndpoint')
         if item_endpoint:  # has additional information
@@ -568,8 +576,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     @ staticmethod
     def _parse_action_button(item):
+        endpoint = multi_get(item, 'buttonRenderer', 'navigationEndpoint')
+
         return {
-            'url': try_get(item, lambda x: YouTubeChatDownloader._parse_navigation_endpoint(x['buttonRenderer']['navigationEndpoint'])) or '',
+            'url': YouTubeChatDownloader._parse_navigation_endpoint(endpoint) if endpoint else '',
             'text': multi_get(item, 'buttonRenderer', 'text', 'simpleText') or ''
         }
 
@@ -1045,10 +1055,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         streaming_data = player_response_info.get('streamingData') or {}
         formats = streaming_data.get(
             'adaptiveFormats') or streaming_data.get('formats')
-        last_modified = try_get(formats, lambda x: float(x[0]['lastModified']))
 
         details = {
-            'start_time': last_modified,
+            'start_time': float_or_none(multi_get(formats, 0, 'lastModified')),
         }
 
         # Try to get continuation info
@@ -1082,8 +1091,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 for error_reason in error_reasons:
                     text = error_info.get(error_reason) or {}
 
-                    error_reasons[error_reason] = text.get('simpleText') or try_get(
-                        text, lambda x: self._parse_runs(x, False)['message']) or error_info.pop(
+                    error_reasons[error_reason] = text.get('simpleText') or self._parse_runs(
+                        text, False)['message'] or error_info.pop(
                         'itemTitle', '') or error_info.pop(
                             'offerDescription', '') or playability_status.get(error_reason) or ''
 
@@ -1110,13 +1119,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:
+                log('debug', 'Initial YouTube data: {}'.format(yt_initial_data))
                 raise VideoUnavailable(
                     'Unable to find initial video contents.')
             else:
                 # Video exists, but you cannot view chat for some reason
-                error_message = try_get(conversation_bar, lambda x: self._parse_runs(
-                    x['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text'], False)['message']) or \
-                    'Video does not have a chat replay.'
+
+                error_runs = multi_get(conversation_bar, 'conversationBarRenderer', 'availabilityMessage', 'messageRenderer', 'text')
+                error_message = self._parse_runs(error_runs, False)['message'] if error_runs else 'Video does not have a chat replay.'
+
                 raise NoChatReplay(error_message)
 
         video_details = player_response_info.get('videoDetails') or {}
