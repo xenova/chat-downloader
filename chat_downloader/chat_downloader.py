@@ -106,7 +106,7 @@ class ChatDownloader():
 
                  # Output
                  output=None,
-                 overwrite=False,
+                 overwrite=True,
                  sort_keys=True,
                  indent=4,
 
@@ -173,8 +173,9 @@ class ChatDownloader():
         :param output: Path of the output file, defaults to None (print to
             standard output)
         :type output: str, optional
-        :param overwrite: Overwrite output file if it exists. Otherwise,
-            append to the end of the file. Defaults to False
+        :param overwrite: If True, overwrite output file. Otherwise, append
+            to the end of the file. Defaults to True. In both cases, the file
+            (and directories) is created if it does not exist.
         :type overwrite: bool, optional
         :param sort_keys: Sort keys when outputting to a file, defaults to True
         :type sort_keys: bool, optional
@@ -288,20 +289,19 @@ class ChatDownloader():
                         setattr(chat.chat, 'on_inactivity_timeout',
                                 log_on_inactivity_timeout)
 
+                formatter = ItemFormatter(format_file)
+                chat.format = lambda x: formatter.format(x, format_name=format)
+
                 if output:
                     output_file = ContinuousWriter(
                         output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
 
-                    def write_to_file(item):
-                        output_file.write(item, flush=True)
-
-                    chat.callback = write_to_file
+                    if output_file.is_default():
+                        chat.callback = lambda x: output_file.write(chat.format(x), flush=True)
+                    else:
+                        chat.callback = lambda x: output_file.write(x, flush=True)
 
                 chat.site = site_object
-
-                formatter = ItemFormatter(format_file)
-
-                chat.format = lambda x: formatter.format(x, format_name=format)
 
                 log('debug', 'Chat information: {}'.format(chat.__dict__))
                 log('info', 'Retrieving chat for "{}".'.format(chat.title))

@@ -30,8 +30,6 @@ Chat Downloader
 `Chat Downloader`_ is a simple tool used to retrieve chat messages from livestreams,
 videos, clips and past broadcasts. No authentication needed!
 
-The tool aims to ... across all sites, allowing for a
-
 .. _Chat Downloader: https://github.com/xenova/chat-downloader
 
 .. include:: installing.rst
@@ -57,8 +55,7 @@ For example, to save messages from a livestream to a JSON file, you can use:
 
 
 
-For a description of these options, as well as advanced command line use-cases and examples, consult the `Advanced Command
-Guide`_.
+For a description of these options, as well as advanced command line use-cases and examples, consult the :ref:`Command Line Usage` page.
 
 
 Python
@@ -74,8 +71,7 @@ Python
        chat.print_formatted(message)           # print the formatted message
 
 
-For advanced python use-cases and examples, consult the `Python Wiki`_.
-source/index
+For advanced python use-cases and examples, consult the :ref:`Python Documentation`.
 
 
 ##########
@@ -84,7 +80,7 @@ Chat Items
 
 Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and should follow a format similar to this:
 
-.. code-block:: json
+.. code-block::
 
     {
         ...
@@ -108,9 +104,11 @@ Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and shoul
     }
 
 
+For an extensive, documented list of included fields, consult the :ref:`Chat Items` page.
 
-For an extensive, documented list of included fields, consult the `Chat Item Wiki`_.
-
+##########################
+Frequently Asked Questions
+##########################
 
 ######
 Issues

@@ -47,11 +47,12 @@ class Remapper():
     def __init__(self, new_key=None, remap_function=None, to_unpack=False):
         """Create a Remapper object
 
-        :param new_key: [description], defaults to None
-        :type new_key: [type], optional
-        :param remap_function: [description], defaults to None
-        :type remap_function: [type], optional
-        :param to_unpack: [description], defaults to False
+        :param new_key: The new key of the item, defaults to None
+        :type new_key: str, optional
+        :param remap_function: The remapping function, defaults to None
+        :type remap_function: function, optional
+        :param to_unpack: Unpack the remapped item (to map to multiple output keys),
+            defaults to False
         :type to_unpack: bool, optional
         :raises ValueError: if unable to perform a remapping
         """

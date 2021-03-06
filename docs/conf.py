@@ -52,9 +52,11 @@ release = metadata['__version__']
 extensions = [
     'sphinx_rtd_theme',
     'sphinx.ext.autodoc',
-    'sphinxcontrib.programoutput'
+    'sphinxcontrib.programoutput',
+    'sphinx.ext.autosectionlabel'
     # 'm2r'
 ]
+# suppress_warnings = ['autosectionlabel.*']
 
 
 # Add any paths that contain templates here, relative to this directory.
