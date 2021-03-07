@@ -123,7 +123,7 @@ Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and shoul
     }
 
 
-For an extensive, documented list of included fields, consult the :ref:`Chat Items Documentation`.
+For an extensive, documented list of included fields, consult the :ref:`Chat Item Fields` page.
 
 ##########################
 Frequently Asked Questions

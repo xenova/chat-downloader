@@ -140,7 +140,7 @@ Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and shoul
     }
 
 
-For an extensive, documented list of included fields, consult the `Chat Items Documentation <https://chat-downloader.readthedocs.io/en/docs/items.html#chat-items-documentation>`_.
+For an extensive, documented list of included fields, consult the `Chat Item Fields <https://chat-downloader.readthedocs.io/en/docs/items.html#chat-item-fields>`_ page.
 
 ##########################
 Frequently Asked Questions
