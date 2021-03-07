@@ -11,6 +11,7 @@ Overview
    cli
    source/index
    items
+   options
    contributing
    changelog
 

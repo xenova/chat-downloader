@@ -21,7 +21,7 @@ def replace_cmd_output(match):
     text = output[0].decode()
 
 
-    return '.. code:: console\n' + ''.join(map(lambda x: padding + x, text.splitlines(True)))
+    return '.. code:: console\n\n' + ''.join(map(lambda x: padding + x, text.splitlines(True)))
 
 substitution = re.sub(cmd_regex, replace_cmd_output, readme)
 

@@ -24,6 +24,17 @@ from ..debugging import log
 
 class Image():
     def __init__(self, url, width=None, height=None, image_id=None):
+        """Create an Image object
+
+        :param url: The URL of the actual image
+        :type url: str
+        :param width: The width of the image, defaults to None
+        :type width: int, optional
+        :param height: The height of the image, defaults to None
+        :type height: int, optional
+        :param image_id: A identifier for the image, usually of the form: {width}x{height}, defaults to None
+        :type image_id: str, optional
+        """
         self.url = url
 
         if self.url.startswith('//'):
@@ -38,6 +49,11 @@ class Image():
             self.id = image_id
 
     def json(self):
+        """Return the JSON representation of an Image
+
+        :return: JSON representation of the object
+        :rtype: dict
+        """
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
 

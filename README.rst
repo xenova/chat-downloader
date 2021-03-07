@@ -64,6 +64,7 @@ Command line
 ------------
 
 .. code:: console
+
     usage: chat_downloader [-h] [--version] [--start_time START_TIME]
                            [--end_time END_TIME]
                            [--message_types MESSAGE_TYPES | --message_groups MESSAGE_GROUPS]

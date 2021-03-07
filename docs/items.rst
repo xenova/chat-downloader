@@ -39,7 +39,7 @@ the relevant documentation in a pull request.
      - Message type of the item.
    * - author
      - dictionary
-     - A dictionary containing information about the user who sent the message. For author fields, see here.
+     - A dictionary containing information about the user who sent the message. For author fields, see :ref:`here <Author fields table>`.
    * - time_in_seconds
      - float
      - The number of seconds after the video began, that the message was sent.  This is only present for replays/vods/clips (i.e. a video which is not live).
@@ -47,7 +47,9 @@ the relevant documentation in a pull request.
      - string
      - Human-readable format for `time_in_seconds`.
 
-Documentation for other (less common) fields can be found here.
+Documentation for other (less common) fields can be found :ref:`here <Other fields table>`.
+
+.. _Author fields table:
 
 .. list-table:: Author fields
    :widths: 20 10 70
@@ -76,10 +78,10 @@ Documentation for other (less common) fields can be found here.
      - URL of the author's channel/page.
    * - images
      - list
-     - A list which contains different sizes of the author's profile picture. See here for the fields that an image may have.
+     - A list which contains different sizes of the author's profile picture. See :ref:`here <Image fields table>` for the fields that an image may have.
    * - badges
      - list
-     - A list of the author's badges. See here for the fields that a badge may have.
+     - A list of the author's badges. See :ref:`here <Badge fields table>` for the fields that a badge may have.
    * - gender
      - string
      - Gender of the author.
@@ -99,6 +101,7 @@ Documentation for other (less common) fields can be found here.
      - boolean
      - `True` if the user is verified, `False` otherwise.
 
+.. _Image fields table:
 
 .. list-table:: Image fields
    :widths: 20 10 70
@@ -120,6 +123,7 @@ Documentation for other (less common) fields can be found here.
      - string
      - A identifier for the image, usually of the form: {width}x{height}
 
+.. _Badge fields table:
 
 .. list-table:: Badge fields
    :widths: 20 10 70
@@ -145,7 +149,7 @@ Documentation for other (less common) fields can be found here.
      - Name of the badge icon.
    * - icons
      - list
-     - A list of images for the badge icons. See here for potential fields.
+     - A list of images for the badge icons. See :ref:`here <Image fields table>` for potential fields.
    * - description
      - string
      - The description of the badge.
@@ -159,36 +163,7 @@ Documentation for other (less common) fields can be found here.
      - string
      - URL to visit if the badge is clicked.
 
-
-.. list-table:: Common fields
-   :widths: 20 10 70
-   :header-rows: 1
-
-   * - Field
-     - Type
-     - Description
-   * - timestamp
-     - float
-     - UNIX time (in microseconds) of when the message was sent.
-   * - message
-     - string
-     - Actual content/text of the chat item.
-   * - message_id
-     - string
-     - Identifier for the chat item.
-   * - message_type
-     - string
-     - Message type of the item.
-   * - author
-     - dictionary
-     - A dictionary containing information about the user who sent the message. For author fields, see here.
-   * - time_in_seconds
-     - float
-     - The number of seconds after the video began, that the message was sent.  This is only present for replays/vods/clips (i.e. a video which is not live).
-   * - time_text
-     - string
-     - Human-readable format for `time_in_seconds`.
-
+.. _Other fields table:
 
 .. list-table:: Other fields
    :widths: 20 10 70
@@ -223,13 +198,13 @@ Documentation for other (less common) fields can be found here.
      - Whether the viewer is the creator or not.
    * - sticker_images
      - list
-     - A list of the sticker image in different sizes. See here for the fields which an image may have.
+     - A list which contains different sizes of the sticker image. See :ref:`here <Image fields table>` for image fields.
    * - sponsor_icons
      - list
-     - A list of the sponsor image in different sizes. See here for potential fields.
+     - A list which contains different sizes of the sponsor image. See :ref:`here <Image fields table>` for image fields.
    * - ticker_icons
      - list
-     - A list of the ticker image in different sizes. See here for potential fields.
+     - A list which contains different sizes of the ticker image. See :ref:`here <Image fields table>` for image fields.
    * - ticker_duration
      - float
      - How long the ticker message is displayed for.
