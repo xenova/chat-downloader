@@ -291,8 +291,8 @@ class ChatReplayDownloader:
 
         return message_text
 
-    _YT_CFG_RE = re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;.*')
-    _YT_INITIAL_DATA_RE = re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;.*')
+    _YT_CFG_RE = re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;')
+    _YT_INITIAL_DATA_RE = re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;')
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
         original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
@@ -463,7 +463,7 @@ class ChatReplayDownloader:
 
         return data
 
-    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
+    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
         """ Get chat messages for a YouTube video. """
         self.debug_logger.video_id = video_id
 
@@ -601,9 +601,10 @@ class ChatReplayDownloader:
             return messages
 
         except KeyboardInterrupt:
+            print('[Interrupted]', flush=True)
             return messages
 
-    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None):
+    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, **kwargs):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
 
@@ -655,17 +656,19 @@ class ChatReplayDownloader:
                     cursor = info['_next']
                 else:
                     return messages
+
         except KeyboardInterrupt:
+            print('[Interrupted]', flush=True)
             return messages
 
-    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
+    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
         match = re.search(self.__YT_REGEX, url)
         if(match):
-            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback)
+            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback, **kwargs)
 
         match = re.search(self.__TWITCH_REGEX, url)
         if(match):
-            return self.get_twitch_messages(match.group(1), start_time, end_time, callback)
+            return self.get_twitch_messages(match.group(1), start_time, end_time, callback, **kwargs)
 
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
@@ -744,14 +747,7 @@ if __name__ == '__main__':
                 open(args.output, 'w').close()  # empty the file
                 callback = write_to_file
 
-        chat_messages = chat_downloader.get_chat_replay(
-            args.url,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            message_type=args.message_type,
-            chat_type=args.chat_type,
-            callback=callback
-        )
+        chat_messages = chat_downloader.get_chat_replay(callback=callback, **vars(args))
 
     except InvalidURL as e:
         print('[Invalid URL]', e, flush=True)
@@ -768,7 +764,13 @@ if __name__ == '__main__':
     except requests.exceptions.RequestException:
         print('[HTTP Request Error]', e, flush=True)
     except KeyboardInterrupt:
-        print('Interrupted.', flush=True)
+        print('[Interrupted]', flush=True)
+    # XXX ctrl-c sometimes isn't caught by above KeyboardInterrupt and/or exits the program before finally block runs,
+    # possibly due to a sys.exit or interrupt in some library code?
+    except SystemExit as e:
+        print('[Unexpected SystemExit]', e, flush=True)
+    except InterruptedError as e:
+        print('[Unexpected InterruptedError]', e, flush=True)
 
     finally:
         if chat_messages and args.output:
@@ -779,10 +781,10 @@ if __name__ == '__main__':
 
             elif(args.output.endswith('.csv')):
                 num_of_messages = len(chat_messages)
-                fieldnames = []
+                fieldnames = set()
                 for message in chat_messages:
-                    fieldnames = list(set(fieldnames + list(message.keys())))
-                fieldnames.sort()
+                    fieldnames.update(message.keys())
+                fieldnames = sorted(fieldnames)
 
                 with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
                     fc = csv.DictWriter(f, fieldnames=fieldnames)
@@ -794,11 +796,11 @@ if __name__ == '__main__':
 
 else:
     # when used as a module
-    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
-        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback)
+    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
+        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, **kwargs)
 
-    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None):
-        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback)
+    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
+        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, **kwargs)
 
-    def get_twitch_messages(url, start_time=0, end_time=None, callback=None):
-        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback)
+    def get_twitch_messages(url, start_time=0, end_time=None, callback=None, **kwargs):
+        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, **kwargs)
