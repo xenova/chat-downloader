@@ -292,6 +292,7 @@ class ChatReplayDownloader:
         return message_text
 
     _YT_CFG_RE = re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;')
+    _YT_INITIAL_PLAYER_RESPONSE_RE = re.compile(r'\bytInitialPlayerResponse\s*=\s*({.+?})\s*;')
     _YT_INITIAL_DATA_RE = re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;')
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
@@ -311,7 +312,14 @@ class ChatReplayDownloader:
             'api_key': ytcfg['INNERTUBE_API_KEY'],
             'context': ytcfg['INNERTUBE_CONTEXT'],
         }
-        if self.debug_logger: self.debug_logger("config:\n{}", json.dumps(config, indent=4))
+
+        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
+        #if self.debug_logger: self.debug_logger("ytInitialPlayerResponse:\n{}", json.dumps(ytInitialPlayerResponse, indent=4)) # too verbose
+
+        config['is_upcoming'] = ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False)
 
         m = self._YT_INITIAL_DATA_RE.search(html.text)
         if not m:
@@ -333,18 +341,16 @@ class ChatReplayDownloader:
                     columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
             except KeyError:
                 pass
-            finally:
-                raise NoChatReplay(error_message)
-
-        livechat_header = columns['conversationBar']['liveChatRenderer']['header']
-        viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
-            'viewSelector']['sortFilterSubMenuRenderer']['subMenuItems']
-
-        continuation_by_title_map = {
-            x['title']: x['continuation']['reloadContinuationData']['continuation']
-            for x in viewselector_submenuitems
-        }
-        if self.debug_logger: self.debug_logger("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
+            config['no_chat_error'] = error_message
+            continuation_by_title_map = {}
+        else:
+            livechat_header = columns['conversationBar']['liveChatRenderer']['header']
+            viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
+                'viewSelector']['sortFilterSubMenuRenderer']['subMenuItems']
+            continuation_by_title_map = {
+                x['title']: x['continuation']['reloadContinuationData']['continuation']
+                for x in viewselector_submenuitems
+            }
 
         return config, continuation_by_title_map
 
@@ -474,27 +480,43 @@ class ChatReplayDownloader:
 
         offset_milliseconds = start_time * 1000 if start_time > 0 else 0
 
-        config, continuation_by_title_map = self.__get_initial_youtube_info(video_id)
-
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
         chat_type_field = chat_type.title()
         chat_replay_field = '{} chat replay'.format(chat_type_field)
         chat_live_field = '{} chat'.format(chat_type_field)
 
-        if(chat_replay_field in continuation_by_title_map):
-            is_live = False
-            continuation_title = chat_replay_field
-        elif(chat_live_field in continuation_by_title_map):
-            is_live = True
-            continuation_title = chat_live_field
-        else:
-            raise NoChatReplay('Video does not have a chat replay.')
-
-        continuation = continuation_by_title_map[continuation_title]
-
-        first_time = True
         try:
+            continuation_title = None
+            attempt_ct = 0
+            while True:
+                attempt_ct += 1
+                config, continuation_by_title_map = self.__get_initial_youtube_info(video_id)
+
+                if(chat_replay_field in continuation_by_title_map):
+                    is_live = False
+                    continuation_title = chat_replay_field
+                elif(chat_live_field in continuation_by_title_map):
+                    is_live = True
+                    continuation_title = chat_live_field
+
+                if continuation_title is None:
+                    error_message = config.get('no_chat_error', 'Video does not have a chat replay.')
+                    if config['is_upcoming']:
+                        retry_wait_secs = random.randint(30, 45) # jitter
+                        if self.debug_logger: self.debug_logger("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
+                        time.sleep(retry_wait_secs)
+                    else:
+                        raise NoChatReplay(error_message)
+                else:
+                    if self.debug_logger:
+                        self.debug_logger("config:\n{}", json.dumps(config, indent=4))
+                        self.debug_logger("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
+                    break
+
+            continuation = continuation_by_title_map[continuation_title]
+
+            first_time = True
             while True:
                 try:
                     if(is_live):
