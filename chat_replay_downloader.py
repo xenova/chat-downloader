@@ -2,6 +2,7 @@
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import logging
 import random
 import json
 import datetime
@@ -15,6 +16,18 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import codecs
 from urllib import parse
+
+
+# add TRACE log level
+if not hasattr(logging, 'TRACE') or 'TRACE' not in logging._nameToLevel:
+    logging.TRACE = logging.DEBUG // 2
+    logging.addLevelName(logging.TRACE, 'TRACE')
+if not hasattr(logging, 'trace') or not hasattr(logging.Logger, 'trace') or not hasattr(logging.LoggerAdapter, 'trace'):
+    def __trace(self, msg, *args, **kwargs):
+        self.log(logging.TRACE, msg, *args, **kwargs)
+    logging.trace = __trace
+    logging.Logger.trace = __trace
+    logging.LoggerAdapter.trace = __trace
 
 
 class CallbackFunction(Exception):
@@ -61,20 +74,11 @@ class CookieError(Exception):
     """Raised when an error occurs while loading a cookie file."""
     pass
 
-# XXX Simple debug logger - could be extended to handle log levels via some LogLevel enum, but not worth the effort, since I'm only using this for temp debugging anyway.
-class DebugLogger:
-    def __init__(self, enabled):
-        self.video_id = ''
-        self.enabled = enabled
-
-    def __call__(self, format, *args):
-        print(("[DEBUG][{}][{:%Y-%m-%d %H:%M:%S}] " + format).format(self.video_id, datetime.datetime.now(), *args), flush=True)
-
-    def __bool__(self):
-        return self.enabled
 
 class ChatReplayDownloader:
     """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
+
+    DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     __HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
@@ -134,9 +138,44 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    def __init__(self, cookies=None, debug_output=False):
+    # 1) provides a formatter that adds context to log messages
+    # 2) allows string.format-style ({}-style) formatting (rather than %-style formatting)
+    # 3) provides a decorator that has context be the video id passed to the decorated function
+    #    decorator functions defined in a class can't be used to decorate a function in the same class, so this separate class provides a workaround
+    class ContextLogger(logging.LoggerAdapter):
+        def __init__(self, logger):
+            logger.propagate = False
+            if not logger.hasHandlers():
+                handler = logging.StreamHandler(sys.stdout)
+                handler.setFormatter(logging.Formatter('[%(levelname)s][%(asctime)s]%(context)s %(message)s', datefmt=ChatReplayDownloader.DATETIME_FORMAT))
+                logger.addHandler(handler)
+            super().__init__(logger, None)
+            self.context = ''
+
+        def log(self, level, msg, *args, **kwargs):
+            if self.isEnabledFor(level):
+                kwargs['extra'] = self.__dict__
+                if args:
+                    msg = msg.format(*args)
+                self.logger._log(level, msg, (), **kwargs)
+
+        @classmethod
+        def log_video_id(cls, func):
+            def wrapped(self, video_id, *args, **kwargs):
+                if not isinstance(self.logger, cls):
+                    raise TypeError(f"self.logger must be {cls.__qualname__} - was {self.logger.__class__.__qualname__}")
+                orig_context = self.logger.context
+                self.logger.context = f"[{video_id}]"
+                try:
+                    return func(self, video_id, *args, **kwargs)
+                finally:
+                    self.logger.context = orig_context
+            return wrapped
+
+    def __init__(self, cookies=None, log_level=logging.WARNING):
         """Initialise a new session for making requests."""
-        self.debug_logger = DebugLogger(debug_output)
+        self.logger = self.ContextLogger(logging.getLogger(self.__class__.__name__))
+        self.logger.setLevel(log_level)
 
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
@@ -162,14 +201,12 @@ class ChatReplayDownloader:
     def __session_get(self, url, post_payload=None):
         """Make a request using the current session."""
         if post_payload is None:
-            #if self.debug_logger: self.debug_logger("HTTP GET {}", url)
             response = self.session.get(url, timeout=10)
-            if self.debug_logger: self.debug_logger("HTTP GET {} => status={} len(text)={}", url, response.status_code, len(response.text))
         else:
+            if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+                self.logger.trace("HTTP POST {!r} <= body JSON (pretty-printed):\n{}", url, json.dumps(post_payload, indent=4)) # too verbose
             post_payload = json.dumps(post_payload)
-            #if self.debug_logger: self.debug_logger("HTTP POST {}\n{}", url, post_payload) # too verbose
             response = self.session.post(url, data=post_payload, timeout=10)
-            if self.debug_logger: self.debug_logger("HTTP POST {} len(payload)={} => status={} len(text)={}", url, len(post_payload), response.status_code, len(response.text))
         return response
 
     def __session_get_json(self, url, post_payload=None):
@@ -177,8 +214,9 @@ class ChatReplayDownloader:
         try:
             ret = self.__session_get(url, post_payload).json()
         except json.JSONDecodeError as e:
-            raise ParsingError("Could not parse JSON from response to '{}':\n{}".format(url, e.doc)) from e
-        #if self.debug_logger: self.debug_logger("=> JSON:\n{}", json.dumps(ret))
+            raise ParsingError("Could not parse JSON from response to {!r}:\n{}".format(url, e.doc)) from e
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, json.dumps(ret, indent=4))
         return ret
 
     def __timestamp_to_microseconds(self, timestamp):
@@ -199,7 +237,7 @@ class ChatReplayDownloader:
 
     def __microseconds_to_timestamp(self, microseconds):
         """Convert unix time to human-readable timestamp."""
-        return datetime.datetime.fromtimestamp(microseconds//1000000).strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.datetime.fromtimestamp(microseconds//1000000).strftime(self.DATETIME_FORMAT)
 
     def __arbg_int_to_rgba(self, argb_int):
         """Convert ARGB integer to RGBA array."""
@@ -305,7 +343,8 @@ class ChatReplayDownloader:
         if not m:
             raise ParsingError('Unable to parse video data. Please try again.')
         ytcfg, _ = json_decoder.raw_decode(m.group(1))
-        #if self.debug_logger: self.debug_logger("ytcfg:\n{}", json.dumps(ytcfg, indent=4)) # too verbose
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("ytcfg:\n{}", json.dumps(ytcfg, indent=4))
 
         config = {
             'api_version': ytcfg['INNERTUBE_API_VERSION'],
@@ -317,7 +356,8 @@ class ChatReplayDownloader:
         if not m:
             raise ParsingError('Unable to parse video data. Please try again.')
         ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
-        #if self.debug_logger: self.debug_logger("ytInitialPlayerResponse:\n{}", json.dumps(ytInitialPlayerResponse, indent=4)) # too verbose
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialPlayerResponse:\n{}", json.dumps(ytInitialPlayerResponse, indent=4))
 
         config['is_upcoming'] = ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False)
 
@@ -326,7 +366,8 @@ class ChatReplayDownloader:
             raise ParsingError('Unable to parse video data. Please try again.')
 
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
-        #if self.debug_logger: self.debug_logger("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4)) # too verbose
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4))
 
         contents = ytInitialData.get('contents')
         if(not contents):
@@ -357,7 +398,7 @@ class ChatReplayDownloader:
     def __get_replay_info(self, config, continuation, offset_milliseconds):
         """Get YouTube replay info, given a continuation or a certain offset."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'get_live_chat_replay', config['api_key'])
-        if self.debug_logger: self.debug_logger("get_replay_info: continuation={}, playerOffsetMs={}", continuation, offset_milliseconds)
+        self.logger.debug("get_replay_info: continuation={}, playerOffsetMs={}", continuation, offset_milliseconds)
         return self.__get_continuation_info(url, {
             'context': config['context'],
             'continuation': continuation,
@@ -369,7 +410,7 @@ class ChatReplayDownloader:
     def __get_live_info(self, config, continuation):
         """Get YouTube live info, given a continuation."""
         url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'get_live_chat', config['api_key'])
-        if self.debug_logger: self.debug_logger("get_live_info: continuation={}", continuation)
+        self.logger.debug("get_live_info: continuation={}", continuation)
         return self.__get_continuation_info(url, {
             'context': config['context'],
             'continuation': continuation,
@@ -387,7 +428,7 @@ class ChatReplayDownloader:
             elif error_code == 404:
                 raise VideoNotFound
             else:
-                raise ParsingError("JSON response to '{}' is error:\n{}".format(url, json.dumps(response)))
+                raise ParsingError("JSON response to {!r} is error:\n{}".format(url, json.dumps(response, indent=4)))
         info = response.get('continuationContents', {}).get('liveChatContinuation')
         if info:
             return info
@@ -469,9 +510,9 @@ class ChatReplayDownloader:
 
         return data
 
+    @ContextLogger.log_video_id
     def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
         """ Get chat messages for a YouTube video. """
-        self.debug_logger.video_id = video_id
 
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
@@ -504,14 +545,14 @@ class ChatReplayDownloader:
                     error_message = config.get('no_chat_error', 'Video does not have a chat replay.')
                     if config['is_upcoming']:
                         retry_wait_secs = random.randint(30, 45) # jitter
-                        if self.debug_logger: self.debug_logger("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
+                        self.logger.debug("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
                         time.sleep(retry_wait_secs)
                     else:
                         raise NoChatReplay(error_message)
                 else:
-                    if self.debug_logger:
-                        self.debug_logger("config:\n{}", json.dumps(config, indent=4))
-                        self.debug_logger("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
+                    if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
+                        self.logger.debug("config:\n{}", json.dumps(config, indent=4))
+                        self.logger.debug("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
                     break
 
             continuation = continuation_by_title_map[continuation_title]
@@ -615,7 +656,7 @@ class ChatReplayDownloader:
                     if 'timeoutMs' in continuation_info:
                         # must wait before calling again
                         # prevents 429 errors (too many requests)
-                        #if self.debug_logger: self.debug_logger("continuation timeoutMs={}", continuation_info['timeoutMs'])
+                        self.logger.trace("continuation timeoutMs={}", continuation_info['timeoutMs'])
                         time.sleep(continuation_info['timeoutMs']/1000)
                 else:
                     break
@@ -626,6 +667,7 @@ class ChatReplayDownloader:
             print('[Interrupted]', flush=True)
             return messages
 
+    @ContextLogger.log_video_id
     def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, **kwargs):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
@@ -722,8 +764,10 @@ if __name__ == '__main__':
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
 
-    parser.add_argument('--debug_output', action='store_true',
-                        help='whether to log debug output to standard output')
+    parser.add_argument('-log_level',
+                        choices=[name for level, name in logging._levelToName.items() if level != 0],
+                        default=logging._levelToName[logging.WARNING],
+                        help='log level, logged to standard output\n(default: %(default)s)')
 
     args = parser.parse_args()
 
@@ -736,11 +780,15 @@ if __name__ == '__main__':
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
 
+    # this has to go after stdout/stderr are modified
+    logging.basicConfig(level=args.log_level, stream=sys.stdout, format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s',
+                        datefmt=ChatReplayDownloader.DATETIME_FORMAT)
+
     num_of_messages = 0
     chat_messages = []
 
     try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies, debug_output=args.debug_output)
+        chat_downloader = ChatReplayDownloader(cookies=args.cookies, log_level=args.log_level)
 
         def print_item(item):
             chat_downloader.print_item(item)
