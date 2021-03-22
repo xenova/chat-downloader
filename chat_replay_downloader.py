@@ -143,18 +143,18 @@ class ChatReplayDownloader:
     # 3) provides a decorator that has context be the video id passed to the decorated function
     #    decorator functions defined in a class can't be used to decorate a function in the same class, so this separate class provides a workaround
     class ContextLogger(logging.LoggerAdapter):
-        def __init__(self, logger):
+        def __init__(self, logger, base_context):
             logger.propagate = False
             if not logger.hasHandlers():
                 handler = logging.StreamHandler(sys.stdout)
                 handler.setFormatter(logging.Formatter('[%(levelname)s][%(asctime)s]%(context)s %(message)s', datefmt=ChatReplayDownloader.DATETIME_FORMAT))
                 logger.addHandler(handler)
             super().__init__(logger, None)
-            self.context = ''
+            self.context = base_context
 
         def log(self, level, msg, *args, **kwargs):
             if self.isEnabledFor(level):
-                kwargs['extra'] = self.__dict__
+                kwargs['extra'] = {'context': f"[{self.context}]" if self.context else ''}
                 if args:
                     msg = msg.format(*args)
                 self.logger._log(level, msg, (), **kwargs)
@@ -165,17 +165,17 @@ class ChatReplayDownloader:
                 if not isinstance(self.logger, cls):
                     raise TypeError(f"self.logger must be {cls.__qualname__} - was {self.logger.__class__.__qualname__}")
                 orig_context = self.logger.context
-                self.logger.context = f"[{video_id}]"
+                self.logger.context += video_id
                 try:
                     return func(self, video_id, *args, **kwargs)
                 finally:
                     self.logger.context = orig_context
             return wrapped
 
-    def __init__(self, cookies=None, log_level=logging.WARNING):
+    def __init__(self, cookies=None, log_options={}):
         """Initialise a new session for making requests."""
-        self.logger = self.ContextLogger(logging.getLogger(self.__class__.__name__))
-        self.logger.setLevel(log_level)
+        self.logger = self.ContextLogger(logging.getLogger(self.__class__.__name__), log_options.get('log_base_context', ''))
+        self.logger.setLevel(log_options.get('log_level', logging.WARNING)) # note: setLevel can handle either the level name or int value
 
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
@@ -769,6 +769,11 @@ if __name__ == '__main__':
                         default=logging._levelToName[logging.WARNING],
                         help='log level, logged to standard output\n(default: %(default)s)')
 
+    parser.add_argument('-log_base_context', default='',
+                        help='lines logged to standard output are formatted as:\n'
+                             '"[<log_level>][<datetime>][<log_base_context><video_id>] <message>" (without the quotes)\n'
+                             "(default: '%(default)s')")
+
     args = parser.parse_args()
 
     if(args.hide_output):
@@ -788,7 +793,9 @@ if __name__ == '__main__':
     chat_messages = []
 
     try:
-        chat_downloader = ChatReplayDownloader(cookies=args.cookies, log_level=args.log_level)
+        chat_downloader = ChatReplayDownloader(
+            cookies=args.cookies,
+            log_options={name: val for name, val in vars(args).items() if name.startswith('log_')})
 
         def print_item(item):
             chat_downloader.print_item(item)
