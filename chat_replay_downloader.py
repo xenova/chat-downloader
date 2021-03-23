@@ -5,7 +5,7 @@ from urllib3.util.retry import Retry
 import logging
 import random
 import json
-import datetime
+from datetime import datetime, timedelta
 import re
 import argparse
 import csv
@@ -204,7 +204,7 @@ class ChatReplayDownloader:
             response = self.session.get(url, timeout=10)
         else:
             if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-                self.logger.trace("HTTP POST {!r} <= body JSON (pretty-printed):\n{}", url, json.dumps(post_payload, indent=4)) # too verbose
+                self.logger.trace("HTTP POST {!r} <= body JSON (pretty-printed):\n{}", url, _debug_dump(post_payload)) # too verbose
             post_payload = json.dumps(post_payload)
             response = self.session.post(url, data=post_payload, timeout=10)
         return response
@@ -216,16 +216,16 @@ class ChatReplayDownloader:
         except json.JSONDecodeError as e:
             raise ParsingError("Could not parse JSON from response to {!r}:\n{}".format(url, e.doc)) from e
         if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-            self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, json.dumps(ret, indent=4))
+            self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, _debug_dump(ret))
         return ret
 
     def __timestamp_to_microseconds(self, timestamp):
         """
         Convert RFC3339 timestamp to microseconds.
-        This is needed as datetime.datetime.strptime() does not support nanosecond precision.
+        This is needed as datetime.strptime() does not support nanosecond precision.
         """
         info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-        return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
+        return round((datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
 
     def __time_to_seconds(self, time):
         """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
@@ -233,11 +233,12 @@ class ChatReplayDownloader:
 
     def __seconds_to_time(self, seconds):
         """Convert seconds to timestamp."""
-        return re.sub(r'^0:0?', '', str(datetime.timedelta(0, seconds)))
+        time_text = str(timedelta(seconds=seconds))
+        return time_text if time_text != '0:0' else ''
 
-    def __microseconds_to_timestamp(self, microseconds):
-        """Convert unix time to human-readable timestamp."""
-        return datetime.datetime.fromtimestamp(microseconds//1000000).strftime(self.DATETIME_FORMAT)
+    def __timestamp_microseconds_to_datetime_str(self, timestamp_microseconds):
+        """Convert unix timestamp in microseconds to datetime string."""
+        return datetime.fromtimestamp(timestamp_microseconds // 1_000_000).strftime(self.DATETIME_FORMAT)
 
     def __arbg_int_to_rgba(self, argb_int):
         """Convert ARGB integer to RGBA array."""
@@ -344,7 +345,7 @@ class ChatReplayDownloader:
             raise ParsingError('Unable to parse video data. Please try again.')
         ytcfg, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-            self.logger.trace("ytcfg:\n{}", json.dumps(ytcfg, indent=4))
+            self.logger.trace("ytcfg:\n{}", _debug_dump(ytcfg))
 
         config = {
             'api_version': ytcfg['INNERTUBE_API_VERSION'],
@@ -357,7 +358,7 @@ class ChatReplayDownloader:
             raise ParsingError('Unable to parse video data. Please try again.')
         ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialPlayerResponse:\n{}", json.dumps(ytInitialPlayerResponse, indent=4))
+            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
 
         config['is_upcoming'] = ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False)
 
@@ -367,7 +368,7 @@ class ChatReplayDownloader:
 
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialData:\n{}", json.dumps(ytInitialData, indent=4))
+            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
 
         contents = ytInitialData.get('contents')
         if(not contents):
@@ -428,7 +429,7 @@ class ChatReplayDownloader:
             elif error_code == 404:
                 raise VideoNotFound
             else:
-                raise ParsingError("JSON response to {!r} is error:\n{}".format(url, json.dumps(response, indent=4)))
+                raise ParsingError("JSON response to {!r} is error:\n{}".format(url, _debug_dump(response)))
         info = response.get('continuationContents', {}).get('liveChatContinuation')
         if info:
             return info
@@ -498,7 +499,7 @@ class ChatReplayDownloader:
         if timestamp:
             timestamp = int(timestamp)
             data['timestamp'] = timestamp
-            data['datetime'] = self.__microseconds_to_timestamp(timestamp)
+            data['datetime'] = self.__timestamp_microseconds_to_datetime_str(timestamp)
 
         if('time_text' in data):
             data['time_in_seconds'] = int(
@@ -551,8 +552,8 @@ class ChatReplayDownloader:
                         raise NoChatReplay(error_message)
                 else:
                     if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
-                        self.logger.debug("config:\n{}", json.dumps(config, indent=4))
-                        self.logger.debug("continuation_by_title_map:\n{}", json.dumps(continuation_by_title_map, indent=4))
+                        self.logger.debug("config:\n{}", _debug_dump(config))
+                        self.logger.debug("continuation_by_title_map:\n{}", _debug_dump(continuation_by_title_map))
                     break
 
             continuation = continuation_by_title_map[continuation_title]
@@ -735,6 +736,10 @@ class ChatReplayDownloader:
             return self.get_twitch_messages(match.group(1), start_time, end_time, callback, **kwargs)
 
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
+
+
+def _debug_dump(obj):
+    return json.dumps(obj, indent=4, default=str)
 
 
 if __name__ == '__main__':
