@@ -744,37 +744,40 @@ if __name__ == '__main__':
 
     parser.add_argument('url', help='YouTube/Twitch video URL')
 
-    parser.add_argument('-start_time', '-from', default=0,
+    parser.add_argument('--start_time', '--from', default=0,
                         help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
-    parser.add_argument('-end_time', '-to', default=None,
+    parser.add_argument('--end_time', '--to', default=None,
                         help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
 
-    parser.add_argument('-message_type', choices=['messages', 'superchat', 'all'], default='messages',
+    parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default='messages',
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
 
-    parser.add_argument('-chat_type', choices=['live', 'top'], default='live',
+    parser.add_argument('--chat_type', choices=['live', 'top'], default='live',
                         help='which chat to get messages from [YouTube only]\n(default: %(default)s)')
 
-    parser.add_argument('-output', '-o', default=None,
+    parser.add_argument('--output', '-o', default=None,
                         help='name of output file\n(default: %(default)s = print to standard output)')
 
-    parser.add_argument('-cookies', '-c', default=None,
+    parser.add_argument('--cookies', '-c', default=None,
                         help='name of cookies file\n(default: %(default)s)')
 
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
 
-    parser.add_argument('-log_level',
+    parser.add_argument('--log_level',
                         choices=[name for level, name in logging._levelToName.items() if level != 0],
                         default=logging._levelToName[logging.WARNING],
                         help='log level, logged to standard output\n(default: %(default)s)')
 
-    parser.add_argument('-log_base_context', default='',
+    parser.add_argument('--log_base_context', default='',
                         help='lines logged to standard output are formatted as:\n'
                              '"[<log_level>][<datetime>][<log_base_context><video_id>] <message>" (without the quotes)\n'
                              "(default: '%(default)s')")
 
-    args = parser.parse_args()
+    # preprocess any long-form '-' args into '--' args
+    args = ['-' + arg if len(arg) >= 3 and arg[0] == '-' and arg[1] != '-' else arg for arg in sys.argv[1:]]
+
+    args = parser.parse_args(args)
 
     if(args.hide_output):
         f = open(os.devnull, 'w')
