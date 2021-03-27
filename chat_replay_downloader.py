@@ -75,6 +75,11 @@ class CookieError(Exception):
     pass
 
 
+class AbortConditionsSatisfied(Exception):
+    """"Raised when all abort conditions are satisfied."""
+    pass
+
+
 class ChatReplayDownloader:
     """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
 
@@ -87,7 +92,7 @@ class ChatReplayDownloader:
 
     __YT_HOME = 'https://www.youtube.com'
     __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
-    __YOUTUBE_API_BASE_TEMPLATE = '{}/youtubei/{}/live_chat/{}?key={}'
+    __YOUTUBE_API_BASE_TEMPLATE = '{}/youtubei/{}/{}?key={}'
 
     __TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
     __TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
@@ -361,6 +366,7 @@ class ChatReplayDownloader:
             self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
 
         config['is_upcoming'] = ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False)
+        config['scheduled_start_time'] = self.__get_scheduled_start_time(ytInitialPlayerResponse)
 
         m = self._YT_INITIAL_DATA_RE.search(html.text)
         if not m:
@@ -396,9 +402,17 @@ class ChatReplayDownloader:
 
         return config, continuation_by_title_map
 
+    def __get_scheduled_start_time(self, info):
+        """Get scheduled start time for a YouTube video (from either heartbeat JSON or ytInitialPlayerResponse JSON)."""
+        try:
+            timestamp = int(info['playabilityStatus']['liveStreamability']['liveStreamabilityRenderer']['offlineSlate']['liveStreamOfflineSlateRenderer']['scheduledStartTime'])
+            return datetime.fromtimestamp(timestamp)
+        except LookupError:
+            return None
+
     def __get_replay_info(self, config, continuation, offset_milliseconds):
         """Get YouTube replay info, given a continuation or a certain offset."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'get_live_chat_replay', config['api_key'])
+        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'live_chat/get_live_chat_replay', config['api_key'])
         self.logger.debug("get_replay_info: continuation={}, playerOffsetMs={}", continuation, offset_milliseconds)
         return self.__get_continuation_info(url, {
             'context': config['context'],
@@ -410,7 +424,7 @@ class ChatReplayDownloader:
 
     def __get_live_info(self, config, continuation):
         """Get YouTube live info, given a continuation."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'get_live_chat', config['api_key'])
+        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'live_chat/get_live_chat', config['api_key'])
         self.logger.debug("get_live_info: continuation={}", continuation)
         return self.__get_continuation_info(url, {
             'context': config['context'],
@@ -419,6 +433,24 @@ class ChatReplayDownloader:
 
     def __get_continuation_info(self, url, payload):
         """Get continuation info for a YouTube video."""
+        response = self.__get_youtube_json(url, payload)
+        try:
+            return response['continuationContents']['liveChatContinuation']
+        except LookupError:
+            raise NoContinuation
+
+    def __get_heartbeat_info(self, video_id, config):
+        """Get heartbeat info for a YouTube video."""
+        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'player/heartbeat', config['api_key'] + '&alt=json')
+        payload = {
+            'context': config['context'],
+            'videoId': video_id,
+            'heartbeatRequestParams': {'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS']}
+        }
+        return self.__get_youtube_json(url, payload)
+
+    def __get_youtube_json(self, url, payload):
+        """Get JSON for a YouTube API url"""
         response = self.__session_get_json(url, payload)
         error = response.get('error')
         if error:
@@ -430,11 +462,7 @@ class ChatReplayDownloader:
                 raise VideoNotFound
             else:
                 raise ParsingError("JSON response to {!r} is error:\n{}".format(url, _debug_dump(response)))
-        info = response.get('continuationContents', {}).get('liveChatContinuation')
-        if info:
-            return info
-        else:
-            raise NoContinuation
+        return response
 
     def __ensure_seconds(self, time, default=0):
         """Ensure time is returned in seconds."""
@@ -511,12 +539,76 @@ class ChatReplayDownloader:
 
         return data
 
+    def __parse_abort_conditions(self, abort_conditions):
+        if not abort_conditions:
+            return None
+        conds = {}
+        for raw_cond in abort_conditions:
+            cond_name, cond_arg = raw_cond.split(':', 1) if ':' in raw_cond else (raw_cond, None)
+            if cond_name == 'changed_scheduled_start_time':
+                changed_scheduled_start_time_format = cond_arg # need to 'fix' cond_arg value for below closure since cond_arg changes
+                sample_formatted = datetime.now().strftime(changed_scheduled_start_time_format) # test format string
+                self.logger.debug("abort condition {}: format {!r} => e.g. {}", cond_name, changed_scheduled_start_time_format, sample_formatted)
+                def cond(orig_scheduled_start_time, curr_scheduled_start_time):
+                    if not orig_scheduled_start_time or not curr_scheduled_start_time:
+                        return None # false
+                    orig_formatted = orig_scheduled_start_time.strftime(changed_scheduled_start_time_format)
+                    curr_formatted = curr_scheduled_start_time.strftime(changed_scheduled_start_time_format)
+                    if orig_formatted != curr_formatted:
+                        return "scheduled start time formatted as {!r} changed from {!r} to {!r}".format(
+                            changed_scheduled_start_time_format, orig_scheduled_start_time, curr_scheduled_start_time)
+                conds[cond_name] = cond
+            elif cond_name == 'min_time_until_scheduled_start_time':
+                m = re.match(r'(\d+):(\d+)', cond_arg)
+                if not m:
+                    raise argparse.ArgumentError(None, f"{cond_name} argument must be in format <hours>:<minutes>, e.g. 01:30")
+                min_secs_until_scheduled_start_time = int(m[1]) * 3600 + int(m[2]) * 60
+                self.logger.debug("abort condition {}: {} => min {!r} secs", cond_name, cond_arg, min_secs_until_scheduled_start_time)
+                def cond(_, curr_scheduled_start_time):
+                    if not curr_scheduled_start_time:
+                        return None # false
+                    secs_until_scheduled_start_time = curr_scheduled_start_time.timestamp() - time.time()
+                    if secs_until_scheduled_start_time > min_secs_until_scheduled_start_time:
+                        return "time until scheduled start time {} secs >= {} secs".format(
+                            secs_until_scheduled_start_time, min_secs_until_scheduled_start_time)
+                    return None
+                conds[cond_name] = cond
+            else:
+                raise argparse.ArgumentError(None, f"Unrecognized abort condition: {raw_cond}")
+        return conds
+
+    class AbortConditionChecker:
+        def __init__(self, logger, abort_conditions, orig_scheduled_start_time, scheduled_start_time_getter):
+            self.logger = logger
+            self.abort_conditions = abort_conditions
+            self.scheduled_start_time_getter = scheduled_start_time_getter
+            self.orig_scheduled_start_time = orig_scheduled_start_time
+            self.curr_scheduled_start_time = orig_scheduled_start_time
+
+        def check(self):
+            # assume that scheduled_start_time is None when video stream has started (is no longer upcoming)
+            if self.curr_scheduled_start_time is not None:
+                scheduled_start_time = self.scheduled_start_time_getter(self)
+                if self.curr_scheduled_start_time != scheduled_start_time:
+                    self.logger.debug("scheduled start time changed from {} to {}", self.curr_scheduled_start_time, scheduled_start_time)
+                    self.curr_scheduled_start_time = scheduled_start_time
+            cond_messages = []
+            for cond_name, cond in self.abort_conditions.items(): # assumed to be non-empty
+                cond_message = cond(self.orig_scheduled_start_time, self.curr_scheduled_start_time)
+                self.logger.trace("abort condition {}{} => {}", cond_name, (self.orig_scheduled_start_time, self.curr_scheduled_start_time), cond_message)
+                if not cond_message: # all abort conditions must evaluate to be truthy
+                    return
+                cond_messages.append(cond_message)
+            raise AbortConditionsSatisfied(' and '.join(cond_messages))
+
     @ContextLogger.log_video_id
     def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
         """ Get chat messages for a YouTube video. """
 
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
+        self.logger.trace("kwargs: {}", kwargs)
+        abort_conditions = self.__parse_abort_conditions(kwargs.get('abort_condition'))
 
         messages = []
 
@@ -529,6 +621,7 @@ class ChatReplayDownloader:
         chat_live_field = '{} chat'.format(chat_type_field)
 
         try:
+            abort_condition_checker = None
             continuation_title = None
             attempt_ct = 0
             while True:
@@ -545,6 +638,13 @@ class ChatReplayDownloader:
                 if continuation_title is None:
                     error_message = config.get('no_chat_error', 'Video does not have a chat replay.')
                     if config['is_upcoming']:
+                        if abort_conditions:
+                            if abort_condition_checker is None:
+                                abort_condition_checker = self.AbortConditionChecker(self.logger, abort_conditions,
+                                    config['scheduled_start_time'], lambda _: config['scheduled_start_time'])
+                            else:
+                                abort_condition_checker.check()
+
                         retry_wait_secs = random.randint(30, 45) # jitter
                         self.logger.debug("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
                         time.sleep(retry_wait_secs)
@@ -555,11 +655,27 @@ class ChatReplayDownloader:
                         self.logger.debug("config:\n{}", _debug_dump(config))
                         self.logger.debug("continuation_by_title_map:\n{}", _debug_dump(continuation_by_title_map))
                     break
-
             continuation = continuation_by_title_map[continuation_title]
 
+            abort_condition_checker = None
             first_time = True
             while True:
+                if abort_conditions:
+                    if abort_condition_checker is None:
+                        scheduled_start_time_poll_timestamp = time.time()
+                        def scheduled_start_time_getter(checker):
+                            nonlocal scheduled_start_time_poll_timestamp
+                            now_timestamp = time.time()
+                            if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
+                                scheduled_start_time_poll_timestamp = now_timestamp
+                                return self.__get_scheduled_start_time(self.__get_heartbeat_info(video_id, config))
+                            else:
+                                return checker.curr_scheduled_start_time
+                        abort_condition_checker = self.AbortConditionChecker(self.logger, abort_conditions,
+                            config.get('scheduled_start_time'), scheduled_start_time_getter)
+                    else:
+                        abort_condition_checker.check()
+
                 try:
                     if(is_live):
                         info = self.__get_live_info(config, continuation)
@@ -664,6 +780,9 @@ class ChatReplayDownloader:
 
             return messages
 
+        except AbortConditionsSatisfied as e:
+            print('[Abort conditions satisfied]', e, flush=True)
+            return messages
         except KeyboardInterrupt:
             print('[Interrupted]', flush=True)
             return messages
@@ -765,6 +884,18 @@ if __name__ == '__main__':
 
     parser.add_argument('--cookies', '-c', default=None,
                         help='name of cookies file\n(default: %(default)s)')
+
+    parser.add_argument('--abort_condition', action='append',
+                        help='a condition on which this application aborts (note: ctrl+c is always such a condition)\n'
+                             'available conditions for upcoming streams:\n'
+                             '* changed_scheduled_start_time:<strftime format e.g. %%Y%%m%%d> [YouTube-only]\n'
+                             '  true if datetime.strftime(<strftime format>) changes between initially fetched scheduled start datetime \n'
+                             '  and latest fetched scheduled start datetime \n'
+                             '* min_time_until_scheduled_start_time:<hours>:<minutes> [YouTube-only]\n'
+                             '  true if (latest fetched scheduled start datetime - current datetime) >= timedelta(hours=<hours>, minutes=<minutes>)\n'
+                             'multiple --abort_condition arguments can be specified, and such conditions are ANDed together,\n'
+                             "e.g. --abort_condition changed_scheduled_start_time:%%Y%%m%%d --abort_condition min_time_until_scheduled_start_time:00:10\n"
+                             'means abort if both scheduled start datetime changes date AND current time until scheduled start datetime is at least 10 minutes')
 
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide output or not\n(default: %(default)s)')
