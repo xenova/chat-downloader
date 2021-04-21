@@ -859,11 +859,19 @@ class ChatReplayDownloader:
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
+def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+    return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
+
+def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+    return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
+
+def get_twitch_messages(url, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
+    return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, output_messages, **kwargs)
+
 def _debug_dump(obj):
     return json.dumps(obj, indent=4, default=str)
 
-
-if __name__ == '__main__':
+def main(args):
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
@@ -913,7 +921,7 @@ if __name__ == '__main__':
                              "(default: '%(default)s')")
 
     # preprocess any long-form '-' args into '--' args
-    args = ['-' + arg if len(arg) >= 3 and arg[0] == '-' and arg[1] != '-' else arg for arg in sys.argv[1:]]
+    args = ['-' + arg if len(arg) >= 3 and arg[0] == '-' and arg[1] != '-' else arg for arg in args]
 
     args = parser.parse_args(args)
 
@@ -938,13 +946,13 @@ if __name__ == '__main__':
         if signum:
             print(f"[{signal.Signals(signum).name}]", flush=True) # pylint: disable=no-member # pylint lies - signal.Signals does exist
 
-        global called_finalize_output
+        nonlocal called_finalize_output
         if called_finalize_output:
             return
         else:
             called_finalize_output = True
 
-        global num_of_messages
+        nonlocal num_of_messages
         if chat_messages and args.output:
             if(args.output.endswith('.json')):
                 num_of_messages = len(chat_messages)
@@ -990,7 +998,7 @@ if __name__ == '__main__':
             chat_downloader.print_item(item)
 
         def write_to_file(item):
-            global num_of_messages
+            nonlocal num_of_messages
 
             # Don't print if it is a ticker message (prevents duplicates)
             if 'ticker_duration' in item:
@@ -1008,7 +1016,7 @@ if __name__ == '__main__':
             if(args.output.endswith('.json')):
                 pass
             elif(args.output.endswith('.csv')):
-                fieldnames = []
+                pass
             else:
                 open(args.output, 'w').close()  # empty the file
                 callback = write_to_file
@@ -1035,13 +1043,6 @@ if __name__ == '__main__':
 
     finally:
         finalize_output()
-else:
-    # when used as a module
-    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
-        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
-        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
-
-    def get_twitch_messages(url, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
-        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, output_messages, **kwargs)
+if __name__ == '__main__':
+    main(sys.argv[1:])
