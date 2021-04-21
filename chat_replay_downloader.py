@@ -15,7 +15,6 @@ import os
 from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import signal
-import codecs
 from urllib import parse
 
 
@@ -859,6 +858,35 @@ class ChatReplayDownloader:
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
+# intended for allowing multiple outputs for a single file object, based off https://stackoverflow.com/a/16551730
+class _MultiFile:
+    def __init__(self, *files):
+        self._files = files
+        self._attrwraps = {}
+
+    # explicit def for efficiency
+    def write(self, s):
+        for f in self._files:
+            f.write(s)
+
+    # explicit def for efficiency
+    def flush(self):
+        for f in self._files:
+            f.flush()
+
+    # for any other method, delegate to slower __getattr__
+    def __getattr__(self, attr, *args):
+        attr = self._attrwraps.get(attr)
+        if attr is not None:
+            return attr
+        def wrap(*args2, **kwargs2):
+            for f in self._files:
+                result = getattr(f, attr, *args)(*args2, **kwargs2)
+            return result
+        self._attrwraps[attr] = wrap
+        return wrap
+
+
 def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
@@ -908,7 +936,14 @@ def main(args):
                              'means abort if both scheduled start datetime changes date AND current time until scheduled start datetime is at least 10 minutes')
 
     parser.add_argument('--hide_output', action='store_true',
-                        help='whether to hide output or not\n(default: %(default)s)')
+                        help='whether to hide stdout and stderr output or not\n(default: %(default)s)')
+
+    parser.add_argument('--log_file', action='append',
+                        help="if --hide_output is true, this option has no effect\n"
+                             "if specified and not ':console:', redirects stdout and stderr to the given log file\n"
+                             "if specified as ':console:', outputs stdout and stderr to console as normal\n"
+                             "multiple --log_file arguments can be specified, allowing output to multiple log files and/or console\n"
+                             "(default if never specified: :console:)")
 
     parser.add_argument('--log_level',
                         choices=[name for level, name in logging._levelToName.items() if level != 0],
@@ -925,14 +960,30 @@ def main(args):
 
     args = parser.parse_args(args)
 
-    if(args.hide_output):
-        f = open(os.devnull, 'w')
-        sys.stdout = f
-        sys.stderr = f
+    # set encoding of standard output and standard error to utf-8
+    orig_stdout_encoding = sys.stdout.encoding
+    if orig_stdout_encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+    orig_stderr_encoding = sys.stderr.encoding
+    if orig_stderr_encoding != 'utf-8':
+        sys.stderr.reconfigure(encoding='utf-8')
+
+    if args.hide_output:
+        log_files = [open(os.devnull, 'w')]
+    elif args.log_file:
+        log_files = [open(log_file, 'w') if log_file != ':console:' else None for log_file in args.log_file]
     else:
-        # set encoding of standard output and standard error
-        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+        log_files = [None] # effectively ':console:'
+    orig_stdout = sys.stdout
+    orig_stderr = sys.stderr
+    out_log_files = [log_file if log_file else sys.stdout for log_file in log_files]
+    err_log_files = [log_file if log_file else sys.stderr for log_file in log_files]
+    if len(log_files) == 1:
+        sys.stdout = out_log_files[0]
+        sys.stderr = err_log_files[0]
+    else:
+        sys.stdout = _MultiFile(*out_log_files)
+        sys.stderr = _MultiFile(*err_log_files)
 
     # this has to go after stdout/stderr are modified
     logging.basicConfig(level=args.log_level, stream=sys.stdout, format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s',
@@ -941,10 +992,12 @@ def main(args):
     num_of_messages = 0
     chat_messages = []
 
+    orig_signal_handlers = {}
     called_finalize_output=False
     def finalize_output(signum=None, frame=None):
         if signum:
-            print(f"[{signal.Signals(signum).name}]", flush=True) # pylint: disable=no-member # pylint lies - signal.Signals does exist
+            name = signal.Signals(signum).name # pylint: disable=no-member # pylint lies - signal.Signals does exist
+            print(f"[{'Signal Received: ' + name[3:].capitalize() if name.startswith('SIG') else name.capitalize()}]", flush=True)
 
         nonlocal called_finalize_output
         if called_finalize_output:
@@ -953,29 +1006,44 @@ def main(args):
             called_finalize_output = True
 
         nonlocal num_of_messages
-        if chat_messages and args.output:
-            if(args.output.endswith('.json')):
-                num_of_messages = len(chat_messages)
-                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                    json.dump(chat_messages, f, sort_keys=True)
+        try:
+            if chat_messages and args.output:
+                if(args.output.endswith('.json')):
+                    num_of_messages = len(chat_messages)
+                    with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                        json.dump(chat_messages, f, sort_keys=True)
 
-            elif(args.output.endswith('.csv')):
-                num_of_messages = len(chat_messages)
-                fieldnames = set()
-                for message in chat_messages:
-                    fieldnames.update(message.keys())
-                fieldnames = sorted(fieldnames)
+                elif(args.output.endswith('.csv')):
+                    num_of_messages = len(chat_messages)
+                    fieldnames = set()
+                    for message in chat_messages:
+                        fieldnames.update(message.keys())
+                    fieldnames = sorted(fieldnames)
 
-                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                    fc = csv.DictWriter(f, fieldnames=fieldnames)
-                    fc.writeheader()
-                    fc.writerows(chat_messages)
+                    with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                        fc = csv.DictWriter(f, fieldnames=fieldnames)
+                        fc.writeheader()
+                        fc.writerows(chat_messages)
 
-            print('Finished writing', num_of_messages,
-                'messages to', args.output, flush=True)
-
-        if signum:
-            sys.exit()
+                print('Finished writing', num_of_messages,
+                    'messages to', args.output, flush=True)
+        finally:
+            try:
+                for orig_signum, orig_handler in orig_signal_handlers.items():
+                    signal.signal(orig_signum, orig_handler)
+                for log_file in log_files:
+                    if log_file: # if an actual file (not sys.__stdout__ or sys.__stderr__)
+                        #print(f"Closing {log_file}", flush=True)
+                        log_file.close()
+                sys.stdout = orig_stdout
+                sys.stderr = orig_stderr
+                if orig_stdout_encoding != 'utf-8':
+                    sys.stdout.reconfigure(encoding=orig_stdout_encoding)
+                if orig_stderr_encoding != 'utf-8':
+                    sys.stderr.reconfigure(encoding=orig_stderr_encoding)
+            finally:
+                if signum:
+                    sys.exit()
 
     FINALIZE_OUTPUT_SIGNAL_NAMES = (
         # 'SIGINT', # SIGINT is handled by catching KeyboardInterrupt
@@ -987,6 +1055,7 @@ def main(args):
     for signal_name in FINALIZE_OUTPUT_SIGNAL_NAMES:
         signum = getattr(signal, signal_name, None)
         if signum:
+            orig_signal_handlers[signum] = signal.getsignal(signum)
             signal.signal(signum, finalize_output)
 
     try:
@@ -1040,7 +1109,14 @@ def main(args):
         print('[HTTP Request Error]', e, flush=True)
     except KeyboardInterrupt: # this should already be caught within get_chat_replay, but keeping this just in case
         print('[Interrupted]', flush=True)
-
+    except SystemExit: # finalize_output may call sys.exit() which raises SystemExit
+        pass # in case main() is being called from another module, don't actually exit the app
+    except Exception:
+        # print full stack trace (rather than only up to main(), the containing method)
+        import traceback
+        stacklines = traceback.format_exc().splitlines(keepends=True)
+        stacklines[1:1] = traceback.format_list(traceback.extract_stack()[:-1])
+        print(''.join(stacklines), end='', file=sys.stderr)
     finally:
         finalize_output()
 
