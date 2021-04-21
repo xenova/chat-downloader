@@ -91,7 +91,7 @@ class ChatReplayDownloader:
     }
 
     __YT_HOME = 'https://www.youtube.com'
-    __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-z-_]{11})(?:[%#?&]|$)'
+    __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-Za-z-_]{11})(?:[%#?&]|$)'
     __YOUTUBE_API_BASE_TEMPLATE = '{}/youtubei/{}/{}?key={}'
 
     __TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
