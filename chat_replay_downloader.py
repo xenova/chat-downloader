@@ -3,6 +3,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import logging
+import loggingutils
+import ioutils
 import random
 import json
 from datetime import datetime, timedelta
@@ -18,16 +20,7 @@ import signal
 from urllib import parse
 
 
-# add TRACE log level
-if not hasattr(logging, 'TRACE') or 'TRACE' not in logging._nameToLevel:
-    logging.TRACE = logging.DEBUG // 2
-    logging.addLevelName(logging.TRACE, 'TRACE')
-if not hasattr(logging, 'trace') or not hasattr(logging.Logger, 'trace') or not hasattr(logging.LoggerAdapter, 'trace'):
-    def __trace(self, msg, *args, **kwargs):
-        self.log(logging.TRACE, msg, *args, **kwargs)
-    logging.trace = __trace
-    logging.Logger.trace = __trace
-    logging.LoggerAdapter.trace = __trace
+logging.TRACE, logging.trace, logging.Logger.trace, logging.LoggerAdapter.trace = loggingutils.addLevelName(logging.DEBUG // 2, 'TRACE')
 
 
 class CallbackFunction(Exception):
@@ -84,6 +77,11 @@ class ChatReplayDownloader:
     """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
 
     DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+    # since sys.stdout may change (see main() below), using loggingutils.StdoutHandler to always use latest sys.stdout
+    logger = loggingutils.loggerProperty(logger_init=lambda self, *_: loggingutils.FormatLoggerAdapter(self, style='{'),
+        propagate=False, handlers=[loggingutils.StdoutHandler()],
+        lenient=True, format='[%(levelname)s][%(asctime)s]%(context)s %(message)s', datefmt=DATETIME_FORMAT)
 
     __HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
@@ -143,45 +141,8 @@ class ChatReplayDownloader:
         'backgroundColor': 'body_color'
     }
 
-    # 1) provides a formatter that adds context to log messages
-    # 2) allows string.format-style ({}-style) formatting (rather than %-style formatting)
-    # 3) provides a decorator that has context be the video id passed to the decorated function
-    #    decorator functions defined in a class can't be used to decorate a function in the same class, so this separate class provides a workaround
-    class ContextLogger(logging.LoggerAdapter):
-        def __init__(self, logger, base_context):
-            logger.propagate = False
-            if not logger.hasHandlers():
-                handler = logging.StreamHandler(sys.stdout)
-                handler.setFormatter(logging.Formatter('[%(levelname)s][%(asctime)s]%(context)s %(message)s', datefmt=ChatReplayDownloader.DATETIME_FORMAT))
-                logger.addHandler(handler)
-            super().__init__(logger, None)
-            self.context = base_context
-
-        def log(self, level, msg, *args, **kwargs):
-            if self.isEnabledFor(level):
-                kwargs['extra'] = {'context': f"[{self.context}]" if self.context else ''}
-                if args:
-                    msg = msg.format(*args)
-                self.logger._log(level, msg, (), **kwargs)
-
-        @classmethod
-        def log_video_id(cls, func):
-            def wrapped(self, video_id, *args, **kwargs):
-                if not isinstance(self.logger, cls):
-                    raise TypeError(f"self.logger must be {cls.__qualname__} - was {self.logger.__class__.__qualname__}")
-                orig_context = self.logger.context
-                self.logger.context += video_id
-                try:
-                    return func(self, video_id, *args, **kwargs)
-                finally:
-                    self.logger.context = orig_context
-            return wrapped
-
-    def __init__(self, cookies=None, log_options={}):
+    def __init__(self, cookies=None):
         """Initialise a new session for making requests."""
-        self.logger = self.ContextLogger(logging.getLogger(self.__class__.__name__), log_options.get('log_base_context', ''))
-        self.logger.setLevel(log_options.get('log_level', logging.WARNING)) # note: setLevel can handle either the level name or int value
-
         self.session = requests.Session()
         self.session.headers = self.__HEADERS
 
@@ -601,7 +562,16 @@ class ChatReplayDownloader:
                 cond_messages.append(cond_message)
             raise AbortConditionsSatisfied(' and '.join(cond_messages))
 
-    @ContextLogger.log_video_id
+    @loggingutils.contextdecorator
+    def _log_with_video_id(self, video_id, *args, **kwargs):
+        cls_logger = loggingutils.getLogger(self.__class__.logger) # ensure we get the Logger and not a LoggerAdapter
+        self.logger = loggingutils.FormatLoggerAdapter(cls_logger, style='{', extra={'context': f"[{kwargs.get('log_base_context', '')}{video_id}]"})
+        try:
+            yield
+        finally:
+            del self.logger
+
+    @_log_with_video_id
     def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
         """ Get chat messages for a YouTube video. """
 
@@ -787,7 +757,7 @@ class ChatReplayDownloader:
             print('[Interrupted]', flush=True)
             return messages
 
-    @ContextLogger.log_video_id
+    @_log_with_video_id
     def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
@@ -858,35 +828,6 @@ class ChatReplayDownloader:
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
-# intended for allowing multiple outputs for a single file object, based off https://stackoverflow.com/a/16551730
-class _MultiFile:
-    def __init__(self, *files):
-        self._files = files
-        self._attrwraps = {}
-
-    # explicit def for efficiency
-    def write(self, s):
-        for f in self._files:
-            f.write(s)
-
-    # explicit def for efficiency
-    def flush(self):
-        for f in self._files:
-            f.flush()
-
-    # for any other method, delegate to slower __getattr__
-    def __getattr__(self, attr, *args):
-        attr = self._attrwraps.get(attr)
-        if attr is not None:
-            return attr
-        def wrap(*args2, **kwargs2):
-            for f in self._files:
-                result = getattr(f, attr, *args)(*args2, **kwargs2)
-            return result
-        self._attrwraps[attr] = wrap
-        return wrap
-
-
 def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
@@ -939,11 +880,12 @@ def main(args):
                         help='whether to hide stdout and stderr output or not\n(default: %(default)s)')
 
     parser.add_argument('--log_file', action='append',
-                        help="if --hide_output is true, this option has no effect\n"
-                             "if specified and not ':console:', redirects stdout and stderr to the given log file\n"
-                             "if specified as ':console:', outputs stdout and stderr to console as normal\n"
-                             "multiple --log_file arguments can be specified, allowing output to multiple log files and/or console\n"
-                             "(default if never specified: :console:)")
+                        help="file (or console) to log output to, including redirecting stdout and stderr to it\n"
+                            "(default: :console:)\n"
+                            "If --hide_output is true, this option has no effect.\n"
+                            "If specified and not ':console:', redirects stdout and stderr to the given log file.\n"
+                            "If specified as ':console:', outputs stdout and stderr to console as normal.\n"
+                            "Multiple --log_file options can be specified, allowing output to multiple log files and/or console.")
 
     parser.add_argument('--log_level',
                         choices=[name for level, name in logging._levelToName.items() if level != 0],
@@ -982,12 +924,12 @@ def main(args):
         sys.stdout = out_log_files[0]
         sys.stderr = err_log_files[0]
     else:
-        sys.stdout = _MultiFile(*out_log_files)
-        sys.stderr = _MultiFile(*err_log_files)
+        sys.stdout = ioutils.MultiFile(*out_log_files)
+        sys.stderr = ioutils.MultiFile(*err_log_files)
 
     # this has to go after stdout/stderr are modified
-    logging.basicConfig(level=args.log_level, stream=sys.stdout, format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s',
-                        datefmt=ChatReplayDownloader.DATETIME_FORMAT)
+    logging.basicConfig(force=True, level=args.log_level, stream=sys.stdout,
+                        format='[%(levelname)s][%(asctime)s][%(name)s] %(message)s', datefmt=ChatReplayDownloader.DATETIME_FORMAT)
 
     num_of_messages = 0
     chat_messages = []
@@ -1059,9 +1001,7 @@ def main(args):
             signal.signal(signum, finalize_output)
 
     try:
-        chat_downloader = ChatReplayDownloader(
-            cookies=args.cookies,
-            log_options={name: val for name, val in vars(args).items() if name.startswith('log_')})
+        chat_downloader = ChatReplayDownloader(cookies=args.cookies)
 
         def print_item(item):
             chat_downloader.print_item(item)
