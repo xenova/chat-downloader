@@ -14,6 +14,7 @@ import time
 import os
 from http.cookiejar import MozillaCookieJar, LoadError
 import sys
+import signal
 import codecs
 from urllib import parse
 
@@ -602,7 +603,7 @@ class ChatReplayDownloader:
             raise AbortConditionsSatisfied(' and '.join(cond_messages))
 
     @ContextLogger.log_video_id
-    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
+    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
         """ Get chat messages for a YouTube video. """
 
         start_time = self.__ensure_seconds(start_time, 0)
@@ -610,7 +611,7 @@ class ChatReplayDownloader:
         self.logger.trace("kwargs: {}", kwargs)
         abort_conditions = self.__parse_abort_conditions(kwargs.get('abort_condition'))
 
-        messages = []
+        messages = [] if output_messages is None else output_messages
 
         offset_milliseconds = start_time * 1000 if start_time > 0 else 0
 
@@ -788,11 +789,12 @@ class ChatReplayDownloader:
             return messages
 
     @ContextLogger.log_video_id
-    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, **kwargs):
+    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
 
-        messages = []
+        messages = [] if output_messages is None else output_messages
+
         api_url = self.__TWITCH_API_TEMPLATE.format(
             video_id, self.__TWITCH_CLIENT_ID)
 
@@ -845,14 +847,14 @@ class ChatReplayDownloader:
             print('[Interrupted]', flush=True)
             return messages
 
-    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
+    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
         match = re.search(self.__YT_REGEX, url)
         if(match):
-            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback, **kwargs)
+            return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
         match = re.search(self.__TWITCH_REGEX, url)
         if(match):
-            return self.get_twitch_messages(match.group(1), start_time, end_time, callback, **kwargs)
+            return self.get_twitch_messages(match.group(1), start_time, end_time, callback, output_messages, **kwargs)
 
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
@@ -931,6 +933,54 @@ if __name__ == '__main__':
     num_of_messages = 0
     chat_messages = []
 
+    called_finalize_output=False
+    def finalize_output(signum=None, frame=None):
+        if signum:
+            print(f"[{signal.Signals(signum).name}]", flush=True) # pylint: disable=no-member # pylint lies - signal.Signals does exist
+
+        global called_finalize_output
+        if called_finalize_output:
+            return
+        else:
+            called_finalize_output = True
+
+        global num_of_messages
+        if chat_messages and args.output:
+            if(args.output.endswith('.json')):
+                num_of_messages = len(chat_messages)
+                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                    json.dump(chat_messages, f, sort_keys=True)
+
+            elif(args.output.endswith('.csv')):
+                num_of_messages = len(chat_messages)
+                fieldnames = set()
+                for message in chat_messages:
+                    fieldnames.update(message.keys())
+                fieldnames = sorted(fieldnames)
+
+                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
+                    fc = csv.DictWriter(f, fieldnames=fieldnames)
+                    fc.writeheader()
+                    fc.writerows(chat_messages)
+
+            print('Finished writing', num_of_messages,
+                'messages to', args.output, flush=True)
+
+        if signum:
+            sys.exit()
+
+    FINALIZE_OUTPUT_SIGNAL_NAMES = (
+        # 'SIGINT', # SIGINT is handled by catching KeyboardInterrupt
+        'SIGBREAK', # Windows-only - allow ctrl-break to gracefully exit (sometimes ctrl+c won't work)
+        'SIGQUIT', # Unix-only
+        'SIGTERM',
+        'SIGABRT',
+    )
+    for signal_name in FINALIZE_OUTPUT_SIGNAL_NAMES:
+        signum = getattr(signal, signal_name, None)
+        if signum:
+            signal.signal(signum, finalize_output)
+
     try:
         chat_downloader = ChatReplayDownloader(
             cookies=args.cookies,
@@ -963,7 +1013,8 @@ if __name__ == '__main__':
                 open(args.output, 'w').close()  # empty the file
                 callback = write_to_file
 
-        chat_messages = chat_downloader.get_chat_replay(callback=callback, **vars(args))
+        # using output_messages arg rather than return value, in case of uncaught exception or caught signal within the call
+        chat_downloader.get_chat_replay(callback=callback, output_messages=chat_messages, **vars(args))
 
     except InvalidURL as e:
         print('[Invalid URL]', e, flush=True)
@@ -979,44 +1030,18 @@ if __name__ == '__main__':
         print('[Cookies Error]', e, flush=True)
     except requests.exceptions.RequestException:
         print('[HTTP Request Error]', e, flush=True)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt: # this should already be caught within get_chat_replay, but keeping this just in case
         print('[Interrupted]', flush=True)
-    # XXX ctrl-c sometimes isn't caught by above KeyboardInterrupt and/or exits the program before finally block runs,
-    # possibly due to a sys.exit or interrupt in some library code?
-    except SystemExit as e:
-        print('[Unexpected SystemExit]', e, flush=True)
-    except InterruptedError as e:
-        print('[Unexpected InterruptedError]', e, flush=True)
 
     finally:
-        if chat_messages and args.output:
-            if(args.output.endswith('.json')):
-                num_of_messages = len(chat_messages)
-                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                    json.dump(chat_messages, f, sort_keys=True)
-
-            elif(args.output.endswith('.csv')):
-                num_of_messages = len(chat_messages)
-                fieldnames = set()
-                for message in chat_messages:
-                    fieldnames.update(message.keys())
-                fieldnames = sorted(fieldnames)
-
-                with open(args.output, 'w', newline='', encoding='utf-8-sig') as f:
-                    fc = csv.DictWriter(f, fieldnames=fieldnames)
-                    fc.writeheader()
-                    fc.writerows(chat_messages)
-
-            print('Finished writing', num_of_messages,
-                'messages to', args.output, flush=True)
-
+        finalize_output()
 else:
     # when used as a module
-    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
-        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, **kwargs)
+    def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+        return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, **kwargs):
-        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, **kwargs)
+    def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+        return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-    def get_twitch_messages(url, start_time=0, end_time=None, callback=None, **kwargs):
-        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, **kwargs)
+    def get_twitch_messages(url, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
+        return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, output_messages, **kwargs)
