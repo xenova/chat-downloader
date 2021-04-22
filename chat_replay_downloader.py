@@ -372,19 +372,16 @@ class ChatReplayDownloader:
         return data
 
     def __get_initial_youtube_info(self, video_id):
-        """ Get initial YouTube video information. """
+        """ Get initial YouTube video information from its watch page. """
+        self.logger.debug("get_initial_youtube_info: video_id={}", video_id)
         url = self.__YT_WATCH_TEMPLATE.format(video_id)
         html = self.__session_get(url).text
 
         ytInitialPlayerResponse = self.__parse_video_text('ytInitialPlayerResponse', html)
-        #playerMicroformatRenderer = ytInitialPlayerResponse.get('microformat', {}).get('playerMicroformatRenderer', {})
         config = {
-            'is_upcoming': ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False),
-            #'is_unlisted': playerMicroformatRenderer.get('isUnlisted', False),
-            #'is_live': playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('isLiveNow', False),
-            'scheduled_start_time': self.__parse_scheduled_start_time(ytInitialPlayerResponse),
-            #'start_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('startTimestamp')),
-            #'end_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('endTimestamp')),
+            **self.__extract_video_details(ytInitialPlayerResponse),
+            **self.__extract_playability_info(ytInitialPlayerResponse),
+            **self.__extract_video_microformat(ytInitialPlayerResponse), # note: data currently unused
         }
 
         ytInitialData = self.__parse_video_text('ytInitialData', html)
@@ -415,6 +412,7 @@ class ChatReplayDownloader:
         return config, continuation_by_title_map
 
     def __get_initial_continuation_info(self, config, continuation, is_live):
+        """Get continuation info via non-API continuation page for a YouTube video. Used to get the first continuation and get config."""
         self.logger.debug("get_initial_continuation_info: continuation={}, is_live={}", continuation, is_live)
         url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
         html = self.__session_get(url).text
@@ -427,9 +425,9 @@ class ChatReplayDownloader:
         })
 
         ytInitialData = self.__parse_video_text('ytInitialData', html)
-        info = self.__parse_continuation_info(ytInitialData)
-        config['logged_out'] = self.__parse_logged_out(ytInitialData)
-        if self.logger.isEnabledFor(logging.DEBUG):
+        info = self.__extract_continuation_info(ytInitialData)
+        config['logged_out'] = self.__extract_logged_out(ytInitialData)
+        if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
             self.logger.debug("config:\n{}", _debug_dump(config))
         if info is None:
             raise NoContinuation
@@ -437,25 +435,55 @@ class ChatReplayDownloader:
 
     # see "fall back" comment in __get_continuation_info
     def __get_fallback_continuation_info(self, continuation, is_live):
+        """Get continuation info via non-API continuation page for a YouTube video. Used as a fallback."""
         self.logger.debug("get_fallback_continuation_info: continuation={}, is_live={}", continuation, is_live)
         url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
         html = self.__session_get(url).text
         ytInitialData = self.__parse_video_text('ytInitialData', html)
-        info = self.__parse_continuation_info(ytInitialData)
+        info = self.__extract_continuation_info(ytInitialData)
         if info is None:
             raise NoContinuation
         return info
 
-    def __parse_scheduled_start_time(self, info):
-        """Get scheduled start time for a YouTube video (from either heartbeat JSON or ytInitialPlayerResponse JSON)."""
+    def __extract_video_details(self, info):
+        """Extract video details (including title and whether upcoming) from ytInitialPlayerResponse JSON."""
+        videoDetails = info.get('videoDetails', {})
+        video_details = {
+            'title': videoDetails.get('title'),
+            'is_upcoming': videoDetails.get('isUpcoming', False),
+        }
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("video_details:\n{}", _debug_dump(video_details))
+        return video_details
+
+    def __extract_playability_info(self, info):
+        """Extract playability status info (including scheduled start time) from either API heartbeat JSON or ytInitialPlayerResponse JSON."""
+        playabilityStatus = info.get('playabilityStatus', {})
         try:
-            timestamp = int(info['playabilityStatus']['liveStreamability']['liveStreamabilityRenderer']['offlineSlate']['liveStreamOfflineSlateRenderer']['scheduledStartTime'])
+            timestamp = int(playabilityStatus['liveStreamability']['liveStreamabilityRenderer']['offlineSlate']['liveStreamOfflineSlateRenderer']['scheduledStartTime'])
             scheduled_start_time = datetime.fromtimestamp(timestamp)
         except LookupError:
             scheduled_start_time = None
-        self.logger.trace("playabilityStatus.liveStreamability.liveStreamabilityRenderer.offlineSlate.liveStreamOfflineSlateRenderer.scheduledStartTime: {}",
-            scheduled_start_time)
-        return scheduled_start_time
+        playability_info = {
+            'playability_status': playabilityStatus.get('status'),
+            'scheduled_start_time': scheduled_start_time,
+        }
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("playability_info:\n{}", _debug_dump(playability_info))
+        return playability_info
+
+    def __extract_video_microformat(self, info):
+        """Extract video "microformat" info (including whether unlisted, actual start/end times) from ytInitialPlayerResponse JSON."""
+        playerMicroformatRenderer = info.get('microformat', {}).get('playerMicroformatRenderer', {})
+        video_microformat = {
+            'is_unlisted': playerMicroformatRenderer.get('isUnlisted', False),
+            'is_live': playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('isLiveNow', False),
+            'start_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('startTimestamp')),
+            'end_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('endTimestamp')),
+        }
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("video_microformat:\n{}", _debug_dump(video_microformat))
+        return video_microformat
 
     @staticmethod
     def __fromisoformat(date_str):
@@ -464,7 +492,7 @@ class ChatReplayDownloader:
         return datetime.fromisoformat(date_str)
 
     def __get_continuation_info(self, config, continuation, is_live, player_offset_ms=None):
-        """Get continuation info for a YouTube video."""
+        """Get continuation info via API for a YouTube video."""
         self.logger.debug("get_continuation_info: continuation={}, is_live={}, player_offset_ms={}", continuation, is_live, player_offset_ms)
         url = self.__YT_CONTINUATION_TEMPLATE.format(config['api_version'], 'live_chat' if is_live else 'live_chat_replay', config['api_key'])
         payload = {
@@ -476,7 +504,7 @@ class ChatReplayDownloader:
                 'playerOffsetMs': str(player_offset_ms),
             }
         data = self.__get_youtube_json(url, payload)
-        info = self.__parse_continuation_info(data)
+        info = self.__extract_continuation_info(data)
         if info is None:
             # YouTube API does not return continuation info (but still returns responseContext, incl loggedOut status) for live (non-replay)
             # members-only streams that have become (or are already) unlisted, even if user is a member and cookies have us logged into YouTube,
@@ -488,7 +516,7 @@ class ChatReplayDownloader:
             # This condition is detected by initial continuation indicating we're logged in, and the YouTube API indicating we're not.
             # Unfortunately this condition also can trigger at the end of a live stream (last continuation has loggedOut=true for some reason),
             # but since this only results in one additional request to the non-API continuation endpoint, this is acceptable.
-            if not config['logged_out'] and self.__parse_logged_out(data):
+            if not config['logged_out'] and self.__extract_logged_out(data):
                 self.logger.debug('initial continuation has loggedOut=false while next continuation has loggedOut=true - '
                     'falling back to always using non-API continuation endpoint')
                 # continue to return None
@@ -496,14 +524,16 @@ class ChatReplayDownloader:
                 raise NoContinuation
         return info
 
-    def __parse_continuation_info(self, data):
+    def __extract_continuation_info(self, data):
+        """Extract continuation info from ytInitialData JSON or API continuation JSON."""
         try:
             info = data['continuationContents']['liveChatContinuation']
         except LookupError:
             info = None
         return info
 
-    def __parse_logged_out(self, data):
+    def __extract_logged_out(self, data):
+        """Extract logged out status from ytInitialData JSON or API continuation JSON."""
         try:
             logged_out = data['responseContext']['mainAppWebResponseContext']['loggedOut']
         except LookupError:
@@ -511,23 +541,24 @@ class ChatReplayDownloader:
         self.logger.trace("responseContext.mainAppWebResponseContext.loggedOut: {}", logged_out)
         return True if logged_out is None else logged_out # if loggedOut is somehow missing, assume it's true
 
-    def __get_scheduled_start_date(self, config, video_id):
-        """Get scheduled start date from heartbeat for a YouTube video."""
-        self.logger.debug("get_scheduled_start_date: video_id={}", video_id)
+    def __get_playability_info(self, config, video_id):
+        """Get playability info (including scheduled start date) via API heartbeat for a YouTube video."""
+        self.logger.debug("get_playability_info: video_id={}", video_id)
         url = self.__YT_HEARTBEAT_TEMPLATE.format(config['api_version'], config['api_key'])
         payload = {
             'context': config['context'],
             'videoId': video_id,
             'heartbeatRequestParams': {'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS']}
         }
-        return self.__parse_scheduled_start_time(self.__get_youtube_json(url, payload))
+        return self.__extract_playability_info(self.__get_youtube_json(url, payload))
 
-    def __get_fallback_scheduled_start_date(self, video_id):
-        self.logger.debug("get_fallback_scheduled_start_date: video_id={}", video_id)
+    def __get_fallback_playability_info(self, video_id):
+        """Get playability info (including scheduled start date) from watch page for a YouTube video. Used as a fallback."""
+        self.logger.debug("get_fallback_playability_info: video_id={}", video_id)
         url = self.__YT_WATCH_TEMPLATE.format(video_id)
         html = self.__session_get(url).text
         ytInitialPlayerResponse = self.__parse_video_text('ytInitialPlayerResponse', html)
-        return self.__parse_scheduled_start_time(ytInitialPlayerResponse)
+        return self.__extract_playability_info(ytInitialPlayerResponse)
 
     def __get_youtube_json(self, url, payload):
         """Get JSON for a YouTube API url"""
@@ -646,9 +677,10 @@ class ChatReplayDownloader:
                 except ValueError as e:
                     raise error_gen(f"({raw_cond_group}) {e}")
                 cls.logger.debug("abort condition {}: format {!r} => e.g. {!r}", cond_name, datetime_format, sample_formatted)
-                def changed_scheduled_start_time(orig_scheduled_start_time, curr_scheduled_start_time,
+                def changed_scheduled_start_time(orig_scheduled_start_time, playability_info,
                         # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
                         datetime_format=datetime_format, **_):
+                    curr_scheduled_start_time = playability_info['scheduled_start_time']
                     if not orig_scheduled_start_time or not curr_scheduled_start_time:
                         return None # falsy
                     orig_formatted = orig_scheduled_start_time.strftime(datetime_format)
@@ -664,9 +696,10 @@ class ChatReplayDownloader:
                     raise error_gen(f"({raw_cond_group}) {cond_name} argument must be in format <hours>:<minutes>, e.g. 01:30")
                 min_secs = int(m[1]) * 3600 + int(m[2]) * 60
                 cls.logger.debug("abort condition {}: {!r} => min {} secs", cond_name, cond_arg, min_secs)
-                def min_time_until_scheduled_start_time(curr_scheduled_start_time,
+                def min_time_until_scheduled_start_time(playability_info,
                         # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
                         min_secs=min_secs, **_):
+                    curr_scheduled_start_time = playability_info['scheduled_start_time']
                     if not curr_scheduled_start_time:
                         return None # falsy
                     secs_until_scheduled_start_time = curr_scheduled_start_time.timestamp() - time.time()
@@ -738,16 +771,24 @@ class ChatReplayDownloader:
             if unmet_prereq_names:
                 raise RuntimeError(f"unmet prereqs: {', '.join(unmet_prereq_names)}")
             self.prereq_funcs = {prereq_name: prereq_func for prereq_name, prereq_func in prereq_funcs.items() if prereq_name in prereq_names}
-            self.prereq_state = {prereq_name: None for prereq_name in prereq_names}
+            self.prereq_state = {}
 
         def check(self):
             # update prereq state first
             for prereq_name, prereq_func in self.prereq_funcs.items():
-                cur_value = self.prereq_state[prereq_name]
-                new_value = prereq_func(cur_value)
-                if cur_value != new_value:
-                    self.logger.debug("{} changed from {} to {}", prereq_name, cur_value, new_value)
+                try:
+                    cur_value = self.prereq_state[prereq_name]
+                except LookupError:
+                    new_value = prereq_func(None)
+                    if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
+                        self.logger.debug("{} initialized to {}", prereq_name, _debug_dump(new_value))
                     self.prereq_state[prereq_name] = new_value
+                else:
+                    new_value = prereq_func(cur_value)
+                    if cur_value != new_value:
+                        if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
+                            self.logger.debug("{} changed from {} to {}", prereq_name, _debug_dump(cur_value), _debug_dump(new_value))
+                        self.prereq_state[prereq_name] = new_value
 
             # then the actual cond checks
             for cond_group_idx, cond_group in enumerate(self.cond_groups):
@@ -815,8 +856,11 @@ class ChatReplayDownloader:
                         if abort_cond_groups:
                             if abort_cond_checker is None:
                                 abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
-                                    orig_scheduled_start_time=lambda _: config.get('scheduled_start_time'),
-                                    curr_scheduled_start_time=lambda _: config.get('scheduled_start_time'))
+                                    orig_scheduled_start_time=lambda _: config['scheduled_start_time'],
+                                    playability_info=lambda _: {
+                                        'playability_status': config['playability_status'],
+                                        'scheduled_start_time': config['scheduled_start_time'],
+                                    })
                             abort_cond_checker.check()
 
                         retry_wait_secs = random.randint(30, 45) # jitter
@@ -835,27 +879,30 @@ class ChatReplayDownloader:
                 if abort_cond_groups:
                     if abort_cond_checker is None:
                         scheduled_start_time_poll_timestamp = None
-                        def scheduled_start_time_getter(curr_scheduled_start_time):
+                        def playability_info_getter(playability_info):
                             nonlocal scheduled_start_time_poll_timestamp
                             # if first call, init with config scheduled_start_time
                             if scheduled_start_time_poll_timestamp is None:
                                 scheduled_start_time_poll_timestamp = time.time()
-                                return config.get('scheduled_start_time')
-                            # assume that curr_scheduled_start_time is None when video stream has started (is no longer upcoming)
-                            if curr_scheduled_start_time is None:
-                                return None
+                                return {
+                                    'playability_status': config['playability_status'],
+                                    'scheduled_start_time': config['scheduled_start_time'],
+                                }
+                            # if playability status is already OK, video has started (is no longer upcoming),
+                            # so return playability info as-is
+                            if playability_info['playability_status'] == 'OK':
+                                return playability_info
                             now_timestamp = time.time()
                             if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
                                 scheduled_start_time_poll_timestamp = now_timestamp
                                 if use_non_api_fallback:
-                                    return self.__get_fallback_scheduled_start_date(video_id)
+                                    playability_info = self.__get_fallback_playability_info(video_id)
                                 else:
-                                    return self.__get_scheduled_start_date(config, video_id)
-                            else:
-                                return curr_scheduled_start_time
+                                    playability_info = self.__get_playability_info(config, video_id)
+                            return playability_info
                         abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
-                            orig_scheduled_start_time=lambda _: config.get('scheduled_start_time'),
-                            curr_scheduled_start_time=scheduled_start_time_getter)
+                            orig_scheduled_start_time=lambda _: config['scheduled_start_time'],
+                            playability_info=playability_info_getter)
                     abort_cond_checker.check()
 
                 try:
@@ -972,6 +1019,7 @@ class ChatReplayDownloader:
 
     @_log_with_video_id
     def get_twitch_messages(self, video_id, start_time=None, end_time=None, callback=None, output_messages=None, **kwargs):
+        """ Get chat messages for a Twitch stream. """
         start_time = self.__ensure_seconds(start_time, None)
         end_time = self.__ensure_seconds(end_time, None)
 
