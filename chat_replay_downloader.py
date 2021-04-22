@@ -18,6 +18,7 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import signal
 from urllib import parse
+import inspect
 
 
 logging.TRACE, logging.trace, logging.Logger.trace, logging.LoggerAdapter.trace = loggingutils.addLevelName(logging.DEBUG // 2, 'TRACE')
@@ -500,67 +501,125 @@ class ChatReplayDownloader:
 
         return data
 
-    def __parse_abort_conditions(self, abort_conditions):
-        if not abort_conditions:
-            return None
-        conds = {}
-        for raw_cond in abort_conditions:
+    # used to construct each args.abort_condition option
+    # resulting args.abort_condition structure:
+    # list of condition groups, where condition group is a list of (condition string (name:arg), condition function) tuples
+    # conditions are ANDed within a condition group, and condition groups are ORed
+    # any boolean formula can be converted into this OR of ANDs form (a.k.a. disjunctive normal form)
+    @classmethod
+    def parse_abort_condition_group(cls, raw_cond_group, error_gen=ValueError):
+        cond_group = []
+        cond_name_dict = {} # for ensuring uniqueness
+
+        raw_conds = list(cls._tokenize_abort_condition_group(raw_cond_group, error_gen))
+        for raw_cond in raw_conds:
+            raw_cond = raw_cond.strip()
             cond_name, cond_arg = raw_cond.split(':', 1) if ':' in raw_cond else (raw_cond, None)
+            if cond_name in cond_name_dict:
+                raise error_gen(f"({raw_cond_group}) multiple {cond_name} conditions cannot exist within in the option argument "
+                    f"(cannot have both {cond_name_dict[cond_name]!r} and {raw_cond!r})")
+            cond_name_dict[cond_name] = raw_cond
+
             if cond_name == 'changed_scheduled_start_time':
-                changed_scheduled_start_time_format = cond_arg # need to 'fix' cond_arg value for below closure since cond_arg changes
-                sample_formatted = datetime.now().strftime(changed_scheduled_start_time_format) # test format string
-                self.logger.debug("abort condition {}: format {!r} => e.g. {}", cond_name, changed_scheduled_start_time_format, sample_formatted)
-                def cond(orig_scheduled_start_time, curr_scheduled_start_time):
+                datetime_format = cond_arg
+                # test format round-trip
+                try:
+                    sample_formatted = datetime.strptime(datetime.now().strftime(datetime_format), datetime_format)
+                except ValueError as e:
+                    raise error_gen(f"({raw_cond_group}) {e}")
+                cls.logger.debug("abort condition {}: format {!r} => e.g. {!r}", cond_name, datetime_format, sample_formatted)
+                def changed_scheduled_start_time(orig_scheduled_start_time, curr_scheduled_start_time,
+                        # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
+                        datetime_format=datetime_format, **_):
                     if not orig_scheduled_start_time or not curr_scheduled_start_time:
-                        return None # false
-                    orig_formatted = orig_scheduled_start_time.strftime(changed_scheduled_start_time_format)
-                    curr_formatted = curr_scheduled_start_time.strftime(changed_scheduled_start_time_format)
+                        return None # falsy
+                    orig_formatted = orig_scheduled_start_time.strftime(datetime_format)
+                    curr_formatted = curr_scheduled_start_time.strftime(datetime_format)
                     if orig_formatted != curr_formatted:
-                        return "scheduled start time formatted as {!r} changed from {!r} to {!r}".format(
-                            changed_scheduled_start_time_format, orig_scheduled_start_time, curr_scheduled_start_time)
-                conds[cond_name] = cond
+                        return "scheduled start time formatted as {!r} changed from {:{}} to {:{}}".format(
+                            datetime_format, orig_scheduled_start_time, datetime_format, curr_scheduled_start_time, datetime_format)
+                cond_group.append((raw_cond, changed_scheduled_start_time))
+
             elif cond_name == 'min_time_until_scheduled_start_time':
-                m = re.match(r'(\d+):(\d+)', cond_arg)
+                m = re.fullmatch(r'(\d+):(\d+)$', cond_arg)
                 if not m:
-                    raise argparse.ArgumentError(None, f"{cond_name} argument must be in format <hours>:<minutes>, e.g. 01:30")
-                min_secs_until_scheduled_start_time = int(m[1]) * 3600 + int(m[2]) * 60
-                self.logger.debug("abort condition {}: {} => min {!r} secs", cond_name, cond_arg, min_secs_until_scheduled_start_time)
-                def cond(_, curr_scheduled_start_time):
+                    raise error_gen(f"({raw_cond_group}) {cond_name} argument must be in format <hours>:<minutes>, e.g. 01:30")
+                min_secs = int(m[1]) * 3600 + int(m[2]) * 60
+                cls.logger.debug("abort condition {}: {!r} => min {} secs", cond_name, cond_arg, min_secs)
+                def min_time_until_scheduled_start_time(curr_scheduled_start_time,
+                        # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
+                        min_secs=min_secs, **_):
                     if not curr_scheduled_start_time:
-                        return None # false
+                        return None # falsy
                     secs_until_scheduled_start_time = curr_scheduled_start_time.timestamp() - time.time()
-                    if secs_until_scheduled_start_time > min_secs_until_scheduled_start_time:
-                        return "time until scheduled start time {} secs >= {} secs".format(
-                            secs_until_scheduled_start_time, min_secs_until_scheduled_start_time)
+                    if secs_until_scheduled_start_time > min_secs:
+                        return f"time until scheduled start time {secs_until_scheduled_start_time} secs >= {min_secs} secs"
                     return None
-                conds[cond_name] = cond
+                cond_group.append((raw_cond, min_time_until_scheduled_start_time))
+
             else:
-                raise argparse.ArgumentError(None, f"Unrecognized abort condition: {raw_cond}")
-        return conds
+                raise error_gen(f"({raw_cond_group}) unrecognized condition: {raw_cond}")
+
+        return cond_group
+
+    # splits on + while handling escapes \\ and \+
+    _ABORT_CONDITION_TOKEN_REGEX = re.compile(r'((?:\\.|[^+\\])*)([+]|$)')
+    @classmethod
+    def _tokenize_abort_condition_group(cls, raw_cond_group, error_gen):
+        prev_pos = 0
+        for m in cls._ABORT_CONDITION_TOKEN_REGEX.finditer(raw_cond_group):
+            if prev_pos != m.start(): # means invalid string (trailing backslash)
+                raise error_gen(f"({raw_cond_group}) invalid string (unexpected end of string): {raw_cond_group[prev_pos:]}")
+            raw_cond = m[1]
+            if len(raw_cond) == 0:
+                raise error_gen(f"({raw_cond_group}) condition cannot be empty")
+            else:
+                yield raw_cond.replace('\\+', '+').replace('\\\\', '\\')
+            prev_pos = m.end()
+            if len(m[2]) == 0: # matched end of string
+                break # next iteration would start at end of string and match empty string, which we want to avoid
 
     class AbortConditionChecker:
-        def __init__(self, logger, abort_conditions, orig_scheduled_start_time, scheduled_start_time_getter):
+        def __init__(self, logger, cond_groups, **prereq_funcs):
             self.logger = logger
-            self.abort_conditions = abort_conditions
-            self.scheduled_start_time_getter = scheduled_start_time_getter
-            self.orig_scheduled_start_time = orig_scheduled_start_time
-            self.curr_scheduled_start_time = orig_scheduled_start_time
+            self.cond_groups = cond_groups
+            prereq_names = set(param.name
+                for cond_group in cond_groups
+                for _, cond_func in cond_group
+                for param in inspect.signature(cond_func).parameters.values()
+                if param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and param.default is inspect.Parameter.empty)
+            self.logger.debug("abort condition prereq names: {!r}", prereq_names)
+            unmet_prereq_names = prereq_names - set(prereq_funcs.keys())
+            if unmet_prereq_names:
+                raise RuntimeError(f"unmet prereqs: {', '.join(unmet_prereq_names)}")
+            self.prereq_funcs = {prereq_name: prereq_func for prereq_name, prereq_func in prereq_funcs.items() if prereq_name in prereq_names}
+            self.prereq_state = {prereq_name: None for prereq_name in prereq_names}
 
         def check(self):
-            # assume that scheduled_start_time is None when video stream has started (is no longer upcoming)
-            if self.curr_scheduled_start_time is not None:
-                scheduled_start_time = self.scheduled_start_time_getter(self)
-                if self.curr_scheduled_start_time != scheduled_start_time:
-                    self.logger.debug("scheduled start time changed from {} to {}", self.curr_scheduled_start_time, scheduled_start_time)
-                    self.curr_scheduled_start_time = scheduled_start_time
-            cond_messages = []
-            for cond_name, cond in self.abort_conditions.items(): # assumed to be non-empty
-                cond_message = cond(self.orig_scheduled_start_time, self.curr_scheduled_start_time)
-                self.logger.trace("abort condition {}{} => {}", cond_name, (self.orig_scheduled_start_time, self.curr_scheduled_start_time), cond_message)
-                if not cond_message: # all abort conditions must evaluate to be truthy
-                    return
-                cond_messages.append(cond_message)
-            raise AbortConditionsSatisfied(' and '.join(cond_messages))
+            # update prereq state first
+            for prereq_name, prereq_func in self.prereq_funcs.items():
+                cur_value = self.prereq_state[prereq_name]
+                new_value = prereq_func(cur_value)
+                if cur_value != new_value:
+                    self.logger.debug("{} changed from {} to {}", prereq_name, cur_value, new_value)
+                    self.prereq_state[prereq_name] = new_value
+
+            # then the actual cond checks
+            for cond_group_idx, cond_group in enumerate(self.cond_groups):
+                cond_group_result = self._check_cond_group(cond_group_idx, cond_group)
+                if cond_group_result: # ANY cond group must evaluate to be truthy
+                    raise AbortConditionsSatisfied(cond_group_result)
+
+        def _check_cond_group(self, cond_group_idx, cond_group):
+            cond_results = []
+            for raw_cond, cond_func in cond_group:
+                cond_result = cond_func(**self.prereq_state)
+                self.logger.trace("abort condition [group {}] {}(**{!r}) => {}",
+                    cond_group_idx, raw_cond, self.prereq_state, cond_result)
+                if not cond_result: # ALL conditions in a group must evaluate to be truthy
+                    return None
+                cond_results.append(cond_result)
+            return ' AND '.join(cond_results) or None
 
     @loggingutils.contextdecorator
     def _log_with_video_id(self, video_id, *args, **kwargs):
@@ -578,7 +637,7 @@ class ChatReplayDownloader:
         start_time = self.__ensure_seconds(start_time, 0)
         end_time = self.__ensure_seconds(end_time, None)
         self.logger.trace("kwargs: {}", kwargs)
-        abort_conditions = self.__parse_abort_conditions(kwargs.get('abort_condition'))
+        abort_cond_groups = kwargs.get('abort_condition')
 
         messages = [] if output_messages is None else output_messages
 
@@ -591,7 +650,7 @@ class ChatReplayDownloader:
         chat_live_field = '{} chat'.format(chat_type_field)
 
         try:
-            abort_condition_checker = None
+            abort_cond_checker = None
             continuation_title = None
             attempt_ct = 0
             while True:
@@ -608,12 +667,12 @@ class ChatReplayDownloader:
                 if continuation_title is None:
                     error_message = config.get('no_chat_error', 'Video does not have a chat replay.')
                     if config['is_upcoming']:
-                        if abort_conditions:
-                            if abort_condition_checker is None:
-                                abort_condition_checker = self.AbortConditionChecker(self.logger, abort_conditions,
-                                    config['scheduled_start_time'], lambda _: config['scheduled_start_time'])
-                            else:
-                                abort_condition_checker.check()
+                        if abort_cond_groups:
+                            if abort_cond_checker is None:
+                                abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
+                                    orig_scheduled_start_time=lambda _: config.get('scheduled_start_time'),
+                                    curr_scheduled_start_time=lambda _: config.get('scheduled_start_time'))
+                            abort_cond_checker.check()
 
                         retry_wait_secs = random.randint(30, 45) # jitter
                         self.logger.debug("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
@@ -627,24 +686,31 @@ class ChatReplayDownloader:
                     break
             continuation = continuation_by_title_map[continuation_title]
 
-            abort_condition_checker = None
+            abort_cond_checker = None
             first_time = True
             while True:
-                if abort_conditions:
-                    if abort_condition_checker is None:
-                        scheduled_start_time_poll_timestamp = time.time()
-                        def scheduled_start_time_getter(checker):
+                if abort_cond_groups:
+                    if abort_cond_checker is None:
+                        scheduled_start_time_poll_timestamp = None
+                        def scheduled_start_time_getter(curr_scheduled_start_time):
                             nonlocal scheduled_start_time_poll_timestamp
+                            # if first call, init with config scheduled_start_time
+                            if scheduled_start_time_poll_timestamp is None:
+                                scheduled_start_time_poll_timestamp = time.time()
+                                return config.get('scheduled_start_time')
+                            # assume that curr_scheduled_start_time is None when video stream has started (is no longer upcoming)
+                            if curr_scheduled_start_time is None:
+                                return None
                             now_timestamp = time.time()
                             if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
                                 scheduled_start_time_poll_timestamp = now_timestamp
                                 return self.__get_scheduled_start_time(self.__get_heartbeat_info(video_id, config))
                             else:
-                                return checker.curr_scheduled_start_time
-                        abort_condition_checker = self.AbortConditionChecker(self.logger, abort_conditions,
-                            config.get('scheduled_start_time'), scheduled_start_time_getter)
-                    else:
-                        abort_condition_checker.check()
+                                return curr_scheduled_start_time
+                        abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
+                            orig_scheduled_start_time=lambda _: config.get('scheduled_start_time'),
+                            curr_scheduled_start_time=scheduled_start_time_getter)
+                    abort_cond_checker.check()
 
                 try:
                     if(is_live):
@@ -864,17 +930,29 @@ def main(args):
     parser.add_argument('--cookies', '-c', default=None,
                         help='name of cookies file\n(default: %(default)s)')
 
-    parser.add_argument('--abort_condition', action='append',
-                        help='a condition on which this application aborts (note: ctrl+c is always such a condition)\n'
-                             'available conditions for upcoming streams:\n'
-                             '* changed_scheduled_start_time:<strftime format e.g. %%Y%%m%%d> [YouTube-only]\n'
-                             '  true if datetime.strftime(<strftime format>) changes between initially fetched scheduled start datetime \n'
-                             '  and latest fetched scheduled start datetime \n'
-                             '* min_time_until_scheduled_start_time:<hours>:<minutes> [YouTube-only]\n'
-                             '  true if (latest fetched scheduled start datetime - current datetime) >= timedelta(hours=<hours>, minutes=<minutes>)\n'
-                             'multiple --abort_condition arguments can be specified, and such conditions are ANDed together,\n'
-                             "e.g. --abort_condition changed_scheduled_start_time:%%Y%%m%%d --abort_condition min_time_until_scheduled_start_time:00:10\n"
-                             'means abort if both scheduled start datetime changes date AND current time until scheduled start datetime is at least 10 minutes')
+    abort_cond_action = parser.add_argument('--abort_condition', action='append',
+                        type=lambda raw_cond_group: ChatReplayDownloader.parse_abort_condition_group(raw_cond_group,
+                                                        lambda msg: argparse.ArgumentError(abort_cond_action, msg)),
+                        help="a condition on which this application aborts (note: ctrl+c is such a condition by default)\n"
+                             "Available conditions for upcoming streams:\n"
+                             "* changed_scheduled_start_time:<strftime format e.g. %%Y%%m%%d> [YouTube-only]\n"
+                             "  True if datetime.strftime(<strftime format>) changes between initially fetched scheduled start datetime.\n"
+                             "  and latest fetched scheduled start datetime.\n"
+                             "* min_time_until_scheduled_start_time:<hours>:<minutes> [YouTube-only]\n"
+                             "  True if (latest fetched scheduled start datetime - current datetime) >= timedelta(hours=<hours>, minutes=<minutes>).\n"
+                             "Multiple abort conditions can be specified within a single --abort_condition option,\n"
+                             "delimited by + (whitespace allowed before and after, though the whole argument may need to be quoted then),\n"
+                             "and such abort conditions are ANDed together as a 'condition group'.\n"
+                             "In case a condition argument itself must contain +, + can be escaped as \\+ (and \\ can be escaped as \\\\).\n"
+                             "Multiple --abort_condition options can be specified, and the condition groups represented by each option are ORed together.\n"
+                             "Example:\n"
+                             "  --abort_condition 'changed_scheduled_start_time:%%Y%%m%%d + min_time_until_scheduled_start_time:00:10'\n"
+                             "  --abort_condition min_time_until_scheduled_start_time:24:00\n"
+                             "means abort if:\n"
+                             "  (both scheduled start datetime changes date AND current time until scheduled start datetime is at least 10 minutes)\n"
+                             "  OR current time until scheduled start datetime is at least 24 hours\n"
+                             "Any combination of ORs and ANDs can be represented by this system, since abort conditions are effectively a boolean formula,\n"
+                             "and any boolean formula can be converted into this OR of ANDs form (a.k.a. disjunctive normal form).")
 
     parser.add_argument('--hide_output', action='store_true',
                         help='whether to hide stdout and stderr output or not\n(default: %(default)s)')
