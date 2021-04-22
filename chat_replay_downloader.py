@@ -588,6 +588,19 @@ class ChatReplayDownloader:
                     return None
                 cond_group.append((raw_cond, min_time_until_scheduled_start_time))
 
+            elif cond_name == 'file_exists':
+                cls.logger.debug("abort condition {}: file {!r}", cond_name, cond_arg)
+                def file_exists(
+                        # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
+                        path=cond_arg, **_):
+                    if os.path.isfile(path):
+                        fstat = os.stat(path)
+                        return "file {!r} exists with ctime {} and mtime {}".format(path,
+                            datetime.fromtimestamp(fstat.st_ctime).strftime(cls.DATETIME_FORMAT),
+                            datetime.fromtimestamp(fstat.st_mtime).strftime(cls.DATETIME_FORMAT))
+                    return None
+                cond_group.append((raw_cond, file_exists))
+
             elif cond_name.startswith('SIG'):
                 try:
                     abort_signal = getattr(signal, cond_name)
@@ -990,6 +1003,9 @@ def main(args):
                              "* min_time_until_scheduled_start_time:<hours>:<minutes> [YouTube-only]\n"
                              "  True if (latest fetched scheduled start datetime - current datetime) >= timedelta(hours=<hours>, minutes=<minutes>).\n"
                              "Other available conditions:\n" +
+                             "* file_exists:<path>\n"
+                             "  True if <path>, given as either relative to working directory or absolute, exists (whether before or during execution).\n"
+                             "  Note: argument may need to be quoted if <path> contains e.g. whitespace.\n"
                              "* <signal name e.g. SIGINT>:<{}>\n".format('|'.join(abort_type.name for abort_type in SignalAbortType)) +
                              "  {}\n".format(SignalAbortType.__doc__) +
                              ''.join(f"  * {abort_type.name}\n{textwrap.indent(abort_type.value, '    ')}\n" for abort_type in SignalAbortType) +
