@@ -431,8 +431,6 @@ class ChatReplayDownloader:
             'api_key': ytcfg['INNERTUBE_API_KEY'],
             'context': ytcfg['INNERTUBE_CONTEXT'],
         })
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug("config:\n{}", _debug_dump(config))
 
         m = self._YT_INITIAL_DATA_RE.search(html.text)
         if not m:
@@ -440,7 +438,31 @@ class ChatReplayDownloader:
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
             self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
-        return self.__parse_continuation_info(ytInitialData)
+        info = self.__parse_continuation_info(ytInitialData)
+        config['logged_out'] = self.__parse_logged_out(ytInitialData)
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug("config:\n{}", _debug_dump(config))
+        if info is None:
+            raise NoContinuation
+        return info
+
+    # see "fall back" comment in __get_continuation_info
+    def __get_fallback_continuation_info(self, continuation, is_live):
+        self.logger.debug("get_fallback_continuation_info: continuation={}, is_live={}", continuation, is_live)
+        url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
+        html = self.__session_get(url)
+        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
+
+        m = self._YT_INITIAL_DATA_RE.search(html.text)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        ytInitialData, _ = json_decoder.raw_decode(m.group(1))
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
+        info = self.__parse_continuation_info(ytInitialData)
+        if info is None:
+            raise NoContinuation
+        return info
 
     def __parse_scheduled_start_time(self, info):
         """Get scheduled start time for a YouTube video (from either heartbeat JSON or ytInitialPlayerResponse JSON)."""
@@ -472,13 +494,40 @@ class ChatReplayDownloader:
                 'playerOffsetMs': str(player_offset_ms),
             }
         data = self.__get_youtube_json(url, payload)
-        return self.__parse_continuation_info(data)
+        info = self.__parse_continuation_info(data)
+        if info is None:
+            # YouTube API does not return continuation info (but still returns responseContext, incl loggedOut status) for live (non-replay)
+            # members-only streams that have become (or are already) unlisted, even if user is a member and cookies have us logged into YouTube,
+            # possibly because we lack a client screen nonce (CSN) (which would be difficult to replicate, since both generation and
+            # publishing-to-server of the CSN is in obfuscated live_chat_polymer.js, which in turn may require something like Selenium to
+            # simulate a web browser to fetch generated/published CSN).
+            # Workaround is to fall back to the non-API continuation endpoint that's used to get the first continuation, which somehow still
+            # works for such live streams.
+            # This condition is detected by initial continuation indicating we're logged in, and the YouTube API indicating we're not.
+            # Unfortunately this condition also can trigger at the end of a live stream (last continuation has loggedOut=true for some reason),
+            # but since this only results in one additional request to the non-API continuation endpoint, this is acceptable.
+            if not config['logged_out'] and self.__parse_logged_out(data):
+                self.logger.debug('initial continuation has loggedOut=false while next continuation has loggedOut=true - '
+                    'falling back to always using non-API continuation endpoint')
+                # continue to return None
+            else:
+                raise NoContinuation
+        return info
 
     def __parse_continuation_info(self, data):
         try:
-            return data['continuationContents']['liveChatContinuation']
+            info = data['continuationContents']['liveChatContinuation']
         except LookupError:
-            raise NoContinuation
+            info = None
+        return info
+
+    def __parse_logged_out(self, data):
+        try:
+            logged_out = data['responseContext']['mainAppWebResponseContext']['loggedOut']
+        except LookupError:
+            logged_out = None
+        self.logger.trace("responseContext.mainAppWebResponseContext.loggedOut: {}", logged_out)
+        return True if logged_out is None else logged_out # if loggedOut is somehow missing, assume it's true
 
     def __get_scheduled_start_date(self, config, video_id):
         """Get scheduled start date from heartbeat for a YouTube video."""
@@ -490,6 +539,20 @@ class ChatReplayDownloader:
             'heartbeatRequestParams': {'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS']}
         }
         return self.__parse_scheduled_start_time(self.__get_youtube_json(url, payload))
+
+    def __get_fallback_scheduled_start_date(self, video_id):
+        self.logger.debug("get_fallback_scheduled_start_date: video_id={}", video_id)
+        url = self.__YT_WATCH_TEMPLATE.format(video_id)
+        html = self.__session_get(url)
+        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
+
+        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
+        return self.__parse_scheduled_start_time(ytInitialPlayerResponse)
 
     def __get_youtube_json(self, url, payload):
         """Get JSON for a YouTube API url"""
@@ -792,6 +855,7 @@ class ChatReplayDownloader:
 
             abort_cond_checker = None
             first_time = True
+            use_non_api_fallback = False
             while True:
                 if abort_cond_groups:
                     if abort_cond_checker is None:
@@ -808,7 +872,10 @@ class ChatReplayDownloader:
                             now_timestamp = time.time()
                             if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
                                 scheduled_start_time_poll_timestamp = now_timestamp
-                                return self.__get_scheduled_start_date(config, video_id)
+                                if use_non_api_fallback:
+                                    return self.__get_fallback_scheduled_start_date(video_id)
+                                else:
+                                    return self.__get_scheduled_start_date(config, video_id)
                             else:
                                 return curr_scheduled_start_time
                         abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
@@ -820,8 +887,14 @@ class ChatReplayDownloader:
                     if first_time:
                         # note: first_time is toggled off at end of this iteration in case first_time is used elsewhere
                         info = self.__get_initial_continuation_info(config, continuation, is_live) # note: updates config
+                    elif use_non_api_fallback:
+                        info = self.__get_fallback_continuation_info(continuation, is_live)
                     else:
                         info = self.__get_continuation_info(config, continuation, is_live, player_offset_ms)
+                        # if above returns None yet doesn't throw NoContinuation, that means fallback to always use fallback continuation endpoint
+                        if info is None:
+                            use_non_api_fallback = True
+                            continue
                 except NoContinuation:
                     print('No continuation found, stream may have ended.')
                     break
