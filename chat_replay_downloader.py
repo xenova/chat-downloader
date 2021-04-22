@@ -14,6 +14,7 @@ import csv
 import emoji
 import time
 import os
+import numbers
 from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import signal
@@ -122,7 +123,10 @@ class ChatReplayDownloader:
 
     __YT_HOME = 'https://www.youtube.com'
     __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-Za-z-_]{11})(?:[%#?&]|$)'
-    __YOUTUBE_API_BASE_TEMPLATE = '{}/youtubei/{}/{}?key={}'
+    __YT_WATCH_TEMPLATE = __YT_HOME + '/watch?v={}'
+    __YT_INIT_CONTINUATION_TEMPLATE = __YT_HOME + '/{}?continuation={}'
+    __YT_CONTINUATION_TEMPLATE = __YT_HOME + '/youtubei/{}/live_chat/get_{}?key={}'
+    __YT_HEARTBEAT_TEMPLATE = __YT_HOME + '/youtubei/{}/player/heartbeat?alt=json&key={}'
 
     __TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
     __TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
@@ -328,14 +332,87 @@ class ChatReplayDownloader:
 
         return message_text
 
+    '''
+    Notes on JSON contents from various URLs:
+
+    watch?v=<video_id> => HTML => ytInitialData JSON
+    contents.twoColumnWatchNextResults.conversationBar.liveChatRenderer.continuations[0].reloadContinuationData.continuation
+    contents.twoColumnWatchNextResults.conversationBar.liveChatRenderer.header.liveChatHeaderRenderer.viewSelector.sortFilterSubMenuRenderer.subMenuItems[i].continuation.reloadContinuationData.continuation
+    contents.twoColumnWatchNextResults.conversationBar.conversationBarRenderer.availabilityMessage.messageRenderer.text.runs (if chat N/A)
+
+    live_chat[_replay]?v=<video_id> (unused) => HTML => ytInitialData JSON
+    contents.liveChatRenderer.continuations[0].timedContinuationData.continuation
+    contents.liveChatRenderer.header.liveChatHeaderRenderer.viewSelector.sortFilterSubMenuRenderer.subMenuItems[i].continuation.reloadContinuationData.continuation
+
+    live_chat[_replay]?continuation=<continuation> => HTML => ytInitialData JSON
+    continuationContents.liveChatContinuation.continuations[0].*ContinuationData.continuation
+    continuationContents.liveChatContinuation.header.liveChatHeaderRenderer.viewSelector.sortFilterSubMenuRenderer.subMenuItems[i].continuation.reloadContinuationData.continuation
+    continuationContents.liveChatContinuation.actions
+
+    get_live_chat[_replay]?key=<api_key> (plus POST data) => JSON
+    continuationContents.liveChatContinuation.continuations[0].*ContinuationData.continuation
+    continuationContents.liveChatContinuation.header.liveChatHeaderRenderer.viewSelector.sortFilterSubMenuRenderer.subMenuItems[i].continuation.reloadContinuationData.continuation
+    continuationContents.liveChatContinuation.actions
+    contents.messageRenderer.text.runs.text (if chat N/A)
+    '''
+
     _YT_CFG_RE = re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;')
     _YT_INITIAL_PLAYER_RESPONSE_RE = re.compile(r'\bytInitialPlayerResponse\s*=\s*({.+?})\s*;')
     _YT_INITIAL_DATA_RE = re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;')
+
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
-        original_url = '{}/watch?v={}'.format(self.__YT_HOME, video_id)
-        html = self.__session_get(original_url)
+        url = self.__YT_WATCH_TEMPLATE.format(video_id)
+        html = self.__session_get(url)
+        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
 
+        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
+        config = {
+            'is_upcoming': ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False),
+            'scheduled_start_time': self.__get_scheduled_start_time(ytInitialPlayerResponse),
+        }
+
+        m = self._YT_INITIAL_DATA_RE.search(html.text)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        ytInitialData, _ = json_decoder.raw_decode(m.group(1))
+        if self.logger.isEnabledFor(logging.TRACE):
+            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
+        contents = ytInitialData.get('contents')
+        if(not contents):
+            raise VideoUnavailable('Video is unavailable (may be private).')
+        contents = contents.get('twoColumnWatchNextResults', {}).get('conversationBar', {})
+        try:
+            container = contents['liveChatRenderer']
+            viewselector_submenuitems = container['header']['liveChatHeaderRenderer'][
+                'viewSelector']['sortFilterSubMenuRenderer']['subMenuItems']
+            continuation_by_title_map = {
+                x['title']: x['continuation']['reloadContinuationData']['continuation']
+                for x in viewselector_submenuitems
+            }
+            if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
+                self.logger.debug("continuation_by_title_map:\n{}", _debug_dump(continuation_by_title_map))
+        except LookupError:
+            error_message = 'Video does not have a chat replay.'
+            try:
+                error_message = self.__parse_message_runs(
+                    contents['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
+            except LookupError:
+                pass
+            config['no_chat_error'] = error_message
+            continuation_by_title_map = {}
+
+        return config, continuation_by_title_map
+
+    def __get_initial_continuation_info(self, config, continuation, is_live):
+        self.logger.debug("get_initial_continuation_info: continuation={}, is_live={}", continuation, is_live)
+        url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
+        html = self.__session_get(url)
         json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
 
         m = self._YT_CFG_RE.search(html.text)
@@ -344,56 +421,25 @@ class ChatReplayDownloader:
         ytcfg, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
             self.logger.trace("ytcfg:\n{}", _debug_dump(ytcfg))
-
-        config = {
+        config.update({
             'api_version': ytcfg['INNERTUBE_API_VERSION'],
             'api_key': ytcfg['INNERTUBE_API_KEY'],
             'context': ytcfg['INNERTUBE_CONTEXT'],
-        }
-
-        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
-
-        config['is_upcoming'] = ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False)
-        config['scheduled_start_time'] = self.__get_scheduled_start_time(ytInitialPlayerResponse)
+        })
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug("config:\n{}", _debug_dump(config))
 
         m = self._YT_INITIAL_DATA_RE.search(html.text)
         if not m:
             raise ParsingError('Unable to parse video data. Please try again.')
-
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
             self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
-
-        contents = ytInitialData.get('contents')
-        if(not contents):
-            raise VideoUnavailable('Video is unavailable (may be private).')
-
-        columns = contents.get('twoColumnWatchNextResults')
-
-        if('conversationBar' not in columns or 'liveChatRenderer' not in columns['conversationBar']):
-            error_message = 'Video does not have a chat replay.'
-            try:
-                error_message = self.__parse_message_runs(
-                    columns['conversationBar']['conversationBarRenderer']['availabilityMessage']['messageRenderer']['text']['runs'])
-            except KeyError:
-                pass
-            config['no_chat_error'] = error_message
-            continuation_by_title_map = {}
-        else:
-            livechat_header = columns['conversationBar']['liveChatRenderer']['header']
-            viewselector_submenuitems = livechat_header['liveChatHeaderRenderer'][
-                'viewSelector']['sortFilterSubMenuRenderer']['subMenuItems']
-            continuation_by_title_map = {
-                x['title']: x['continuation']['reloadContinuationData']['continuation']
-                for x in viewselector_submenuitems
-            }
-
-        return config, continuation_by_title_map
+        try:
+            info = ytInitialData['continuationContents']['liveChatContinuation']
+        except LookupError:
+            raise NoContinuation
+        return info
 
     def __get_scheduled_start_time(self, info):
         """Get scheduled start time for a YouTube video (from either heartbeat JSON or ytInitialPlayerResponse JSON)."""
@@ -403,29 +449,18 @@ class ChatReplayDownloader:
         except LookupError:
             return None
 
-    def __get_replay_info(self, config, continuation, offset_milliseconds):
-        """Get YouTube replay info, given a continuation or a certain offset."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'live_chat/get_live_chat_replay', config['api_key'])
-        self.logger.debug("get_replay_info: continuation={}, playerOffsetMs={}", continuation, offset_milliseconds)
-        return self.__get_continuation_info(url, {
-            'context': config['context'],
-            'continuation': continuation,
-            'currentPlayerState': {
-                'playerOffsetMs': str(offset_milliseconds),
-            },
-        })
-
-    def __get_live_info(self, config, continuation):
-        """Get YouTube live info, given a continuation."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'live_chat/get_live_chat', config['api_key'])
-        self.logger.debug("get_live_info: continuation={}", continuation)
-        return self.__get_continuation_info(url, {
-            'context': config['context'],
-            'continuation': continuation,
-        })
-
-    def __get_continuation_info(self, url, payload):
+    def __get_continuation_info(self, config, continuation, is_live, player_offset_ms=None):
         """Get continuation info for a YouTube video."""
+        self.logger.debug("get_continuation_info: continuation={}, is_live={}, player_offset_ms={}", continuation, is_live, player_offset_ms)
+        url = self.__YT_CONTINUATION_TEMPLATE.format(config['api_version'], 'live_chat' if is_live else 'live_chat_replay', config['api_key'])
+        payload = {
+            'context': config['context'],
+            'continuation': continuation,
+        }
+        if not is_live and player_offset_ms is not None:
+            payload['currentPlayerState'] = {
+                'playerOffsetMs': str(player_offset_ms),
+            }
         response = self.__get_youtube_json(url, payload)
         try:
             return response['continuationContents']['liveChatContinuation']
@@ -434,7 +469,7 @@ class ChatReplayDownloader:
 
     def __get_heartbeat_info(self, video_id, config):
         """Get heartbeat info for a YouTube video."""
-        url = self.__YOUTUBE_API_BASE_TEMPLATE.format(self.__YT_HOME, config['api_version'], 'player/heartbeat', config['api_key'] + '&alt=json')
+        url = self.__YT_HEARTBEAT_TEMPLATE.format(config['api_version'], config['api_key'])
         payload = {
             'context': config['context'],
             'videoId': video_id,
@@ -699,7 +734,7 @@ class ChatReplayDownloader:
 
         messages = [] if output_messages is None else output_messages
 
-        offset_milliseconds = start_time * 1000 if start_time > 0 else 0
+        player_offset_ms = start_time * 1000 if isinstance(start_time, numbers.Number) else None
 
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
@@ -738,9 +773,6 @@ class ChatReplayDownloader:
                     else:
                         raise NoChatReplay(error_message)
                 else:
-                    if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
-                        self.logger.debug("config:\n{}", _debug_dump(config))
-                        self.logger.debug("continuation_by_title_map:\n{}", _debug_dump(continuation_by_title_map))
                     break
             continuation = continuation_by_title_map[continuation_title]
 
@@ -771,24 +803,17 @@ class ChatReplayDownloader:
                     abort_cond_checker.check()
 
                 try:
-                    if(is_live):
-                        info = self.__get_live_info(config, continuation)
+                    if first_time:
+                        # note: first_time is toggled off at end of this iteration in case first_time is used elsewhere
+                        info = self.__get_initial_continuation_info(config, continuation, is_live) # note: updates config
                     else:
-                        # must run to get first few messages, otherwise might miss some
-                        if(first_time):
-                            info = self.__get_replay_info(config, continuation, 0)
-                            first_time = False
-                        else:
-                            info = self.__get_replay_info(config, continuation, offset_milliseconds)
-
+                        info = self.__get_continuation_info(config, continuation, is_live, player_offset_ms)
                 except NoContinuation:
                     print('No continuation found, stream may have ended.')
                     break
-
                 except VideoUnavailable:
                     print('Video not unavailable, stream may have been privated while live chat was still active.')
                     break
-
                 except VideoNotFound:
                     print('Video not found, stream may have been deleted while live chat was still active.')
                     break
@@ -871,6 +896,8 @@ class ChatReplayDownloader:
                         time.sleep(continuation_info['timeoutMs']/1000)
                 else:
                     break
+
+                first_time = False
 
             return messages
 
