@@ -188,7 +188,7 @@ class ChatReplayDownloader:
             # Retry doesn't have jitter functionality; following random usage is a poor man's version that only jitters backoff_factor across sessions.
             backoff_factor=random.uniform(1.0, 1.5),
             status_forcelist=[413, 429, 500, 502, 503, 504], # also retries on connection/read timeouts
-            method_whitelist=False))) # retry on any HTTP method (including GET and POST)
+            allowed_methods=False))) # retry on any HTTP method (including GET and POST)
 
         cj = MozillaCookieJar(cookies)
         if cookies is not None:
