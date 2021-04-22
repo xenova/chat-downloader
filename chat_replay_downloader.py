@@ -122,13 +122,13 @@ class ChatReplayDownloader:
     }
 
     __YT_HOME = 'https://www.youtube.com'
-    __YT_REGEX = r'(?:/|%3D|v=|vi=)([0-9A-Za-z-_]{11})(?:[%#?&]|$)'
+    __YT_REGEX = re.compile(r'(?:/|%3D|v=|vi=)([0-9A-Za-z-_]{11})(?:[%#?&]|$)')
     __YT_WATCH_TEMPLATE = __YT_HOME + '/watch?v={}'
     __YT_INIT_CONTINUATION_TEMPLATE = __YT_HOME + '/{}?continuation={}'
     __YT_CONTINUATION_TEMPLATE = __YT_HOME + '/youtubei/{}/live_chat/get_{}?key={}'
     __YT_HEARTBEAT_TEMPLATE = __YT_HOME + '/youtubei/{}/player/heartbeat?alt=json&key={}'
 
-    __TWITCH_REGEX = r'(?:/videos/|/v/)(\d+)'
+    __TWITCH_REGEX = re.compile(r'(?:/videos/|/v/)(\d+)')
     __TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
     __TWITCH_API_TEMPLATE = 'https://api.twitch.tv/v5/videos/{}/comments?client_id={}'
 
@@ -356,22 +356,27 @@ class ChatReplayDownloader:
     contents.messageRenderer.text.runs.text (if chat N/A)
     '''
 
-    _YT_CFG_RE = re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;')
-    _YT_INITIAL_PLAYER_RESPONSE_RE = re.compile(r'\bytInitialPlayerResponse\s*=\s*({.+?})\s*;')
-    _YT_INITIAL_DATA_RE = re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;')
+    __YT_HTML_REGEXES = {
+        'ytcfg': re.compile(r'\bytcfg\s*\.\s*set\(\s*({.*})\s*\)\s*;'),
+        'ytInitialPlayerResponse': re.compile(r'\bytInitialPlayerResponse\s*=\s*({.+?})\s*;'),
+        'ytInitialData': re.compile(r'(?:\bwindow\s*\[\s*["\']ytInitialData["\']\s*\]|\bytInitialData)\s*=\s*(\{.+\})\s*;'),
+    }
+    __json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
+    def __parse_video_text(self, regex_key, html):
+        m = self.__YT_HTML_REGEXES[regex_key].search(html)
+        if not m:
+            raise ParsingError('Unable to parse video data. Please try again.')
+        data, _ = self.__json_decoder.raw_decode(m.group(1))
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("{}:\n{}", regex_key, _debug_dump(data))
+        return data
 
     def __get_initial_youtube_info(self, video_id):
         """ Get initial YouTube video information. """
         url = self.__YT_WATCH_TEMPLATE.format(video_id)
-        html = self.__session_get(url)
-        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
+        html = self.__session_get(url).text
 
-        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
+        ytInitialPlayerResponse = self.__parse_video_text('ytInitialPlayerResponse', html)
         #playerMicroformatRenderer = ytInitialPlayerResponse.get('microformat', {}).get('playerMicroformatRenderer', {})
         config = {
             'is_upcoming': ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False),
@@ -382,12 +387,7 @@ class ChatReplayDownloader:
             #'end_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('endTimestamp')),
         }
 
-        m = self._YT_INITIAL_DATA_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialData, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
+        ytInitialData = self.__parse_video_text('ytInitialData', html)
         contents = ytInitialData.get('contents')
         if(not contents):
             raise VideoUnavailable('Video is unavailable (may be private).')
@@ -417,27 +417,16 @@ class ChatReplayDownloader:
     def __get_initial_continuation_info(self, config, continuation, is_live):
         self.logger.debug("get_initial_continuation_info: continuation={}, is_live={}", continuation, is_live)
         url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
-        html = self.__session_get(url)
-        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
+        html = self.__session_get(url).text
 
-        m = self._YT_CFG_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytcfg, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-            self.logger.trace("ytcfg:\n{}", _debug_dump(ytcfg))
+        ytcfg = self.__parse_video_text('ytcfg', html)
         config.update({
             'api_version': ytcfg['INNERTUBE_API_VERSION'],
             'api_key': ytcfg['INNERTUBE_API_KEY'],
             'context': ytcfg['INNERTUBE_CONTEXT'],
         })
 
-        m = self._YT_INITIAL_DATA_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialData, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
+        ytInitialData = self.__parse_video_text('ytInitialData', html)
         info = self.__parse_continuation_info(ytInitialData)
         config['logged_out'] = self.__parse_logged_out(ytInitialData)
         if self.logger.isEnabledFor(logging.DEBUG):
@@ -450,15 +439,8 @@ class ChatReplayDownloader:
     def __get_fallback_continuation_info(self, continuation, is_live):
         self.logger.debug("get_fallback_continuation_info: continuation={}, is_live={}", continuation, is_live)
         url = self.__YT_INIT_CONTINUATION_TEMPLATE.format('live_chat' if is_live else 'live_chat_replay', continuation)
-        html = self.__session_get(url)
-        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
-
-        m = self._YT_INITIAL_DATA_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialData, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
+        html = self.__session_get(url).text
+        ytInitialData = self.__parse_video_text('ytInitialData', html)
         info = self.__parse_continuation_info(ytInitialData)
         if info is None:
             raise NoContinuation
@@ -543,15 +525,8 @@ class ChatReplayDownloader:
     def __get_fallback_scheduled_start_date(self, video_id):
         self.logger.debug("get_fallback_scheduled_start_date: video_id={}", video_id)
         url = self.__YT_WATCH_TEMPLATE.format(video_id)
-        html = self.__session_get(url)
-        json_decoder = json.JSONDecoder() # for more lenient raw_decode usage
-
-        m = self._YT_INITIAL_PLAYER_RESPONSE_RE.search(html.text)
-        if not m:
-            raise ParsingError('Unable to parse video data. Please try again.')
-        ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
-        if self.logger.isEnabledFor(logging.TRACE):
-            self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
+        html = self.__session_get(url).text
+        ytInitialPlayerResponse = self.__parse_video_text('ytInitialPlayerResponse', html)
         return self.__parse_scheduled_start_time(ytInitialPlayerResponse)
 
     def __get_youtube_json(self, url, payload):
@@ -1055,11 +1030,11 @@ class ChatReplayDownloader:
             return messages
 
     def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
-        match = re.search(self.__YT_REGEX, url)
+        match = self.__YT_REGEX.search(url)
         if(match):
             return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-        match = re.search(self.__TWITCH_REGEX, url)
+        match = self.__TWITCH_REGEX.search(url)
         if(match):
             return self.get_twitch_messages(match.group(1), start_time, end_time, callback, output_messages, **kwargs)
 
