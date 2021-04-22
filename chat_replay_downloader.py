@@ -776,12 +776,12 @@ class ChatReplayDownloader:
             del self.logger
 
     @_log_with_video_id
-    def get_youtube_messages(self, video_id, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+    def get_youtube_messages(self, video_id, start_time=None, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
         """ Get chat messages for a YouTube video. """
-
-        start_time = self.__ensure_seconds(start_time, 0)
+        start_time = self.__ensure_seconds(start_time, None)
         end_time = self.__ensure_seconds(end_time, None)
-        self.logger.trace("kwargs: {}", kwargs)
+        self.logger.trace("video_id={}, start_time={}, end_time={}, message_type={}, chat_type={}, kwargs={}",
+            video_id, start_time, end_time, message_type, chat_type, kwargs)
         abort_cond_groups = kwargs.get('abort_condition')
 
         messages = [] if output_messages is None else output_messages
@@ -924,7 +924,7 @@ class ChatReplayDownloader:
                         if(end_time is not None and valid_seconds and time_in_seconds > end_time):
                             return messages
 
-                        if(is_live or (valid_seconds and time_in_seconds >= start_time)):
+                        if(is_live or start_time is None or (valid_seconds and time_in_seconds >= start_time)):
                             messages.append(data)
 
                             if(callback is None):
@@ -971,8 +971,8 @@ class ChatReplayDownloader:
             return messages
 
     @_log_with_video_id
-    def get_twitch_messages(self, video_id, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
-        start_time = self.__ensure_seconds(start_time, 0)
+    def get_twitch_messages(self, video_id, start_time=None, end_time=None, callback=None, output_messages=None, **kwargs):
+        start_time = self.__ensure_seconds(start_time, None)
         end_time = self.__ensure_seconds(end_time, None)
 
         messages = [] if output_messages is None else output_messages
@@ -992,7 +992,7 @@ class ChatReplayDownloader:
 
                 for comment in info['comments']:
                     time_in_seconds = float(comment['content_offset_seconds'])
-                    if(time_in_seconds < start_time):
+                    if(start_time is not None and time_in_seconds < start_time):
                         continue
 
                     if(end_time is not None and time_in_seconds > end_time):
@@ -1029,7 +1029,7 @@ class ChatReplayDownloader:
             print('[Interrupted]', flush=True)
             return messages
 
-    def get_chat_replay(self, url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+    def get_chat_replay(self, url, start_time=None, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
         match = self.__YT_REGEX.search(url)
         if(match):
             return self.get_youtube_messages(match.group(1), start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
@@ -1041,13 +1041,13 @@ class ChatReplayDownloader:
         raise InvalidURL('The url provided ({}) is invalid.'.format(url))
 
 
-def get_chat_replay(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+def get_chat_replay(url, start_time=None, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_chat_replay(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-def get_youtube_messages(url, start_time=0, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
+def get_youtube_messages(url, start_time=None, end_time=None, message_type='messages', chat_type='live', callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_youtube_messages(url, start_time, end_time, message_type, chat_type, callback, output_messages, **kwargs)
 
-def get_twitch_messages(url, start_time=0, end_time=None, callback=None, output_messages=None, **kwargs):
+def get_twitch_messages(url, start_time=None, end_time=None, callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, output_messages, **kwargs)
 
 def _debug_dump(obj):
@@ -1066,10 +1066,10 @@ def gen_arg_parser(abort_signals=None, add_positional_arguments=True, parser=Non
     if add_positional_arguments:
         parser.add_argument('url', help='YouTube/Twitch video URL')
 
-    parser.add_argument('--start_time', '--from', default=0,
-                        help='start time in seconds or hh:mm:ss\n(default: %(default)s)')
+    parser.add_argument('--start_time', '--from', default=None,
+                        help='start time in seconds or hh:mm:ss [no effect on non-replay YouTube videos]\n(default: %(default)s = from the start)')
     parser.add_argument('--end_time', '--to', default=None,
-                        help='end time in seconds or hh:mm:ss\n(default: %(default)s = until the end)')
+                        help='end time in seconds or hh:mm:ss [no effect on non-replay YouTube videos]\n(default: %(default)s = until the end)')
 
     parser.add_argument('--message_type', choices=['messages', 'superchat', 'all'], default='messages',
                         help='types of messages to include [YouTube only]\n(default: %(default)s)')
