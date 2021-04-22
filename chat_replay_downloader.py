@@ -206,7 +206,7 @@ class ChatReplayDownloader:
             response = self.session.get(url, timeout=10)
         else:
             if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-                self.logger.trace("HTTP POST {!r} <= body JSON (pretty-printed):\n{}", url, _debug_dump(post_payload)) # too verbose
+                self.logger.trace("HTTP POST {!r} <= payload JSON (pretty-printed):\n{}", url, _debug_dump(post_payload)) # too verbose
             post_payload = json.dumps(post_payload)
             response = self.session.post(url, data=post_payload, timeout=10)
         return response
@@ -214,12 +214,12 @@ class ChatReplayDownloader:
     def __session_get_json(self, url, post_payload=None):
         """Make a request using the current session and get json data."""
         try:
-            ret = self.__session_get(url, post_payload).json()
+            data = self.__session_get(url, post_payload).json()
         except json.JSONDecodeError as e:
             raise ParsingError("Could not parse JSON from response to {!r}:\n{}".format(url, e.doc)) from e
         if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
-            self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, _debug_dump(ret))
-        return ret
+            self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, _debug_dump(data))
+        return data
 
     def __timestamp_to_microseconds(self, timestamp):
         """
@@ -372,9 +372,14 @@ class ChatReplayDownloader:
         ytInitialPlayerResponse, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
             self.logger.trace("ytInitialPlayerResponse:\n{}", _debug_dump(ytInitialPlayerResponse))
+        #playerMicroformatRenderer = ytInitialPlayerResponse.get('microformat', {}).get('playerMicroformatRenderer', {})
         config = {
             'is_upcoming': ytInitialPlayerResponse.get('videoDetails', {}).get('isUpcoming', False),
-            'scheduled_start_time': self.__get_scheduled_start_time(ytInitialPlayerResponse),
+            #'is_unlisted': playerMicroformatRenderer.get('isUnlisted', False),
+            #'is_live': playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('isLiveNow', False),
+            'scheduled_start_time': self.__parse_scheduled_start_time(ytInitialPlayerResponse),
+            #'start_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('startTimestamp')),
+            #'end_time': self.__fromisoformat(playerMicroformatRenderer.get('liveBroadcastDetails', {}).get('endTimestamp')),
         }
 
         m = self._YT_INITIAL_DATA_RE.search(html.text)
@@ -435,19 +440,24 @@ class ChatReplayDownloader:
         ytInitialData, _ = json_decoder.raw_decode(m.group(1))
         if self.logger.isEnabledFor(logging.TRACE):
             self.logger.trace("ytInitialData:\n{}", _debug_dump(ytInitialData))
-        try:
-            info = ytInitialData['continuationContents']['liveChatContinuation']
-        except LookupError:
-            raise NoContinuation
-        return info
+        return self.__parse_continuation_info(ytInitialData)
 
-    def __get_scheduled_start_time(self, info):
+    def __parse_scheduled_start_time(self, info):
         """Get scheduled start time for a YouTube video (from either heartbeat JSON or ytInitialPlayerResponse JSON)."""
         try:
             timestamp = int(info['playabilityStatus']['liveStreamability']['liveStreamabilityRenderer']['offlineSlate']['liveStreamOfflineSlateRenderer']['scheduledStartTime'])
-            return datetime.fromtimestamp(timestamp)
+            scheduled_start_time = datetime.fromtimestamp(timestamp)
         except LookupError:
+            scheduled_start_time = None
+        self.logger.trace("playabilityStatus.liveStreamability.liveStreamabilityRenderer.offlineSlate.liveStreamOfflineSlateRenderer.scheduledStartTime: {}",
+            scheduled_start_time)
+        return scheduled_start_time
+
+    @staticmethod
+    def __fromisoformat(date_str):
+        if date_str is None:
             return None
+        return datetime.fromisoformat(date_str)
 
     def __get_continuation_info(self, config, continuation, is_live, player_offset_ms=None):
         """Get continuation info for a YouTube video."""
@@ -461,26 +471,30 @@ class ChatReplayDownloader:
             payload['currentPlayerState'] = {
                 'playerOffsetMs': str(player_offset_ms),
             }
-        response = self.__get_youtube_json(url, payload)
+        data = self.__get_youtube_json(url, payload)
+        return self.__parse_continuation_info(data)
+
+    def __parse_continuation_info(self, data):
         try:
-            return response['continuationContents']['liveChatContinuation']
+            return data['continuationContents']['liveChatContinuation']
         except LookupError:
             raise NoContinuation
 
-    def __get_heartbeat_info(self, video_id, config):
-        """Get heartbeat info for a YouTube video."""
+    def __get_scheduled_start_date(self, config, video_id):
+        """Get scheduled start date from heartbeat for a YouTube video."""
+        self.logger.debug("get_scheduled_start_date: video_id={}", video_id)
         url = self.__YT_HEARTBEAT_TEMPLATE.format(config['api_version'], config['api_key'])
         payload = {
             'context': config['context'],
             'videoId': video_id,
             'heartbeatRequestParams': {'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS']}
         }
-        return self.__get_youtube_json(url, payload)
+        return self.__parse_scheduled_start_time(self.__get_youtube_json(url, payload))
 
     def __get_youtube_json(self, url, payload):
         """Get JSON for a YouTube API url"""
-        response = self.__session_get_json(url, payload)
-        error = response.get('error')
+        data = self.__session_get_json(url, payload)
+        error = data.get('error')
         if error:
             # Error code 403 'The caller does not have permission' error likely means the stream was privated immediately while the chat is still active.
             error_code = error.get('code')
@@ -489,8 +503,8 @@ class ChatReplayDownloader:
             elif error_code == 404:
                 raise VideoNotFound
             else:
-                raise ParsingError("JSON response to {!r} is error:\n{}".format(url, _debug_dump(response)))
-        return response
+                raise ParsingError("JSON response to {!r} is error:\n{}".format(url, _debug_dump(data)))
+        return data
 
     def __ensure_seconds(self, time, default=0):
         """Ensure time is returned in seconds."""
@@ -794,7 +808,7 @@ class ChatReplayDownloader:
                             now_timestamp = time.time()
                             if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
                                 scheduled_start_time_poll_timestamp = now_timestamp
-                                return self.__get_scheduled_start_time(self.__get_heartbeat_info(video_id, config))
+                                return self.__get_scheduled_start_date(config, video_id)
                             else:
                                 return curr_scheduled_start_time
                         abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
@@ -1275,7 +1289,8 @@ def main(args):
         import traceback
         stacklines = traceback.format_exc().splitlines(keepends=True)
         stacklines[1:1] = traceback.format_list(traceback.extract_stack()[:-1])
-        print(''.join(stacklines), end='', file=sys.stderr)
+        # not using logger.error in case logging system somehow failed
+        print(f"[ERROR][{datetime.now():{ChatReplayDownloader.DATETIME_FORMAT}}]", ''.join(stacklines), end='', file=sys.stderr)
     finally:
         finalize_output()
 
