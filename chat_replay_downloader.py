@@ -117,7 +117,7 @@ class ChatReplayDownloader:
         lenient=True, format='[%(levelname)s][%(asctime)s]%(context)s %(message)s', datefmt=DATETIME_FORMAT)
 
     __HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.72 Safari/537.36',
         'Accept-Language': 'en-US, en'
     }
 
