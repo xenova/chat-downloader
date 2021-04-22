@@ -863,14 +863,18 @@ class ChatReplayDownloader:
                                     })
                             abort_cond_checker.check()
 
-                        retry_wait_secs = random.randint(30, 45) # jitter
-                        self.logger.debug("Upcoming {} Retrying in {} secs (attempt {})", error_message, retry_wait_secs, attempt_ct)
+                        retry_wait_secs = random.randint(45, 60) # jitter
+                        if self.logger.isEnabledFor(logging.INFO):
+                            self.logger.info("Upcoming {} Retrying in {} secs (attempt {})",
+                                error_message.lower(), retry_wait_secs, attempt_ct)
                         time.sleep(retry_wait_secs)
                     else:
                         raise NoChatReplay(error_message)
                 else:
                     break
             continuation = continuation_by_title_map[continuation_title]
+            if self.logger.isEnabledFor(logging.INFO):
+                self.logger.info("Downloading {} for video: {}", continuation_title.lower(), config['title'])
 
             abort_cond_checker = None
             first_time = True
