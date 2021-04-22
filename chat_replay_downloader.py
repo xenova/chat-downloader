@@ -19,6 +19,8 @@ import sys
 import signal
 from urllib import parse
 import inspect
+import enum
+import textwrap
 
 
 logging.TRACE, logging.trace, logging.Logger.trace, logging.LoggerAdapter.trace = loggingutils.addLevelName(logging.DEBUG // 2, 'TRACE')
@@ -73,6 +75,35 @@ class AbortConditionsSatisfied(Exception):
     """"Raised when all abort conditions are satisfied."""
     pass
 
+
+# ideally this would be defined as a class variable within SignalAbortType, but that can't be done since SignalAbortType is an enum
+DEFAULT_SIGNAL_ABORT_NAMES = [signal_name for signal_name in (
+    'SIGINT',
+    'SIGBREAK', # Windows-only (ctrl+break)
+                # warning: if running multiple background jobs in a console shell, ctrl+break signals all those jobs rather than just the current job
+    'SIGQUIT', # Unix-only
+    'SIGTERM',
+    'SIGABRT',
+) if hasattr(signal, signal_name)]
+class SignalAbortType(enum.Enum):
+    """Determines whether given signal aborts the application."""
+    default  = ("Same as 'enable' for signal if it's one of: " + ', '.join(DEFAULT_SIGNAL_ABORT_NAMES) + ".\n"
+                "Otherwise, signals are handled as-is (unless overriden, a noop by default).") + ("" if os.name != 'nt' else (
+                "\nWindows technical limitations:\n"
+                "* SIGINT:default (ctrl+c)\n"
+                "  SIGINT only aborts when this application is NOT started in a background job (e.g. via bash '&'),\n"
+                "  even if that job is later restored to the foreground.\n"
+                "* SIGBREAK:default (Windows-only ctrl+break)\n"
+                "  Same as SIGBREAK:enable."))
+    disable  =  "Never abort on this signal."
+    enable   =  "Always abort on this signal." + ("" if os.name != 'nt' else (
+                "\nWindows technical limitations:\n"
+                "* SIGINT:enable (ctrl+c)\n"
+                "  SIGINT aborts regardless of whether this application is running in the background or foreground job.\n"
+                "  Using bash terminology, this also means that ctrl+c aborts all the current session's background and foreground jobs\n"
+                "  running this application with SIGINT:enable.\n"
+                "* SIGBREAK:enable  (Windows-only ctrl+break)\n"
+                "  SIGBREAK also aborts all the current sessions' jobs running this application with either SIGBREAK:enable or SIGBREAK:default."))
 
 class ChatReplayDownloader:
     """A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!"""
@@ -507,7 +538,7 @@ class ChatReplayDownloader:
     # conditions are ANDed within a condition group, and condition groups are ORed
     # any boolean formula can be converted into this OR of ANDs form (a.k.a. disjunctive normal form)
     @classmethod
-    def parse_abort_condition_group(cls, raw_cond_group, error_gen=ValueError):
+    def parse_abort_condition_group(cls, raw_cond_group, abort_signals=None, error_gen=ValueError):
         cond_group = []
         cond_name_dict = {} # for ensuring uniqueness
 
@@ -557,6 +588,20 @@ class ChatReplayDownloader:
                     return None
                 cond_group.append((raw_cond, min_time_until_scheduled_start_time))
 
+            elif cond_name.startswith('SIG'):
+                try:
+                    abort_signal = getattr(signal, cond_name)
+                except AttributeError:
+                    raise error_gen(f"({raw_cond_group}) unrecognized signal name: {cond_name}")
+                if len(raw_conds) > 1:
+                    raise error_gen(f"({raw_cond_group}) signal condition must be only condition in the option argument")
+                try:
+                    abort_signal_type = SignalAbortType[cond_arg]
+                except LookupError:
+                    raise error_gen("({}) signal condition argument must be one of: {}".format(
+                        raw_cond_group, ', '.join(abort_type.name for abort_type in SignalAbortType)))
+                cls.logger.debug("abort condition {}: {!r} => {}", cond_name, abort_signal, abort_signal_type)
+                abort_signals[abort_signal] = abort_signal_type
             else:
                 raise error_gen(f"({raw_cond_group}) unrecognized condition: {raw_cond}")
 
@@ -907,6 +952,10 @@ def _debug_dump(obj):
     return json.dumps(obj, indent=4, default=str)
 
 def main(args):
+    logger = ChatReplayDownloader.logger
+
+    abort_signals = {getattr(signal, signal_name): SignalAbortType.default for signal_name in DEFAULT_SIGNAL_ABORT_NAMES}
+
     parser = argparse.ArgumentParser(
         description='A simple tool used to retrieve YouTube/Twitch chat from past broadcasts/VODs. No authentication needed!',
         formatter_class=argparse.RawTextHelpFormatter)
@@ -931,7 +980,7 @@ def main(args):
                         help='name of cookies file\n(default: %(default)s)')
 
     abort_cond_action = parser.add_argument('--abort_condition', action='append',
-                        type=lambda raw_cond_group: ChatReplayDownloader.parse_abort_condition_group(raw_cond_group,
+                        type=lambda raw_cond_group: ChatReplayDownloader.parse_abort_condition_group(raw_cond_group, abort_signals,
                                                         lambda msg: argparse.ArgumentError(abort_cond_action, msg)),
                         help="a condition on which this application aborts (note: ctrl+c is such a condition by default)\n"
                              "Available conditions for upcoming streams:\n"
@@ -940,7 +989,12 @@ def main(args):
                              "  and latest fetched scheduled start datetime.\n"
                              "* min_time_until_scheduled_start_time:<hours>:<minutes> [YouTube-only]\n"
                              "  True if (latest fetched scheduled start datetime - current datetime) >= timedelta(hours=<hours>, minutes=<minutes>).\n"
-                             "Multiple abort conditions can be specified within a single --abort_condition option,\n"
+                             "Other available conditions:\n" +
+                             "* <signal name e.g. SIGINT>:<{}>\n".format('|'.join(abort_type.name for abort_type in SignalAbortType)) +
+                             "  {}\n".format(SignalAbortType.__doc__) +
+                             ''.join(f"  * {abort_type.name}\n{textwrap.indent(abort_type.value, '    ')}\n" for abort_type in SignalAbortType) +
+                             "  Note: this cannot be grouped with other abort conditions within a single --abort_condition option (see below).\n"
+                             "Multiple abort conditions (excluding the signal abort condition) can be specified within a single --abort_condition option,\n"
                              "delimited by + (whitespace allowed before and after, though the whole argument may need to be quoted then),\n"
                              "and such abort conditions are ANDed together as a 'condition group'.\n"
                              "In case a condition argument itself must contain +, + can be escaped as \\+ (and \\ can be escaped as \\\\).\n"
@@ -948,9 +1002,11 @@ def main(args):
                              "Example:\n"
                              "  --abort_condition 'changed_scheduled_start_time:%%Y%%m%%d + min_time_until_scheduled_start_time:00:10'\n"
                              "  --abort_condition min_time_until_scheduled_start_time:24:00\n"
+                             "  --abort_condition SIGINT:disable\n"
                              "means abort if:\n"
                              "  (both scheduled start datetime changes date AND current time until scheduled start datetime is at least 10 minutes)\n"
                              "  OR current time until scheduled start datetime is at least 24 hours\n"
+                             "  IN ADDITION to disabling the application-aborting SIGINT handler\n"
                              "Any combination of ORs and ANDs can be represented by this system, since abort conditions are effectively a boolean formula,\n"
                              "and any boolean formula can be converted into this OR of ANDs form (a.k.a. disjunctive normal form).")
 
@@ -1013,11 +1069,14 @@ def main(args):
     chat_messages = []
 
     orig_signal_handlers = {}
+    def print_signal_received(signum, msg):
+        name = signal.Signals(signum).name # pylint: disable=no-member # pylint lies - signal.Signals does exist
+        print(f"[Signal Received: {name}] {msg}", flush=True)
+
     called_finalize_output=False
     def finalize_output(signum=None, frame=None):
         if signum:
-            name = signal.Signals(signum).name # pylint: disable=no-member # pylint lies - signal.Signals does exist
-            print(f"[{'Signal Received: ' + name[3:].capitalize() if name.startswith('SIG') else name.capitalize()}]", flush=True)
+            print_signal_received(signum, 'Aborting')
 
         nonlocal called_finalize_output
         if called_finalize_output:
@@ -1049,8 +1108,8 @@ def main(args):
                     'messages to', args.output, flush=True)
         finally:
             try:
-                for orig_signum, orig_handler in orig_signal_handlers.items():
-                    signal.signal(orig_signum, orig_handler)
+                for orig_signal, orig_handler in orig_signal_handlers.items():
+                    signal.signal(orig_signal, orig_handler)
                 for log_file in log_files:
                     if log_file: # if an actual file (not sys.__stdout__ or sys.__stderr__)
                         #print(f"Closing {log_file}", flush=True)
@@ -1065,18 +1124,44 @@ def main(args):
                 if signum:
                     sys.exit()
 
-    FINALIZE_OUTPUT_SIGNAL_NAMES = (
-        # 'SIGINT', # SIGINT is handled by catching KeyboardInterrupt
-        'SIGBREAK', # Windows-only - allow ctrl-break to gracefully exit (sometimes ctrl+c won't work)
-        'SIGQUIT', # Unix-only
-        'SIGTERM',
-        'SIGABRT',
-    )
-    for signal_name in FINALIZE_OUTPUT_SIGNAL_NAMES:
-        signum = getattr(signal, signal_name, None)
-        if signum:
-            orig_signal_handlers[signum] = signal.getsignal(signum)
-            signal.signal(signum, finalize_output)
+    def noop_handler(signum, frame):
+        print_signal_received(signum, 'Ignored')
+
+    def register_handler(abort_signal, handler):
+        orig_signal_handlers[abort_signal] = signal.getsignal(abort_signal)
+        signal.signal(abort_signal, handler)
+        logger.debug("registered {} for {!r}", handler.__name__, abort_signal)
+
+    # depending on SignalAbortType for each abort signal, either allow graceful exit or noop that signal
+    for abort_signal, abort_type in abort_signals.items():
+        if abort_signal is signal.SIGINT: # own case since SIGINT's default handler throws KeyboardInterrupt (and also Windows-specific stuff)
+            # The low-level Windows ctrl+c handler prevents Python SIGINT signal handler for any job launched in the background,
+            # even if such a job is later restored to the foreground. Furthermore, ctrl+c is sent even to background jobs.
+            # Thus, if this low-level handler is disabled and we handle a SIGINT, we can't accurately determine whether this is
+            # being run in a foreground (should abort) or a background (should NOT abort) job.
+            # As a workaround, 'default' and 'enable' have different behaviors to allow user to choose which tradeoff is best for them:
+            # 'default' abort type: can abort foreground-launched job, but cannot abort background-launched job that's later restored to foreground
+            # 'enable' abort type:  can abort foreground job, whether background-launched, but also aborts background job
+            # 'disable' abort type: never aborts (unchanged with respect to how other signals are handled)
+            if abort_type is not SignalAbortType.default:
+                # Disable the low-level Windows ctrl+c handler only if abort behavior between whether foreground and background job is the same,
+                # i.e. always abort or never abort.
+                try:
+                    import ctypes
+                    ctypes.windll.kernel32.SetConsoleCtrlHandler(None, False)
+                    logger.debug("disabled low-level Windows {} handler", signal.CTRL_C_EVENT)
+                except:
+                    pass
+            if abort_type is SignalAbortType.disable:
+                register_handler(abort_signal, noop_handler)
+            # else, let SIGINT's default handler throw KeyboardInterrupt, which we already handle gracefully
+        else:
+            if abort_type is SignalAbortType.disable:
+                register_handler(abort_signal, noop_handler)
+            elif abort_type is SignalAbortType.enable:
+                register_handler(abort_signal, finalize_output)
+            elif abort_signal.name in DEFAULT_SIGNAL_ABORT_NAMES: # and abort_type is SignalAbortType.default
+                register_handler(abort_signal, finalize_output)
 
     try:
         chat_downloader = ChatReplayDownloader(cookies=args.cookies)
