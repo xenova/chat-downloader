@@ -19,7 +19,6 @@ from http.cookiejar import MozillaCookieJar, LoadError
 import sys
 import signal
 from urllib import parse
-import inspect
 import enum
 import textwrap
 
@@ -677,17 +676,16 @@ class ChatReplayDownloader:
                 except ValueError as e:
                     raise error_gen(f"({raw_cond_group}) {e}")
                 cls.logger.debug("abort condition {}: format {!r} => e.g. {!r}", cond_name, datetime_format, sample_formatted)
-                def changed_scheduled_start_time(orig_scheduled_start_time, playability_info,
+                def changed_scheduled_start_time(orig_scheduled_start_time, scheduled_start_time,
                         # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
                         datetime_format=datetime_format, **_):
-                    curr_scheduled_start_time = playability_info['scheduled_start_time']
-                    if not orig_scheduled_start_time or not curr_scheduled_start_time:
+                    if not orig_scheduled_start_time or not scheduled_start_time:
                         return None # falsy
                     orig_formatted = orig_scheduled_start_time.strftime(datetime_format)
-                    curr_formatted = curr_scheduled_start_time.strftime(datetime_format)
+                    curr_formatted = scheduled_start_time.strftime(datetime_format)
                     if orig_formatted != curr_formatted:
                         return "scheduled start time formatted as {!r} changed from {:{}} to {:{}}".format(
-                            datetime_format, orig_scheduled_start_time, datetime_format, curr_scheduled_start_time, datetime_format)
+                            datetime_format, orig_scheduled_start_time, datetime_format, scheduled_start_time, datetime_format)
                 cond_group.append((raw_cond, changed_scheduled_start_time))
 
             elif cond_name == 'min_time_until_scheduled_start_time':
@@ -696,13 +694,12 @@ class ChatReplayDownloader:
                     raise error_gen(f"({raw_cond_group}) {cond_name} argument must be in format <hours>:<minutes>, e.g. 01:30")
                 min_secs = int(m[1]) * 3600 + int(m[2]) * 60
                 cls.logger.debug("abort condition {}: {!r} => min {} secs", cond_name, cond_arg, min_secs)
-                def min_time_until_scheduled_start_time(playability_info,
+                def min_time_until_scheduled_start_time(scheduled_start_time,
                         # trick to 'fix' the value of variable for this function, since variable changes over loop iterations
                         min_secs=min_secs, **_):
-                    curr_scheduled_start_time = playability_info['scheduled_start_time']
-                    if not curr_scheduled_start_time:
+                    if not scheduled_start_time:
                         return None # falsy
-                    secs_until_scheduled_start_time = curr_scheduled_start_time.timestamp() - time.time()
+                    secs_until_scheduled_start_time = scheduled_start_time.timestamp() - time.time()
                     if secs_until_scheduled_start_time > min_secs:
                         return f"time until scheduled start time {secs_until_scheduled_start_time} secs >= {min_secs} secs"
                     return None
@@ -758,37 +755,28 @@ class ChatReplayDownloader:
                 break # next iteration would start at end of string and match empty string, which we want to avoid
 
     class AbortConditionChecker:
-        def __init__(self, logger, cond_groups, **prereq_funcs):
+        def __init__(self, logger, cond_groups, *state_funcs, state={}):
             self.logger = logger
             self.cond_groups = cond_groups
-            prereq_names = set(param.name
-                for cond_group in cond_groups
-                for _, cond_func in cond_group
-                for param in inspect.signature(cond_func).parameters.values()
-                if param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and param.default is inspect.Parameter.empty)
-            self.logger.debug("abort condition prereq names: {!r}", prereq_names)
-            unmet_prereq_names = prereq_names - set(prereq_funcs.keys())
-            if unmet_prereq_names:
-                raise RuntimeError(f"unmet prereqs: {', '.join(unmet_prereq_names)}")
-            self.prereq_funcs = {prereq_name: prereq_func for prereq_name, prereq_func in prereq_funcs.items() if prereq_name in prereq_names}
-            self.prereq_state = {}
+            self.state_funcs = state_funcs
+            self.state = loggingutils.ChangelogMapWrapper(state)
 
         def check(self):
-            # update prereq state first
-            for prereq_name, prereq_func in self.prereq_funcs.items():
-                try:
-                    cur_value = self.prereq_state[prereq_name]
-                except LookupError:
-                    new_value = prereq_func(None)
-                    if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
-                        self.logger.debug("{} initialized to {}", prereq_name, _debug_dump(new_value))
-                    self.prereq_state[prereq_name] = new_value
-                else:
-                    new_value = prereq_func(cur_value)
-                    if cur_value != new_value:
-                        if self.logger.isEnabledFor(logging.DEBUG): # guard since json.dumps is expensive
-                            self.logger.debug("{} changed from {} to {}", prereq_name, _debug_dump(cur_value), _debug_dump(new_value))
-                        self.prereq_state[prereq_name] = new_value
+            # update state first
+            for prereq_func in self.state_funcs:
+                prereq_func(self.state)
+            for record in self.state.changelog:
+                if self.logger.isEnabledFor(record.level):
+                    if record.type is loggingutils.ChangelogRecord.added:
+                        self.logger.log(record.level, "Video {} is {}",
+                            record.key.replace('_', ' '), _debug_dump(record.new))
+                    elif record.type is loggingutils.ChangelogRecord.changed:
+                        self.logger.log(record.level, "Video {} changed from {} to {}",
+                            record.key.replace('_', ' '), _debug_dump(record.old), _debug_dump(record.new))
+                    elif record.type is loggingutils.ChangelogRecord.deleted:
+                        self.logger.log(record.level, "Video {} changed from {} to (unset)",
+                            record.key.replace('_', ' '), _debug_dump(record.old))
+            self.state.changelog.clear()
 
             # then the actual cond checks
             for cond_group_idx, cond_group in enumerate(self.cond_groups):
@@ -799,9 +787,10 @@ class ChatReplayDownloader:
         def _check_cond_group(self, cond_group_idx, cond_group):
             cond_results = []
             for raw_cond, cond_func in cond_group:
-                cond_result = cond_func(**self.prereq_state)
+                # note: following will error if state is missing a key that's a required parameter for the cond_func
+                cond_result = cond_func(**self.state)
                 self.logger.trace("abort condition [group {}] {}(**{!r}) => {}",
-                    cond_group_idx, raw_cond, self.prereq_state, cond_result)
+                    cond_group_idx, raw_cond, self.state, cond_result)
                 if not cond_result: # ALL conditions in a group must evaluate to be truthy
                     return None
                 cond_results.append(cond_result)
@@ -855,18 +844,19 @@ class ChatReplayDownloader:
                     if config['is_upcoming']:
                         if abort_cond_groups:
                             if abort_cond_checker is None:
-                                abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
-                                    orig_scheduled_start_time=lambda _: config['scheduled_start_time'],
-                                    playability_info=lambda _: {
-                                        'playability_status': config['playability_status'],
-                                        'scheduled_start_time': config['scheduled_start_time'],
-                                    })
+                                def nochat_abort_cond_state_updater(state):
+                                    state.info['playability_status'] = config['playability_status']
+                                    scheduled_start_time = config['scheduled_start_time']
+                                    state.info['scheduled_start_time'] = scheduled_start_time
+                                    if 'orig_scheduled_start_time' not in state:
+                                        state.debug['orig_scheduled_start_time'] = scheduled_start_time
+                                abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups, nochat_abort_cond_state_updater)
                             abort_cond_checker.check()
 
                         retry_wait_secs = random.randint(45, 60) # jitter
                         if self.logger.isEnabledFor(logging.INFO):
                             self.logger.info("Upcoming {} Retrying in {} secs (attempt {})",
-                                error_message.lower(), retry_wait_secs, attempt_ct)
+                                _trans_first_char(error_message, str.lower), retry_wait_secs, attempt_ct)
                         time.sleep(retry_wait_secs)
                     else:
                         raise NoChatReplay(error_message)
@@ -874,7 +864,7 @@ class ChatReplayDownloader:
                     break
             continuation = continuation_by_title_map[continuation_title]
             if self.logger.isEnabledFor(logging.INFO):
-                self.logger.info("Downloading {} for video: {}", continuation_title.lower(), config['title'])
+                self.logger.info("Downloading {} for video: {}", _trans_first_char(continuation_title, str.lower), config['title'])
 
             abort_cond_checker = None
             first_time = True
@@ -882,31 +872,26 @@ class ChatReplayDownloader:
             while True:
                 if abort_cond_groups:
                     if abort_cond_checker is None:
-                        scheduled_start_time_poll_timestamp = None
-                        def playability_info_getter(playability_info):
-                            nonlocal scheduled_start_time_poll_timestamp
-                            # if first call, init with config scheduled_start_time
-                            if scheduled_start_time_poll_timestamp is None:
-                                scheduled_start_time_poll_timestamp = time.time()
-                                return {
-                                    'playability_status': config['playability_status'],
-                                    'scheduled_start_time': config['scheduled_start_time'],
-                                }
-                            # if playability status is already OK, video has started (is no longer upcoming),
-                            # so return playability info as-is
-                            if playability_info['playability_status'] == 'OK':
-                                return playability_info
-                            now_timestamp = time.time()
-                            if now_timestamp > scheduled_start_time_poll_timestamp + 60: # check at most once a minute
-                                scheduled_start_time_poll_timestamp = now_timestamp
-                                if use_non_api_fallback:
-                                    playability_info = self.__get_fallback_playability_info(video_id)
-                                else:
-                                    playability_info = self.__get_playability_info(config, video_id)
-                            return playability_info
-                        abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups,
-                            orig_scheduled_start_time=lambda _: config['scheduled_start_time'],
-                            playability_info=playability_info_getter)
+                        def abort_cond_state_updater(state):
+                            poll_timestamp = state.get('poll_timestamp')
+                            # if first call, init with config
+                            if poll_timestamp is None:
+                                state.trace['poll_timestamp'] = time.time()
+                                state.info['playability_status'] = config['playability_status']
+                                scheduled_start_time = config['scheduled_start_time']
+                                state.info['scheduled_start_time'] = scheduled_start_time
+                                state.debug['orig_scheduled_start_time'] = config['scheduled_start_time']
+                            # if playability status is already OK, video has started (is no longer upcoming), so stop updating state
+                            elif state['playability_status'] != 'OK':
+                                now_timestamp = time.time()
+                                if now_timestamp > poll_timestamp + 60: # check at most once a minute
+                                    state.trace['poll_timestamp'] = now_timestamp
+                                    if use_non_api_fallback:
+                                        playability_info = self.__get_fallback_playability_info(video_id)
+                                    else:
+                                        playability_info = self.__get_playability_info(config, video_id)
+                                    state.info.update(playability_info)
+                        abort_cond_checker = self.AbortConditionChecker(self.logger, abort_cond_groups, abort_cond_state_updater)
                     abort_cond_checker.check()
 
                 try:
@@ -1102,8 +1087,12 @@ def get_youtube_messages(url, start_time=None, end_time=None, message_type='mess
 def get_twitch_messages(url, start_time=None, end_time=None, callback=None, output_messages=None, **kwargs):
     return ChatReplayDownloader().get_twitch_messages(url, start_time, end_time, callback, output_messages, **kwargs)
 
-def _debug_dump(obj):
-    return json.dumps(obj, indent=4, default=str)
+# json.dumps with more suitable default arguments
+def _debug_dump(obj, *, ensure_ascii=False, indent=4, default=str, **kwargs):
+    return json.dumps(obj, ensure_ascii=ensure_ascii, indent=indent, default=default, **kwargs)
+
+def _trans_first_char(text, func):
+    return func(text[:1]) + text[1:]
 
 # if adding as a subparser, pass `parser_type=subparsers.add_parser, cmd_name`
 # if adding to an existing parser or argument group, pass as parser parameter
