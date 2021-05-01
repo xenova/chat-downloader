@@ -220,7 +220,8 @@ class ChatReplayDownloader:
             self.logger.trace("HTTP {} {!r} => response JSON:\n{}", 'GET' if post_payload is None else 'POST', url, _debug_dump(data))
         return data
 
-    def __timestamp_to_microseconds(self, timestamp):
+    @staticmethod
+    def __timestamp_to_microseconds(timestamp):
         """
         Convert RFC3339 timestamp to microseconds.
         This is needed as datetime.strptime() does not support nanosecond precision.
@@ -228,20 +229,40 @@ class ChatReplayDownloader:
         info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
         return round((datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1])))*1e6)
 
-    def __time_to_seconds(self, time):
+    @staticmethod
+    def __time_to_seconds(time):
         """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
         return sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1)
 
-    def __seconds_to_time(self, seconds):
+    @staticmethod
+    def __seconds_to_time(seconds):
         """Convert seconds to timestamp."""
         time_text = str(timedelta(seconds=seconds))
         return time_text if time_text != '0:0' else ''
 
-    def __timestamp_microseconds_to_datetime_str(self, timestamp_microseconds):
-        """Convert unix timestamp in microseconds to datetime string."""
-        return datetime.fromtimestamp(timestamp_microseconds // 1_000_000).strftime(self.DATETIME_FORMAT)
+    @classmethod
+    def __ensure_seconds(cls, time, default=0):
+        """Ensure time is returned in seconds."""
+        try:
+            return int(time)
+        except ValueError:
+            return cls.__time_to_seconds(time)
+        except:
+            return default
 
-    def __arbg_int_to_rgba(self, argb_int):
+    @classmethod
+    def __timestamp_microseconds_to_datetime_str(cls, timestamp_microseconds):
+        """Convert unix timestamp in microseconds to datetime string."""
+        return datetime.fromtimestamp(timestamp_microseconds // 1_000_000).strftime(cls.DATETIME_FORMAT)
+
+    @staticmethod
+    def __fromisoformat(date_str):
+        if date_str is None:
+            return None
+        return datetime.fromisoformat(date_str)
+
+    @staticmethod
+    def __arbg_int_to_rgba(argb_int):
         """Convert ARGB integer to RGBA array."""
         red = (argb_int >> 16) & 255
         green = (argb_int >> 8) & 255
@@ -249,14 +270,16 @@ class ChatReplayDownloader:
         alpha = (argb_int >> 24) & 255
         return [red, green, blue, alpha]
 
-    def __rgba_to_hex(self, colours):
+    @staticmethod
+    def __rgba_to_hex(colours):
         """Convert RGBA array to hex colour."""
         return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
-    def __get_colours(self, argb_int):
+    @classmethod
+    def __get_colours(cls, argb_int):
         """Given an ARGB integer, return both RGBA and hex values."""
-        rgba_colour = self.__arbg_int_to_rgba(argb_int)
-        hex_colour = self.__rgba_to_hex(rgba_colour)
+        rgba_colour = cls.__arbg_int_to_rgba(argb_int)
+        hex_colour = cls.__rgba_to_hex(rgba_colour)
         return {
             'rgba': rgba_colour,
             'hex': hex_colour
@@ -484,12 +507,6 @@ class ChatReplayDownloader:
             self.logger.trace("video_microformat:\n{}", _debug_dump(video_microformat))
         return video_microformat
 
-    @staticmethod
-    def __fromisoformat(date_str):
-        if date_str is None:
-            return None
-        return datetime.fromisoformat(date_str)
-
     def __get_continuation_info(self, config, continuation, is_live, player_offset_ms=None):
         """Get continuation info via API for a YouTube video."""
         self.logger.debug("get_continuation_info: continuation={}, is_live={}, player_offset_ms={}", continuation, is_live, player_offset_ms)
@@ -573,15 +590,6 @@ class ChatReplayDownloader:
             else:
                 raise ParsingError("JSON response to {!r} is error:\n{}".format(url, _debug_dump(data)))
         return data
-
-    def __ensure_seconds(self, time, default=0):
-        """Ensure time is returned in seconds."""
-        try:
-            return int(time)
-        except ValueError:
-            return self.__time_to_seconds(time)
-        except:
-            return default
 
     __AUTHORTYPE_ORDER_MAP = {value: index for index, value in enumerate(('', 'VERIFIED', 'MEMBER', 'MODERATOR', 'OWNER'))}
     def __parse_item(self, item):
