@@ -2,6 +2,7 @@ import logging
 import string
 import time
 from datetime import datetime
+import collections
 import collections.abc
 import sys
 import os
@@ -25,11 +26,15 @@ class loggerProperty:
     after the above optional `loggingutils.basicConfig` call.
 
     `loggerProperty` can be used as a decorator, e.g.
+    ```python
         @loggerProperty(...)
         def logger(self, instance, owner): # where self is the new logger
             return ...
+    ```
     is effectively equivalent to:
+    ```python
         logger = loggerProperty(logger_init=lambda self, instance, owner: ..., ...)
+    ```
     """
 
     __slots__ = 'logger', 'actual_logger', 'logger_name', 'logger_init', 'basic_config_kwargs'
@@ -128,9 +133,9 @@ class _PreinitLogger(logging.LoggerAdapter):
 # copy of logging._StderrHandler, replacing stderr with stdout
 class StdoutHandler(logging.StreamHandler):
     """
-    This class is like a StreamHandler using sys.stdout, but always uses
-    whatever sys.stderr is currently set to rather than the value of
-    sys.stdout at handler construction time.
+    This class is like a StreamHandler using `sys.stdout`, but always uses
+    whatever `sys.stderr` is currently set to rather than the value of
+    `sys.stdout` at handler construction time.
     """
     def __init__(self, level=logging.NOTSET):
         """
@@ -147,6 +152,38 @@ class StdoutHandler(logging.StreamHandler):
 StderrHandler = logging._StderrHandler
 
 
+# Optimization that merges class's single base class into class (rather than subclassing) and uses __slots__
+# to eliminate instance __dict__/__weakref__ and MRO overhead
+# Warning on __slots__: don't define __slots__ in original class definition, since it will already be used to
+# define descriptors for each slot member that are specific to that original class definition
+# This also means that __slots__ must be empty or undefined in the base class as well
+# (note: namedtuple actually has __slots__ as empty tuple, so it can be used as base class).
+def _merge_class(cls, slots):
+    basecls = cls.__bases__[0]
+    namespace = {**basecls.__dict__, **cls.__dict__}
+    namespace['__slots__'] = slots
+    namespace.pop('__dict__', None)
+    namespace.pop('__weakref__', None)
+    return type(cls.__name__, basecls.__bases__, namespace)
+
+# wrapper version of UserDict, used in some classes below
+class _MapWrapper(collections.UserDict):
+    def __init__(self, data):
+        self.data = data
+    # UserDict delegates following methods to Mapping, which in turn relies on __iter__, for extensibility,
+    # but since we're not going to modify __iter__, just directly delegate to data's method for efficiency
+    def keys(self):
+        return self.data.keys()
+    def values(self):
+        return self.data.values()
+    def items(self):
+        return self.data.items()
+    def __reversed__(self):
+        return self.data.__reversed__()
+if True: # pylint can't handle this optimizing redefinition, so trick pylint into ignoring it
+    _MapWrapper = _merge_class(_MapWrapper, slots='data')
+
+
 class lenientFormatStyle(contextlib.ContextDecorator):
     """
     Provides a context where when initializing `Formatter`s, the format string can contain substitution keywords
@@ -158,25 +195,29 @@ class lenientFormatStyle(contextlib.ContextDecorator):
 
     This class can be used in one of two ways:
     * as a context manager:
+    ```python
         with lenientFormatStyle():
             ... Formatter(...) # only Formatter construction needs to be done in the with block
+    ```
     * as a decorator:
+    ```python
         @lenientFormatStyle()
         def foo(...):
             ... Formatter(...) # only Formatter construction needs to be done in the function
+    ```
     """
 
     class PercentStyle(logging.PercentStyle):
         def _format(self, record):
-            return self._fmt % _LenientMapWrapper(record.__dict__)
+            return self._fmt % _LenientMapWrapper(record.__dict__, '')
 
     class StrFormatStyle(logging.StrFormatStyle):
         def _format(self, record):
-            return _LenientFormatter().vformat(self._fmt, (), record.__dict__)
+            return _LenientFormatter('').vformat(self._fmt, (), record.__dict__)
 
     class StringTemplateStyle(logging.StringTemplateStyle):
         def _format(self, record):
-            return self._tpl.substitute(_LenientMapWrapper(record.__dict__))
+            return self._tpl.substitute(_LenientMapWrapper(record.__dict__, ''))
 
     __slots__ = 'orig_STYLES'
 
@@ -196,27 +237,23 @@ class lenientFormatStyle(contextlib.ContextDecorator):
         logging._releaseLock()
 
 class _LenientFormatter(string.Formatter):
-    __slots__ = ()
+    __slots__ = 'default'
+    def __init__(self, default):
+        super().__init__()
+        self.default = default
     def get_value(self, key, args, kwargs):
         try:
             return super().get_value(key, args, kwargs)
         except LookupError:
-            return ''
+            return self.default
 
-class _LenientMapWrapper(collections.abc.Mapping):
-    __slots__ = 'map'
-    def __init__(self, map):
-        self.map = map
-    def __getitem__(self, key):
-        return self.map.get(key, '')
-    def __iter__(self):
-        return iter(self.map)
-    def __len__(self):
-        return len(self.map)
-    def __str__(self):
-        return str(self.map)
-    def __repr__(self):
-        return repr(self.map)
+class _LenientMapWrapper(_MapWrapper):
+    __slots__ = 'default'
+    def __init__(self, data, default):
+        super().__init__(data)
+        self.default = default
+    def __getitem__(self, key): # note: even if `self[key]` for missing key now "works", `key in self` still is False in this case
+        return self.data.get(key, self.default)
 
 
 class FormatLoggerAdapter(logging.LoggerAdapter):
@@ -288,6 +325,7 @@ def contextdecorator(dec_func):
     An alternate to `contextlib.contextmanager` intended to be used only as a decorator.
 
     To illustrate the difference, `@contextmanager` in decorator form is used to pass "fixed" arguments to the decorator:
+    ```python
         @contextmanager
         def decorator(x):
             <start>
@@ -298,7 +336,9 @@ def contextdecorator(dec_func):
         @decorator(<x>) # note how decorator is "called" here - decorator's x is "fixed" to always be <x> when foo is called
         def foo(a, b):
             ...
+    ```
     while `@contextdecorator` is used to pass arguments from a call to the decoree on to the decorator:
+    ```python
         @contextdecorator
         def decorator(a, b):
             <start>
@@ -309,8 +349,10 @@ def contextdecorator(dec_func):
         @decorator      # note how decorator is NOT "called" here - foo's arguments are passed on to the decorator each call
         def foo(a, b):
             ...
+    ```
 
     This doesn't really belong in this module, but it's convenient for defining local loggers, e.g.
+    ```python
         @contextdecorator
         def with_context(self, id, *args, **kwargs):
             self.logger = LoggerAdapter(self.__class__.logger, {'context': id})
@@ -321,6 +363,7 @@ def contextdecorator(dec_func):
         @with_context
         def foo(self, id, ...):
             ...
+    ```
     """
     @contextlib.wraps(dec_func)
     def helper(func):
@@ -395,8 +438,6 @@ def basicConfig(logger, **kwargs):
     """
     `logging.basicConfig` primarily for non-root loggers (although still useful for root logger for lenient style - see below).
 
-    :param propagate: if given, sets logger.propagate to its value.
-
     If `propagate` keyword arg is given, sets logger.propagate to its value.
     
     If `lenient` keyword arg is truthy, effectively decorates this function with `@lenientFormatStyle()`.
@@ -427,13 +468,17 @@ def basicConfig(logger, **kwargs):
 def addLevelName(level, level_name):
     """
     Usage (to workaround `pylint` inability to recognize new setattr'd attributes):
+    ```python
         logging.<NAME>, logging.<name>, logging.Logger.<name>, logging.LoggerAdapter.<name> = logging.addLevelName(<level>, <NAME>)
+    ```
 
     More complete version of `logging.addLevelName(<level>, <NAME>)` that also adds (if not yet defined):
+    ```python
         logging.<NAME> = <level>
         logging.<name>(msg, *args, **kwargs)
         logging.Logger.<name>(self, msg, *args, **kwargs)
         logging.LoggerAdapter.<name>(self, msg, *args, **kwargs)
+    ```
     """
     if not level_name.isupper():
         raise ValueError(f"Expected all uppercase level name: {level_name}")
@@ -457,6 +502,88 @@ def _def_method(cls, name, func):
             func.__qualname__ = f"{cls.__qualname__}.{name}"
             func.__module__ = cls.__module__
         setattr(cls, name, func)
+
+
+# following is a trick to convince pylint that ChangelogRecord is a namedtuple yet has class attributes with minimal overhead
+class ChangelogRecord(collections.namedtuple('ChangelogRecord', ('level', 'type', 'key', 'old', 'new'))):
+    added = 'added'
+    changed = 'changed'
+    deleted = 'deleted'
+if True: # pylint can't handle this optimizing redefinition, so trick pylint into ignoring it
+    ChangelogRecord = _merge_class(ChangelogRecord, slots=())
+
+_MISSING = object()
+
+class ChangelogMapWrapper(_MapWrapper):
+    """
+    Wrapper of a map (such as `dict`), accessible via `data`, that records changes to the map in a `changelog` list.
+
+    Each changelog item is a `ChangelogRecord`, a named tuple with attributes:
+    * `level` is specified by `<lowercase_log_level>[key]` properties (e.g. `info[key]`).
+      Specifically such properties return a `ChangelogMapWrapper` that shares the same attributes with only the log level changed.
+    * `type` is one of the following: `ChangelogRecord.added`, `ChangelogRecord.changed`, `ChangelogRecord.deleted`.
+    * `key` is the map key
+    * `old` is `None` for added items, the previous value for changed items, and deleted value for deleted items.
+    * `new` is the new value for added items, the new value for changed items, and `None` for deleted items.
+
+    Example usage:
+    ```python
+        d = {'a': 1}
+        c = ChangelogMapWrapper(d)
+        assert c.changelog == []
+        c['a'] = 2
+        c.info['a'] = 3
+        c.debug['b'] = 'foo'
+        del c.warning['a']
+        assert c.changelog == [
+            ChangelogRecord(logging.INFO, ChangelogRecord.changed, 'a', 2, 3),
+            ChangelogRecord(logging.DEBUG, ChangelogRecord.added, 'b', None, 'foo'),
+            ChangelogRecord(logging.WARNING, ChangelogRecord.deleted, 'a', 3, None),
+        ]
+        c.changelog.clear() # or c.changelog = []; can mutate c.changelog at will
+        assert c == {'b': 'foo'}
+        assert c == d # always
+    ```
+
+    Note: this only tracks shallow changes, i.e. direct assignment to or deletion of a map entry.
+    It cannot track changes within the objects in the map, e.g.
+    ```python
+        d = {'a': []}
+        c = ChangelogMapWrapper(d)
+        c.info['a'].append('foo')
+        assert c == {'a': ['foo']}
+        assert c.changelog == [] # still empty
+    ```
+    """
+
+    __slots__ = 'log_level', 'changelog'
+
+    def __init__(self, data, log_level=None, changelog=None):
+        super().__init__(data)
+        self.log_level = log_level
+        self.changelog = [] if changelog is None else changelog
+
+    def __setitem__(self, key, value):
+        if self.log_level is not None:
+            cur_value = self.data.get(key, _MISSING)
+            if cur_value is _MISSING:
+                self.changelog.append(ChangelogRecord(self.log_level, ChangelogRecord.added, key, None, value))
+            elif cur_value != value:
+                self.changelog.append(ChangelogRecord(self.log_level, ChangelogRecord.changed, key, cur_value, value))
+        self.data[key] = value
+
+    def __delitem__(self, key):
+        if self.log_level is not None:
+            cur_value = self.data.get(key, _MISSING)
+            if cur_value is not _MISSING:
+                self.changelog.append(ChangelogRecord(self.log_level, ChangelogRecord.deleted, key, cur_value, None))
+        del self.data[key]
+
+    def __getattr__(self, name):
+        log_level = getattr(logging, name.swapcase(), None)
+        if log_level is not None:
+            return ChangelogMapWrapper(self.data, log_level, self.changelog)
+        return getattr(self.data, name)
 
 
 # for debugging
