@@ -891,7 +891,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             # }
 
     def _get_initial_info(self, url):
-        html = self._session_get(url, cookies={'CONSENT': 'PENDING+{}'.format(random.randint(100, 999))}).text #skips YouTube cookie consent page
+        html = self._session_get(url, cookies={'CONSENT': 'YES+RU.ru+201909'}).text #skips YouTube cookie consent page
         yt = re.search(self._YT_INITIAL_DATA_RE, html)
         yt_initial_data = try_parse_json(yt.group(1)) if yt else None
         return html, yt_initial_data
