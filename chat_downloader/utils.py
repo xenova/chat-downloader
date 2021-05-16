@@ -113,6 +113,13 @@ def int_or_none(v, default=None):
         return default
 
 
+def str_or_none(v, default=None):
+    try:
+        return str(v)
+    except (ValueError, TypeError):
+        return default
+
+
 def try_get_first_key(dictionary, default=None):
     try:
         return next(iter(dictionary))
