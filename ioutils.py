@@ -1,4 +1,5 @@
 from datetime import datetime
+import io
 
 class TimestampPrefixFileWrapper:
     """
@@ -32,37 +33,42 @@ class TimestampPrefixFileWrapper:
     def __getattr__(self, name):
         return self.f.__getattr__(self, name)
 
+
 class MultiFile:
     """
-    Intended for allowing multiple outputs for a single file object.
+    Allows multiple file-like outputs via single file-like object.
+    Other operations also are performed on each file, but only the result on the last file is returned.
     
     Based off https://stackoverflow.com/a/16551730
     """
 
-    __slots__ = 'files', 'attrwraps'
+    __slots__ = '_files', '_wraps'
 
     def __init__(self, *files):
-        self.files = files
-        self.attrwraps = {}
+        self._files = files
+        self._wraps = {}
 
     # explicit def for efficiency
     def write(self, s):
-        for f in self.files:
+        for f in self._files:
             f.write(s)
 
     # explicit def for efficiency
     def flush(self):
-        for f in self.files:
+        for f in self._files:
             f.flush()
 
     # for any other method, delegate to slower __getattr__
-    def __getattr__(self, attr, *args):
-        attr = self.attrwraps.get(attr)
-        if attr is not None:
-            return attr
-        def wrap(*args2, **kwargs2):
-            for f in self.files:
-                result = getattr(f, attr, *args)(*args2, **kwargs2)
-            return result
-        self.attrwraps[attr] = wrap
+    # assumes all other accessed attributes are methods
+    def __getattr__(self, name):
+        try:
+            wrap = self._wraps[name]
+        except KeyError:
+            def wrap(*args, **kwargs):
+                for f in self._files:
+                    result = getattr(f, name)(*args, **kwargs)
+                return result
+            self._wraps[name] = wrap
         return wrap
+
+io.IOBase.register(MultiFile)

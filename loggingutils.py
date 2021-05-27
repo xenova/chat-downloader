@@ -402,7 +402,7 @@ class DateFileHandler(logging.FileHandler):
             old_stream = self.setStream(super()._open())
             try:
                 old_stream.close()
-            except:
+            except Exception: # don't catch non-Exceptions like KeyboardInterrupt
                 traceback.print_exc(file=sys.stderr)
         super().emit(record)
 
