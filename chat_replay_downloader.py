@@ -404,6 +404,7 @@ class ChatReplayDownloader:
             **self.__extract_video_details(ytInitialPlayerResponse),
             **self.__extract_playability_info(ytInitialPlayerResponse),
             **self.__extract_video_microformat(ytInitialPlayerResponse), # note: data currently unused
+            **self.__extract_heartbeat_params(ytInitialPlayerResponse),
         }
 
         ytInitialData = self.__parse_video_text('ytInitialData', html)
@@ -507,6 +508,22 @@ class ChatReplayDownloader:
             self.logger.trace("video_microformat:\n{}", _debug_dump(video_microformat))
         return video_microformat
 
+    def __extract_heartbeat_params(self, info):
+        heartbeatParams = info.get('heartbeatParams', {})
+        heartbeat_params = {
+            'heartbeat_params': {
+                'heartbeatToken': heartbeatParams['heartbeatToken'],
+                'heartbeatServerData': heartbeatParams['heartbeatServerData'],
+                'heartbeatRequestParams': {
+                    'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS'],
+                },
+            },
+            'heartbeat_interval_secs': float(heartbeatParams['intervalMilliseconds']) / 1000,
+        }
+        if self.logger.isEnabledFor(logging.TRACE): # guard since json.dumps is expensive
+            self.logger.trace("heartbeat_params:\n{}", _debug_dump(heartbeat_params))
+        return heartbeat_params
+
     def __get_continuation_info(self, config, continuation, is_live, player_offset_ms=None):
         """Get continuation info via API for a YouTube video."""
         self.logger.debug("get_continuation_info: continuation={}, is_live={}, player_offset_ms={}", continuation, is_live, player_offset_ms)
@@ -561,16 +578,22 @@ class ChatReplayDownloader:
         """Get playability info (including scheduled start date) via API heartbeat for a YouTube video."""
         self.logger.debug("get_playability_info: video_id={}", video_id)
         url = self.__YT_HEARTBEAT_TEMPLATE.format(config['api_version'], config['api_key'])
+        sequence_number = config.get('heartbeat_sequence_number', 0) # stored in config for convenience
+        config['heartbeat_sequence_number'] = sequence_number + 1
         payload = {
             'context': config['context'],
+            **config['heartbeat_params'],
             'videoId': video_id,
-            'heartbeatRequestParams': {'heartbeatChecks': ['HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS']}
+            'sequenceNumber': sequence_number,
         }
         return self.__extract_playability_info(self.__get_youtube_json(url, payload))
 
     def __get_fallback_playability_info(self, video_id):
         """Get playability info (including scheduled start date) from watch page for a YouTube video. Used as a fallback."""
         self.logger.debug("get_fallback_playability_info: video_id={}", video_id)
+        # TODO: use https://www.youtube.com/get_video_info endpoint
+        # see https://github.com/Tyrrrz/YoutubeExplode/blob/master/YoutubeExplode/Bridge/YoutubeController.cs
+        # and https://github.com/pytube/pytube/blob/master/pytube/extract.py
         url = self.__YT_WATCH_TEMPLATE.format(video_id)
         html = self.__session_get(url).text
         ytInitialPlayerResponse = self.__parse_video_text('ytInitialPlayerResponse', html)
@@ -871,6 +894,9 @@ class ChatReplayDownloader:
                 else:
                     break
             continuation = continuation_by_title_map[continuation_title]
+            # TODO: get local title from microformat, poll request https://www.youtube.com/youtubei/v1/updated_metadata for locale tile updates
+            # and https://www.youtube.com/youtubei/v1/updated_metadata for page title updates,
+            # fallback to https://www.youtube.com/get_video_info for both and scheduled start time updates
             if self.logger.isEnabledFor(logging.INFO):
                 self.logger.info("Downloading {} for video: {}", _trans_first_char(continuation_title, str.lower), config['title'])
 
@@ -892,7 +918,7 @@ class ChatReplayDownloader:
                             # if playability status is already OK, video has started (is no longer upcoming), so stop updating state
                             elif state['playability_status'] != 'OK':
                                 now_timestamp = time.time()
-                                if now_timestamp > poll_timestamp + 60: # check at most once a minute
+                                if now_timestamp > poll_timestamp + config.get('heartbeat_interval_secs', 60.0):
                                     state.trace['poll_timestamp'] = now_timestamp
                                     if use_non_api_fallback:
                                         playability_info = self.__get_fallback_playability_info(video_id)
