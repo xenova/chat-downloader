@@ -95,14 +95,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
         {
             'name': 'Get chat messages from livestream, using custom url (1).',
             'params': {
-                'url': 'https://www.youtube.com/c/ChilledCow',
+                'url': 'https://www.youtube.com/c/lofigirl',
                 'timeout': 5
             }
         },
         {
             'name': 'Get chat messages from livestream, using custom url (2).',
             'params': {
-                'url': 'https://www.youtube.com/ChilledCow',
+                'url': 'https://www.youtube.com/lofigirl',
                 'timeout': 5
             }
         },
