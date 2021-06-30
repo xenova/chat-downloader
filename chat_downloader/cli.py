@@ -9,7 +9,11 @@ from .chat_downloader import (
     run
 )
 
-from .metadata import __version__
+from .metadata import (
+    __version__,
+    __summary__,
+    __program__
+)
 
 from .utils import (
     get_default_args,
@@ -20,16 +24,12 @@ from .utils import (
 def main():
 
     parser = argparse.ArgumentParser(
-        description='A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!',
-        formatter_class=argparse.RawTextHelpFormatter,
+        description=__summary__,
+        # formatter_class=argparse.RawTextHelpFormatter,
     )
+    parser.prog = __program__
 
-    parser.add_argument('--version', action='version',
-                        version=__version__)
-
-    # PROGRAM PARAMS
-    parser.add_argument(
-        'url', help='The URL of the livestream, video, clip or past broadcast')
+    parser.add_argument('--version', action='version', version=__version__)
 
     def get_info(function):
         info = {}
@@ -73,6 +73,8 @@ def main():
     def add_init_param(group, *keys, **kwargs):
         add_param('init', group, *keys, **kwargs)
 
+    add_chat_param(parser, 'url')
+
     time_group = parser.add_argument_group('Timing Arguments')
 
     add_chat_param(time_group, '--start_time', '-s')
@@ -108,6 +110,7 @@ def main():
 
     # Formatting
     format_group = parser.add_argument_group('Format Arguments')
+    # format_group.add_argument('--print_json', action='store_true', help='Print out json ', default=None)
     add_chat_param(format_group, '--format')
     add_chat_param(format_group, '--format_file')
 
@@ -116,6 +119,7 @@ def main():
         '[Site Specific] YouTube Arguments')
     add_chat_param(youtube_group, '--chat_type',
                    choices=['live', 'top'])
+    add_chat_param(youtube_group, '--ignore', type=splitter)
     # add_chat_param(
     #     youtube_group, '--force_no_timeout', action='store_true')
 
@@ -127,14 +131,10 @@ def main():
     add_chat_param(twitch_group, '--buffer_size', type=int)
 
     output_group = parser.add_argument_group('Output Arguments')
-    output_group.add_argument(
-        '--output', '-o', help='Path of the output file, default is None (i.e. print to standard output)', default=None)
-    output_group.add_argument(
-        '--sort_keys', help='Sort keys when outputting to a file', action='store_false')
-    output_group.add_argument('--indent', type=lambda x: int_or_none(x, x),
-                              help='Number of spaces to indent JSON objects by. If nonnumerical input is provided, this will be used to indent the objects.', default=4)
-    output_group.add_argument(
-        '--overwrite', help='Overwrite output file if it exists. Otherwise, append to the end of the file.', action='store_true')
+    add_chat_param(output_group, '--output', '-o')
+    add_chat_param(output_group, '--overwrite', is_boolean_flag=True)
+    add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
+    add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')
 
@@ -143,15 +143,18 @@ def main():
     add_chat_param(on_debug_options, '--exit_on_debug', is_boolean_flag=True)
 
     debug_options = debug_group.add_mutually_exclusive_group()
+
+    # overwrite default from method
+    get_chat_info['logging']['default'] = 'info'
+
     add_chat_param(debug_options, '--logging',
                    choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
 
-    debug_options.add_argument(
-        '--testing', help='Enable testing mode. This is equivalent to setting logging to debug and enabling pause_on_debug', action='store_true')
-    debug_options.add_argument(
-        '--verbose', '-v', help='Print various debugging information. This is equivalent to setting logging to debug', action='store_true')
-    debug_options.add_argument(
-        '--quiet', '-q', help='Activate quiet mode (hide all output)', action='store_true')
+    add_chat_param(debug_options, '--testing', is_boolean_flag=True)
+    add_chat_param(debug_options, '--verbose', '-v', is_boolean_flag=True)
+    add_chat_param(debug_options, '--quiet', '-q', is_boolean_flag=True)
+
+    # TODO Add --do_not_print option
 
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
@@ -165,6 +168,5 @@ def main():
 
     args = parser.parse_args()
 
-    # Finished parsing CLI arguments
     # Run with these arguments
     run(**args.__dict__)

@@ -9,11 +9,11 @@ with open('chat_downloader/metadata.py') as metadata_file:
     exec(metadata_file.read())
     metadata = locals()
 
-with open('README.md') as readme_file:
+with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.md') as history_file:
-    history = history_file.read()
+# with open('HISTORY.rst') as history_file:
+#     history = history_file.read()
 
 requirements = [
     'requests',
@@ -30,18 +30,18 @@ setup(
     author_email=metadata['__email__'],
     url=metadata['__url__'],
     version=metadata['__version__'],
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Operating System :: OS Independent',
     ],
     description=metadata['__summary__'],
@@ -57,13 +57,15 @@ setup(
             'twine',
             'wheel',
             'tox',
+            'pytest',
             'sphinx',
-            'pytest'
+            'sphinx-rtd-theme',
+            'sphinxcontrib-programoutput'
         ]
     },
     license='MIT license',
-    long_description=readme + '\n\n' + history,
-    long_description_content_type='text/markdown',
+    long_description=readme, # + '\n\n' + history,
+    long_description_content_type='text/x-rst',
     include_package_data=True,
     keywords='python chat downloader youtube twitch',
     name='chat-downloader',

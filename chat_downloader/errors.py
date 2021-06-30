@@ -1,78 +1,90 @@
 """File for defining errors"""
 
 
-class UnexpectedError(Exception):
+class ChatDownloaderError(Exception):
+    """Base class for Chat Downloader errors."""
+
+
+class UnexpectedError(ChatDownloaderError):
     """Raised if something unexpected happens."""
 
     def __init__(self, items):
         super().__init__(str(items))
 
 
-class InvalidParameter(Exception):
+class InvalidParameter(ChatDownloaderError):
     """Raised if an invalid parameter is specified."""
     pass
 
 
-class RetriesExceeded(Exception):
+class RetriesExceeded(ChatDownloaderError):
     """Raised after the maximum number of retries has been reached."""
     pass
 
 
-class VideoNotFound(Exception):
+class VideoNotFound(ChatDownloaderError):
     """Raised when video cannot be found."""
     pass
 
+class UserNotFound(ChatDownloaderError):
+    """Raised when user cannot be found."""
+    pass
 
-class ParsingError(Exception):
+class ParsingError(ChatDownloaderError):
     """Raised when video data cannot be parsed."""
     pass
 
 
-class VideoUnavailable(Exception):
+class VideoUnavailable(ChatDownloaderError):
     """Raised when video is unavailable."""
     pass
 
 
-class LoginRequired(Exception):
+class LoginRequired(ChatDownloaderError):
     """Raised when video is login is required (e.g. if video is private)."""
     pass
 
 
-class VideoUnplayable(Exception):
+class VideoUnplayable(ChatDownloaderError):
     """Raised when video is unplayable (e.g. if video is members-only)."""
     pass
 
 
-class NoChatReplay(Exception):
+class NoChatReplay(ChatDownloaderError):
     """Raised when the video does not contain a chat replay."""
     pass
 
 
-class URLNotProvided(Exception):
+class URLNotProvided(ChatDownloaderError):
     """Raised when no url is provided."""
     pass
 
 
-class InvalidURL(Exception):
+class InvalidURL(ChatDownloaderError):
     """Raised when the url is invalid."""
     pass
 
 
-class SiteNotSupported(Exception):
+class ChatGeneratorError(ChatDownloaderError):
+    """Raised when no valid generator method for a site can be found."""
+    pass
+
+
+class SiteNotSupported(ChatDownloaderError):
     """Raised when the url is valid, but the site is not supported."""
     pass
 
 
-class TwitchError(Exception):
+class TwitchError(ChatDownloaderError):
     """Raised when an error occurs with a Twitch video."""
     pass
 
 
-class NoContinuation(Exception):
+class NoContinuation(ChatDownloaderError):
     """Raised when no continuation can be found."""
     pass
 
 
-class CookieError(Exception):
+class CookieError(ChatDownloaderError):
     """Raised when an error occurs while loading a cookie file."""
     pass
