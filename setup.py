@@ -9,11 +9,11 @@ with open('chat_downloader/metadata.py') as metadata_file:
     exec(metadata_file.read())
     metadata = locals()
 
-with open('README.md') as readme_file:
+with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.md') as history_file:
-    history = history_file.read()
+# with open('HISTORY.rst') as history_file:
+#     history = history_file.read()
 
 requirements = [
     'requests',
@@ -64,8 +64,8 @@ setup(
         ]
     },
     license='MIT license',
-    long_description=readme + '\n\n' + history,
-    long_description_content_type='text/markdown',
+    long_description=readme, # + '\n\n' + history,
+    long_description_content_type='text/x-rst',
     include_package_data=True,
     keywords='python chat downloader youtube twitch',
     name='chat-downloader',
