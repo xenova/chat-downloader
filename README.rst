@@ -92,7 +92,7 @@ For example, to save messages from a livestream to a JSON file, you can use:
 
 
 
-For a description of these options, as well as advanced command line use-cases and examples, consult the `Command Line Usage <https://chat-downloader.readthedocs.io/en/docs/cli.html#command-line-usage>`_ page.
+For a description of these options, as well as advanced command line use-cases and examples, consult the `Command Line Usage <https://chat-downloader.readthedocs.io/en/latest/cli.html#command-line-usage>`_ page.
 
 
 Python
@@ -108,7 +108,7 @@ Python
        chat.print_formatted(message)           # print the formatted message
 
 
-For advanced python use-cases and examples, consult the `Python Documentation <https://chat-downloader.readthedocs.io/en/docs/source/index.html#python-documentation>`_.
+For advanced python use-cases and examples, consult the `Python Documentation <https://chat-downloader.readthedocs.io/en/latest/source/index.html#python-documentation>`_.
 
 
 ##########
@@ -141,7 +141,7 @@ Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and shoul
     }
 
 
-For an extensive, documented list of included fields, consult the `Chat Item Fields <https://chat-downloader.readthedocs.io/en/docs/items.html#chat-item-fields>`_ page.
+For an extensive, documented list of included fields, consult the `Chat Item Fields <https://chat-downloader.readthedocs.io/en/latest/items.html#chat-item-fields>`_ page.
 
 ##########################
 Frequently Asked Questions
@@ -165,7 +165,7 @@ Contributing
 ############
 
 If you would like to help improve the tool, you'll find more
-information on contributing in our `Contributing Guide <https://chat-downloader.readthedocs.io/en/docs/contributing.html#contributing-guide>`_.
+information on contributing in our `Contributing Guide <https://chat-downloader.readthedocs.io/en/latest/contributing.html#contributing-guide>`_.
 
 
 ################

@@ -33,7 +33,7 @@ readme_html = open('_build/README.html').read()
 relative_link_dict = {name: link for link, name in re.findall(relative_link_regex, readme_html)}
 
 BASE_READTHEDOCS_URL = 'https://chat-downloader.readthedocs.io/en/latest/'
-BASE_READTHEDOCS_URL = 'https://chat-downloader.readthedocs.io/en/docs/' # Testing
+# BASE_READTHEDOCS_URL = 'https://chat-downloader.readthedocs.io/en/docs/' # Testing
 
 
 reference_regex = r':ref:`(.*)`'
