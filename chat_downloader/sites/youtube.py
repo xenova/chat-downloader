@@ -683,6 +683,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'viewerIsCreator': 'viewer_is_creator',
         'targetId': 'target_message_id',
         'isStackable': 'is_stackable',
+        'backgroundType': 'background_type',
 
         # removeBannerForLiveChatCommand
         'targetActionId': 'target_message_id',
