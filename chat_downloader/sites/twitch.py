@@ -391,6 +391,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'msg-param-streak-months': r('number_of_consecutive_months_subscribed', int_or_none),
         'msg-param-sub-plan': r('subscription_type', lambda x: TwitchChatDownloader._SUBSCRIPTION_TYPES.get(x)),
         'msg-param-sub-plan-name': r('subscription_plan_name', _decode_pseudo_BNF),
+        'msg-param-sub-benefit-end-month': r('sub_benefit_end_month', int_or_none),
 
         'msg-param-ritual-name': 'ritual_name',
 
@@ -1519,7 +1520,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     irc.set_timeout(message_receive_timeout)
                     irc.join_channel(stream_id)
                     return irc
-                except socket.gaierror as e:
+                except (socket.gaierror, ConnectionRefusedError) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         twitch_chat_irc = create_connection()
