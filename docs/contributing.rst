@@ -1,10 +1,9 @@
-************
-Contributing
-************
+Contributing Guide
+==================
 
 
-Developer Guide
-===============
+Developers
+~~~~~~~~~~
 
 The following section outlines the basic procedure for people who
 want to assist in development.
@@ -101,7 +100,7 @@ When adding new features, we encourage developers to use these templates
 as starting points. This helps ensure consistency across the codebase.
 
 New site
-~~~~~~~~~~~~~~~~
+^^^^^^^^
 
 *Coming soon*
 
@@ -118,7 +117,7 @@ New site
 
 
 Testing
-=======
+~~~~~~~
 
 If you are unable to write code but still wish to assist, we encourage
 users to run commands with the ``--testing`` flag included. This will
@@ -139,7 +138,7 @@ write to files (using ``--output``).
 
 
 Sponsor
-=======
+~~~~~~~
 
 `Chat Downloader`_ has always and will always be free. If you are feeling
 generous, donations are always appreciated!

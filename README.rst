@@ -147,6 +147,8 @@ For an extensive, documented list of included fields, consult the `Chat Item Fie
 Frequently Asked Questions
 ##########################
 
+*Coming soon*
+
 ######
 Issues
 ######
@@ -163,9 +165,7 @@ Contributing
 ############
 
 If you would like to help improve the tool, you'll find more
-information on contributing in our `contributing guide`_.
-
-.. _contributing guide: https://github.com/xenova/chat-downloader/
+information on contributing in our `Contributing Guide <https://chat-downloader.readthedocs.io/en/docs/contributing.html#contributing-guide>`_.
 
 
 ################
