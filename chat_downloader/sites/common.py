@@ -1,6 +1,6 @@
 
 import requests
-from http.cookiejar import MozillaCookieJar
+from http.cookiejar import (MozillaCookieJar, Cookie)
 import os
 import re
 from json import JSONDecodeError
@@ -388,6 +388,14 @@ class BaseChatDownloader:
         :rtype: dict
         """
         return requests.utils.dict_from_cookiejar(self.session.cookies)
+
+    def set_cookie_value(self, domain, name, value, expire_time=None, port=None,
+                         path='/', secure=False, discard=False, rest={}, **kwargs):
+        cookie = Cookie(
+            0, name, value, port, port is not None, domain, True,
+            domain.startswith('.'), path, True, secure, expire_time,
+            discard, None, None, rest)
+        self.session.cookies.set_cookie(cookie)
 
     def get_cookie_value(self, name, default=None):
         """Return the value for key if key is in the cookie dictionary, else default.
