@@ -17,6 +17,7 @@ from ..utils import (
     timestamp_to_microseconds,
     seconds_to_time,
     int_or_none,
+    str_or_none,
     replace_with_underscores,
     multi_get,
     remove_prefixes,
@@ -343,7 +344,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         return emotes
 
     _AUTHOR_REMAPPING = {
-        '_id': r('id', int_or_none),
+        '_id': r('id', str_or_none),
         'name': 'name',
         'display_name': 'display_name',
         'logo': r('images', _parse_author_images),
@@ -487,7 +488,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # can be empty (which means it depends on dark/light theme)
         'color': 'colour',
         'display-name': 'author_display_name',
-        'user-id': r('author_id', int_or_none),
+        'user-id': r('author_id', str_or_none),
 
 
 
@@ -502,8 +503,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         'id': 'message_id',
         'mod': r('author_is_moderator', _parse_bool),
-        'room-id': r('channel_id', int_or_none),
-
+        'room-id': r('channel_id', str_or_none),
         'tmi-sent-ts': r('timestamp', lambda x: int_or_none(x, 0) * 1000),
 
         'subscriber': r('author_is_subscriber', _parse_bool),
@@ -516,7 +516,8 @@ class TwitchChatDownloader(BaseChatDownloader):
 
 
         'reply-parent-msg-body': r('in_reply_to_message', _decode_pseudo_BNF),
-        'reply-parent-user-id': r('in_reply_to_author_id', int_or_none),
+        'reply-parent-user-id': r('in_reply_to_author_id', str_or_none),
+
         'reply-parent-msg-id': 'in_reply_to_message_id',
         'reply-parent-display-name': 'in_reply_to_author_display_name',
         'reply-parent-user-login': 'in_reply_to_author_name',
@@ -547,7 +548,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'number-of-viewers': 'number_of_viewers',
 
         # ban user
-        'target-user-id': r('target_author_id', int_or_none),
+        'target-user-id': r('target_author_id', str_or_none),
 
         # USERNOTICE - other
         **_MESSAGE_PARAM_REMAPPING
@@ -910,7 +911,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         return None
 
     _CLIP_REMAPPING = {
-        'id': r('id', int_or_none),
+        'id': r('id', str_or_none),
         'slug': 'slug',
         'url': 'url',
         'embedURL': 'embed_url',
@@ -973,7 +974,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 break
 
     _VIDEO_REMAPPING = {
-        'id': r('id', int_or_none),
+        'id': r('id', str_or_none),
         'animatedPreviewURL': 'animated_preview_url',
         'game': r('game', _parse_game),
 
@@ -1056,7 +1057,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
     _LIVESTREAM_REMAPPING = {
 
-        'id': r('id', int_or_none),
+        'id': r('id', str_or_none),
         'title': 'title',
         'viewersCount': 'viewers',
 
