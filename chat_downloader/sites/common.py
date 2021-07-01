@@ -1,7 +1,8 @@
 
 import requests
-from http.cookiejar import MozillaCookieJar
+from http.cookiejar import (MozillaCookieJar, Cookie)
 import os
+import re
 from json import JSONDecodeError
 
 from ..errors import (
@@ -13,14 +14,65 @@ from ..errors import (
 
 from ..utils import (
     get_title_of_webpage,
-    log,
     pause,
-    timed_input
+    timed_input,
+    safe_print
 )
+
+from ..debugging import log
+
+
+class Image():
+    def __init__(self, url, width=None, height=None, image_id=None):
+        """Create an Image object
+
+        :param url: The URL of the actual image
+        :type url: str
+        :param width: The width of the image, defaults to None
+        :type width: int, optional
+        :param height: The height of the image, defaults to None
+        :type height: int, optional
+        :param image_id: A identifier for the image, usually of the form: {width}x{height}, defaults to None
+        :type image_id: str, optional
+        """
+        self.url = url
+
+        if self.url.startswith('//'):
+            self.url = 'https:' + self.url
+
+        self.width = width
+        self.height = height
+
+        if width and height and not image_id:
+            self.id = '{}x{}'.format(width, height)
+        elif image_id:
+            self.id = image_id
+
+    def json(self):
+        """Return the JSON representation of an Image
+
+        :return: JSON representation of the object
+        :rtype: dict
+        """
+        return {k: v for k, v in self.__dict__.items() if v is not None}
 
 
 class Remapper():
+    """Class used to control the remapping of one dictionary to another dictionary."""
+
     def __init__(self, new_key=None, remap_function=None, to_unpack=False):
+        """Create a Remapper object
+
+        :param new_key: The new key of the item, defaults to None
+        :type new_key: str, optional
+        :param remap_function: The remapping function, defaults to None
+        :type remap_function: function, optional
+        :param to_unpack: Unpack the remapped item (to map to multiple output keys),
+            defaults to False
+        :type to_unpack: bool, optional
+        :raises ValueError: if unable to perform a remapping
+        """
+
         if new_key is not None and to_unpack:
             # New key is specified, but must unpack. Not allowed
             raise ValueError(
@@ -37,238 +89,28 @@ class Remapper():
         self.remap_function = remap_function
         self.to_unpack = to_unpack
 
-
-class SiteDefault:
-    # Used for site-default parameters
-    def __init__(self, name):
-        self.name = name
-
-
-class Chat():
-    def __init__(self, chat, **kwargs):
-        self.chat = chat
-
-        self.title = kwargs.get('title')
-        self.duration = kwargs.get('duration')
-        self.is_live = kwargs.get('is_live')
-        self.start_time = kwargs.get('start_time')
-
-        # TODO
-        # author/user/uploader/creator
-
-    def __iter__(self):
-        yield from self.chat
-
-    # Must be set later
-    def format(self, item):
-        raise NotImplementedError
-
-
-class BaseChatDownloader:
-    """
-    Subclasses of this should redefine the get_chat()
-    method and define a _VALID_URL regexp. The
-    _DEFAULT_FORMAT field may also be redefined.
-
-    Each chat item is a dictionary and must contain the following fields:
-
-    timestamp:          UNIX time (in microseconds) of when the message was sent.
-    message:            Actual content/text of the chat item.
-    message_id:         Identifier for the chat item.
-    message_type:       Message type of the item.
-    author:             A dictionary containing information about the user who
-                        sent the message.
-
-                        Mandatory fields:
-                        * name      The name of the author.
-                        * id        Idenfifier for the author.
-
-                        Optional fields:
-                        * display_name  The name of the author which is displayed
-                                    to the viewer. This may be different to `name`.
-                        * short_name    A shortened version of the author's name.
-                        * type      Type of the author.
-                        * url       URL for the author's channel/page.
-
-                        * images    A list of the author's profile picture in
-                                    different sizes. See below for the
-                                    fields which an image may have.
-                        * badges    A list of the author's badges.
-                                    Mandatory fields:
-                                    * title         The title of the badge.
-
-                                    Optional fields:
-                                    * id            Identifier for the badge.
-                                    * name          Name of the badge.
-                                    * version       Version of the badge.
-                                    * icon_name     Name of the badge icon.
-                                    * icons         A list of images for the badge icons.
-                                                    See below for potential fields.
-                                    * description   The description of the badge.
-                                    * alternative_title
-                                                    Alternative title of the badge.
-                                    * click_action  Action to perform if the badge is clicked.
-                                    * click_url     URL to visit if the badge is clicked.
-
-                        * gender    Gender of the author.
-
-                        The following boolean fields are self-explanatory:
-                        * is_banned
-                        * is_bot
-                        * is_non_coworker
-                        * is_original_poster
-                        * is_verified
-
-
-    Mandatory fields for replays/vods/clips (i.e. a video which is not live):
-
-    time_in_seconds:    The number of seconds after the video began, that the message was sent.
-    time_text:          Human-readable format for `time_in_seconds`.
-
-
-    Optional fields:
-
-    sub_message:        Additional text of the message.
-    action_type:        Action type of the item.
-    amount:             The amount of money which was sent with the message.
-    tooltip:            Text to be displayed when hovering over the message.
-    icon:               Icon associated with the message.
-    target_message_id:  The identifier for a message which this message references.
-    action:             The action of the message.
-    viewer_is_creator:  Whether the viewer is the creator or not.
-
-    sticker_images:     A list of the sticker image in different sizes. See
-                        below for the fields which an image may have.
-    sponsor_icons:      A list of the sponsor image in different sizes. See
-                        below for potential fields.
-    ticker_icons:       A list of the ticker image in different sizes. See
-                        below for potential fields.
-    ticker_duration:    How long the ticker message is displayed for.
-
-
-    The following fields indicate HEX colour information for the message:
-
-    author_name_text_colour
-    timestamp_colour
-    body_background_colour
-    header_text_colour
-    header_background_colour
-    body_text_colour
-    background_colour
-    money_chip_text_colour
-    money_chip_background_colour
-    start_background_colour
-    amount_text_colour
-    end_background_colour
-    detail_text_colour
-
-
-    An image contains the following fields:
-    url:                Mandatory. URL of the image.
-    id:                 Mandatory. Identifier for the image.
-    width:              Width of the image.
-    height:             Height of the image.
-
-
-
-    TODO
-    """
-
-    # id
-    # author_id
-    # author_name
-    # amount
-    # message
-    # time_text
-    # timestamp
-    # author_images
-    # tooltip
-    # icon
-    # author_badges
-    # badge_icons
-    # sticker_images
-    # ticker_duration
-    # sponsor_icons
-    # ticker_icons
-
-    # target_id
-    # action
-    # viewer_is_creator
-    # is_stackable
-    # sub_message
-
-    _NAME = None
-    _VALID_URL = None
-
-    _SITE_DEFAULT_PARAMS = {
-        # MAY NOT specify message_types. must always be empty
-        'message_groups': ['messages'],
-        'format': 'default',
-    }
-
-    # For general tests (non-site specific)
-    _TESTS = [
-        {
-            'name': 'Get a certain number of messages from a livestream.',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
-                'max_messages': 10,
-                'timeout': 60, # As a fallback
-            },
-
-            'expected_result': {
-                'messages_condition': lambda messages: len(messages) <= 10,
-            }
-        }
-    ]
-
-    _URL_GENERATORS = [
-
-    ]
-
-    @staticmethod
-    def must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
-
-        # Force mutual exclusion
-        if messages_types_to_add:
-            # messages_types is set
-            messages_groups_to_add = []
-
-        if 'all' in messages_groups_to_add or 'all' in messages_types_to_add:  # user wants everything
-            return True
-
-        valid_message_types = []
-        for message_group in messages_groups_to_add or []:
-            valid_message_types += message_groups_dict.get(message_group, [])
-
-        for message_type in messages_types_to_add or []:
-            valid_message_types.append(message_type)
-
-        return item.get('message_type') in valid_message_types
-
-    @staticmethod
-    def remap_dict(item, remapping_dict, keep_unknown_keys=False, replace_char_with_underscores=None):
-        info = {}
-        for key in item:
-            BaseChatDownloader.remap(
-                info, remapping_dict, key, item[key],
-                keep_unknown_keys=keep_unknown_keys,
-                replace_char_with_underscores=replace_char_with_underscores
-            )
-        return info
-
     @staticmethod
     def remap(info, remapping_dict, remap_key, remap_input, keep_unknown_keys=False, replace_char_with_underscores=None):
-        """
-        A function used to remap items from one dictionary to another
+        """A function used to remap items from one dictionary to another
 
         :param info: Output dictionary
+        :type info: dict
         :param remapping_dict: Dictionary of remappings
+        :type remapping_dict: dict
         :param remap_key: The key of the remapping
+        :type remap_key: str
         :param remap_input: The input sent to the remapping function
-        :param keep_unknown_keys: If no remap is found, keep the data with its original key and value
-        :param replace_char_with_underscores: If no remap is found, replace a character in the key with underscores
+        :type remap_input: object
+        :param keep_unknown_keys: If no remapping is found, keep the data
+            with its original key and value. Defaults to False
+        :type keep_unknown_keys: bool, optional
+        :param replace_char_with_underscores: If no remapping is found,
+            replace a character in the key with underscores. Defaults to None
+        :type replace_char_with_underscores: str, optional
+        :raises ValueError: if attempting to unpack an item that is not a dictionary,
+            or if an unknown remapping is specified
         """
+
         remap = remapping_dict.get(remap_key)
 
         if remap:  # A matching 'remapping' has been found, apply this remapping
@@ -303,30 +145,206 @@ class BaseChatDownloader:
             info[remap_key] = remap_input
 
     @staticmethod
-    def debug_log(params, *items):
-        pause_on_debug = params.get('pause_on_debug')
-        exit_on_debug = params.get('exit_on_debug')
+    def remap_dict(input_dictionary, remapping_dict, keep_unknown_keys=False, replace_char_with_underscores=None):
+        """Given an input dictionary and a remapping dictionary, return the remapped dictionary
 
+        :param input_dictionary: Input dictionary
+        :type input_dictionary: dict
+        :param remapping_dict: Dictionary of Remapper objects
+        :type remapping_dict: dict
+        :param keep_unknown_keys: If no remapping is found, keep the data
+            with its original key and value. Defaults to False
+        :type keep_unknown_keys: bool, optional
+        :param replace_char_with_underscores: If no remapping is found,
+            replace a character in the key with underscores. Defaults to None
+        :type replace_char_with_underscores: str, optional
+        :return: Remapped dictionary
+        :rtype: dict
+        """
+
+        info = {}
+        for key in input_dictionary:
+            Remapper.remap(
+                info, remapping_dict, key, input_dictionary[key],
+                keep_unknown_keys=keep_unknown_keys,
+                replace_char_with_underscores=replace_char_with_underscores
+            )
+        return info
+
+
+class SiteDefault:
+    """Allows for sites to specify default parameters. Additionally, different
+    sites can specify different values for the same input parameter."""
+
+    def __init__(self, name):
+        """Create a SiteDefault object
+
+        :param name: The key which will be checked in the `_SITE_DEFAULT_PARAMS`
+        dictionary to get the site's default value
+        :type name: str
+        """
+        self.name = name
+
+
+class Chat():
+    """Class used to manage all chat data for a single stream or video.
+
+    Classes that extend `BaseChatDownloader` contain the `get_chat` method,
+    which returns a `Chat` object. These objects are iterable, where the
+    next value is yielded from the object's `chat` generator method.
+    """
+
+    def __init__(self, chat=None, callback=None, title=None, duration=None, is_live=None, start_time=None, **kwargs):
+        """Create a Chat object
+
+        :param chat: Generator method for retrieving chat messages, defaults to None
+        :type chat: generator, optional
+        :param callback: Function to call on every message, defaults to None
+        :type callback: function, optional
+        :param title: Stream or video title, defaults to None
+        :type title: str, optional
+        :param duration: Duration of the stream or video, defaults to None
+        :type duration: float, optional
+        :param is_live: True if the stream is live, defaults to None
+        :type is_live: bool, optional
+        :param start_time: Start time of the stream (or upload date of video)
+            in UNIX microseconds, defaults to None
+        :type start_time: float, optional
+        """
+
+        self.chat = chat
+
+        self.callback = callback
+        self.title = title
+        self.duration = duration
+        self.is_live = is_live
+        self.start_time = start_time
+
+        # TODO
+        # author/user/uploader/creator
+
+    def __iter__(self):
+        """Allows the object to be iterable
+
+        :return: This object
+        :rtype: Chat
+        """
+        return self
+
+    def __next__(self):
+        """Get the next chat message from the generator
+
+        :return: The next chat item
+        :rtype: dict
+        """
+        item = next(self.chat)
+        if self.callback:
+            self.callback(item)
+        return item
+
+    def print_formatted(self, item):
+        """Safely print the formatted message
+
+        :param item: The chat item to be printed
+        :type item: dict
+        """
+        formatted = self.format(item)
+        safe_print(formatted)
+
+    def format(self, item):
+        """Format chat messages
+
+        :param item: The chat item to be formatted
+        :type item: dict
+        :raises NotImplementedError: if this method has not been overridden later
+        """
+        raise NotImplementedError
+
+
+class BaseChatDownloader:
+    """Base class for chat downloaders. Each supported site should have its
+    own chat downloader. Subclasses should redefine the `_VALID_URLS`
+    dictionary which creates a mapping between functions and their matching
+    regular expressions. Optionally, subclasses should also redefine `_NAME`,
+    `_SITE_DEFAULT_PARAMS` and `_TESTS` fields."""
+
+    _NAME = None
+
+    _SITE_DEFAULT_PARAMS = {
+        # MAY NOT specify message_types. must always be empty
+        'message_groups': ['messages'],
+        'format': 'default',
+    }
+
+    # For general tests (non-site specific)
+    _TESTS = [
+        {
+            'name': 'Get a certain number of messages from a livestream.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'max_messages': 10,
+                'timeout': 60,  # As a fallback
+            },
+
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        }
+    ]
+
+    @staticmethod
+    def _must_add_item(item, message_groups_dict, messages_groups_to_add, messages_types_to_add):
+
+        # Force mutual exclusion
+        if messages_types_to_add:
+            # messages_types is set
+            messages_groups_to_add = []
+
+        if 'all' in messages_groups_to_add or 'all' in messages_types_to_add:  # user wants everything
+            return True
+
+        valid_message_types = []
+        for message_group in messages_groups_to_add or []:
+            valid_message_types += message_groups_dict.get(message_group, [])
+
+        for message_type in messages_types_to_add or []:
+            valid_message_types.append(message_type)
+
+        return item.get('message_type') in valid_message_types
+
+    @staticmethod
+    def _debug_log(params, *items):
+        """Method which simplifies the logging of debugging messages
+
+        :param params: Dictionary of parameters sent to the `get_chat` method
+        :type params: dict
+        :raises UnexpectedError: if something unexpected occurs, but is only
+            used when debugging
+        """
         log(
             'debug',
             items,
-            pause_on_debug
+            params.get('pause_on_debug')
         )
-        if exit_on_debug:
+        if params.get('exit_on_debug'):
             raise UnexpectedError(items)
 
     def __init__(self,
                  **kwargs
                  ):
+        """Initialise a session with various parameters
 
-        # Begin session
+        :raises CookieError: if unable to read or parse the cookie file
+        """
+
+        # Start a new session
         self.session = requests.Session()
 
         headers = kwargs.get('headers')
         if headers is None:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
-                'Accept-Language': 'en-US, en'
+                'Accept-Language': 'en-US, en, *'  # 'de-CH'#'fr-CH'#
             }
         self.session.headers = headers
 
@@ -360,73 +378,109 @@ class BaseChatDownloader:
         self.session.headers.update(new_headers)
 
     def clear_cookies(self):
+        """Clear the session's cookies."""
         self.session.cookies.clear()
 
-    def get_cookies_dict(self):
+    def _get_cookies_dict(self):
+        """Returns a key/value dictionary from the session's CookieJar
+
+        :return: Dictionary of cookies
+        :rtype: dict
+        """
         return requests.utils.dict_from_cookiejar(self.session.cookies)
 
+    def set_cookie_value(self, domain, name, value, expire_time=None, port=None,
+                         path='/', secure=False, discard=False, rest={}, **kwargs):
+        cookie = Cookie(
+            0, name, value, port, port is not None, domain, True,
+            domain.startswith('.'), path, True, secure, expire_time,
+            discard, None, None, rest)
+        self.session.cookies.set_cookie(cookie)
+
     def get_cookie_value(self, name, default=None):
-        return self.get_cookies_dict().get(name, default)
+        """Return the value for key if key is in the cookie dictionary, else default.
+
+        :param name: The key of the cookie
+        :type name: str
+        :param default: Return this value if the specified cookie cannot be found, defaults to None
+        :type default: object, optional
+        :return: The cookie value, or default
+        :rtype: Union[str, object, None]
+        """
+        return self._get_cookies_dict().get(name, default)
 
     def close(self):
+        """Close the session. Once this has been called, no more requests can be made."""
         self.session.close()
         log('debug', 'Session closed.')
 
-    # def __enter__(self):
-    #     return self
-
-    # def __exit__(self, exc_type, exc_val, exc_tb):
-    #     pass
-    #     # self.close()
-
     def _session_post(self, url, **kwargs):
-        """Make a request using the current session."""
+        """Make a post request using the current session."""
         return self.session.post(url, **kwargs)
 
     def _session_get(self, url, **kwargs):
-        """Make a request using the current session."""
+        """Make a get request using the current session."""
         return self.session.get(url, **kwargs)
 
     def _session_get_json(self, url, **kwargs):
-        """Make a request using the current session and get json data."""
+        """Make a get request using the current session and return as JSON."""
         return self._session_get(url, **kwargs).json()
 
-    def get_site_value(self, v):
-        if isinstance(v, SiteDefault):
+    def get_site_value(self, value):
+        """Get the site's default value for a certain parameter
+
+        :param value: The value
+        :type value: Union[SiteDefault, object]
+        :return: The site's default value
+        :rtype: object
+        """
+        if isinstance(value, SiteDefault):
             return self._SITE_DEFAULT_PARAMS.get(
-                v.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(v.name))
+                value.name, BaseChatDownloader._SITE_DEFAULT_PARAMS.get(value.name))
         else:
-            return v
+            return value
+
+    _VALID_URLS = {
+        # function_name: regex
+    }
+
+    @classmethod
+    def matches(cls, url):
+        """Used to check if a url matches any of the
+        regular expressions specified in the classes
+        `_VALID_URLS` dictionary.
+
+        :return: If a match is found, the function name and
+            match object is returned, otherwise None.
+        :rtype: (str, re.Match)
+        """
+        for function_name, regex in cls._VALID_URLS.items():
+
+            if isinstance(regex, str):
+                match = re.search(regex, url)
+                if match:
+                    return function_name, match
+
+        return None
 
     def get_chat(self, **kwargs):
+        """This method should be implemented in a subclass and should return
+        the appropriate `Chat` object with respect to the specified parameters.
+
+        :raises NotImplementedError: if not implemented and called from a subclass
+        """
+        raise NotImplementedError
+
+    def generate_urls(self, **kwargs):
+        """This method should be implemented in a subclass and should return
+        a generator which yields URLs for testing.
+
+        :raises NotImplementedError: if not implemented and called from a subclass
+        """
         raise NotImplementedError
 
     @staticmethod
-    def generate_urls(**kwargs):
-        raise NotImplementedError
-
-    @staticmethod
-    def create_image(url, width=None, height=None, image_id=None):
-        if url.startswith('//'):
-            url = 'https:' + url
-        image = {
-            'url': url,
-        }
-        if width:
-            image['width'] = width
-        if height:
-            image['height'] = height
-
-        # TODO remove id?
-        if width and height and not image_id:
-            image['id'] = '{}x{}'.format(width, height)
-        elif image_id:
-            image['id'] = image_id
-
-        return image
-
-    @staticmethod
-    def move_to_dict(info, dict_name, replace_key=None, create_when_empty=False, *info_keys):
+    def _move_to_dict(info, dict_name, replace_key=None, create_when_empty=False, *info_keys):
         """
         Move all items with keys that contain some text to a separate dictionary.
 
@@ -455,6 +509,21 @@ class BaseChatDownloader:
 
     @staticmethod
     def retry(attempt_number, max_attempts, error, retry_timeout=None, text=None):
+        """Retry to occur after an error occurs
+
+        :param attempt_number: The current attempt number
+        :type attempt_number: int
+        :param max_attempts: The maximum number of attempts allowed
+        :type max_attempts: int
+        :param error: The error which was raised
+        :type error: Exception
+        :param retry_timeout: The number of seconds to sleep after failing,
+            defaults to None (i.e. use exponential back-off)
+        :type retry_timeout: float, optional
+        :param text: Items to display on retry, defaults to None
+        :type text: object, optional
+        :raises RetriesExceeded: if the maximum number of retries has been exceeded
+        """
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
@@ -506,6 +575,14 @@ class BaseChatDownloader:
 
     @staticmethod
     def check_for_invalid_types(messages_types_to_add, allowed_message_types):
+        """Used to check for invalid message types
+
+        :param messages_types_to_add: List of message types to add
+        :type messages_types_to_add: list
+        :param allowed_message_types: List of allowed message type
+        :type allowed_message_types: list
+        :raises InvalidParameter: if invalid types are specified
+        """
         invalid_types = set(messages_types_to_add) - set(allowed_message_types)
         if invalid_types:
             raise InvalidParameter(

@@ -1,0 +1,21 @@
+##########
+TODO list:
+##########
+
+-  Finalise unit testing
+-  Improve documentation
+-  Add progress bar when duration is known
+-  Add support for streams by username (i.e. currently live)
+-  Websites to add:
+
+   -  facebook.com (in progress)
+   -  vimeo.com
+   -  dlive.tv
+   -  instagib.tv
+   -  dailymotion.com
+   -  reddit live
+   -  younow.com
+
+-  Add ``--statistics`` tag. This will show a summary of all chat
+   messages retrieved (e.g. sum YouTube superchat, memberships,
+   subscriptions, etc.)

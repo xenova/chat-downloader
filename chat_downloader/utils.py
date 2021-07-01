@@ -1,11 +1,9 @@
 import inspect
 import threading
 import _thread
-import colorlog
 import datetime
 import re
 import sys
-import os
 import locale
 import collections.abc
 import io
@@ -14,27 +12,41 @@ import json
 
 
 def timestamp_to_microseconds(timestamp):
+    """Convert RFC3339 timestamp to microseconds. This is needed since
+        ``datetime.datetime.strptime()`` does not support nanosecond precision.
+
+    :param timestamp: RFC3339 timestamp
+    :type timestamp: str
+    :return: The number of microseconds of the timestamp
+    :rtype: int
     """
-    Convert RFC3339 timestamp to microseconds.
-    This is needed as datetime.datetime.strptime() does not support nanosecond precision.
-    """
+
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
     return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1]))) * 1e6)
 
 
 def time_to_seconds(time):
-    """Convert timestamp string of the form 'hh:mm:ss' to seconds."""
+    """Convert timestamp string of the form 'hh:mm:ss' to seconds.
+
+    :param time: Timestamp of the form 'hh:mm:ss'
+    :type time: str
+    :return: The corresponding number of seconds
+    :rtype: int
+    """
+    if not time:
+        return 0
     return int(sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1))
 
 
-# def seconds_to_time(seconds):
-#     """Convert seconds to timestamp."""
-#     t = datetime.timedelta(0, abs(seconds))
-#     # time_string = t.days()
-#     return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', str(t))
-
 def seconds_to_time(seconds):
-    """Convert seconds to timestamp."""
+    """Convert seconds to timestamp. Note that leading zeroes are omitted
+        when seconds > 60
+
+    :param seconds: Number of seconds
+    :type seconds: int
+    :return: The corresponding timestamp string
+    :rtype: str
+    """
     h, remainder = divmod(abs(seconds), 3600)
     m, s = divmod(remainder, 60)
     time_string = '{}:{:02}:{:02}'.format(int(h), int(m), int(s))
@@ -42,17 +54,35 @@ def seconds_to_time(seconds):
 
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
-    """Convert unix time to human-readable timestamp."""
+    """Convert unix time to human-readable timestamp.
+
+    :param microseconds: UNIX microseconds
+    :type microseconds: float
+    :param format: The format string, defaults to '%Y-%m-%d %H:%M:%S'. For
+        information on supported codes, see https://strftime.org/ and
+        https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+    :type format: str, optional
+    :return: Human readable timestamp corresponding to the format
+    :rtype: str
+    """
     return datetime.datetime.fromtimestamp(microseconds // 1000000).strftime(format)
 
 
 def ensure_seconds(time, default=None):
-    """Ensure time is returned in seconds."""
+    """Ensure time is returned in seconds.
+
+    :param time: The time, in seconds or 'hh:mm:ss'.
+    :type time: Union[float, str]
+    :param default: Returns this if unable to parse the time, defaults to None
+    :type default: object, optional
+    :return: The corresponding number of seconds
+    :rtype: float
+    """
     if time is None:  # if time is none, return default
         return default
 
     try:
-        return int(time)
+        return float(time)
     except ValueError:
         return time_to_seconds(time)
     except Exception:
@@ -60,7 +90,13 @@ def ensure_seconds(time, default=None):
 
 
 def arbg_int_to_rgba(argb_int):
-    """Convert ARGB integer to RGBA array."""
+    """Convert ARGB integer to RGBA array.
+
+    :param argb_int: ARGB integer
+    :type argb_int: int
+    :return: RGBA array
+    :rtype: list[int]
+    """
     red = (argb_int >> 16) & 255
     green = (argb_int >> 8) & 255
     blue = argb_int & 255
@@ -69,29 +105,21 @@ def arbg_int_to_rgba(argb_int):
 
 
 def rgba_to_hex(colours):
-    """Convert RGBA array to hex colour."""
+    """Convert RGBA array to hex colour.
+
+    :param colours: RGBA array
+    :type colours: list[int]
+    :return: Corresponding hexadecimal representation
+    :rtype: str
+    """
     return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
 
-def get_colours(argb_int):
-    """Given an ARGB integer, return both RGBA and hex values."""
-    rgba_colour = arbg_int_to_rgba(argb_int)
-    hex_colour = rgba_to_hex(rgba_colour)
-    return {
-        'argb_int': argb_int,
-        'rgba': rgba_colour,
-        'hex': hex_colour
-    }
-
 # from youtube-dl
-
-
 def try_get(src, getter, expected_type=None):
     # used when a method is needed
     # or list/number index retrieval
-    if not isinstance(getter, (list, tuple)):
-        getter = [getter]
-    for get in getter:
+    for get in wrap_as_list(getter):
         try:
             v = get(src)
         except (AttributeError, KeyError, TypeError, IndexError):
@@ -112,6 +140,11 @@ def int_or_none(v, default=None):
     except (ValueError, TypeError):
         return default
 
+def float_or_none(v, default=None):
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return default
 
 def str_or_none(v, default=None):
     try:
@@ -133,124 +166,46 @@ def try_get_first_value(dictionary, default=None):
     except Exception:
         return default
 
+
 def try_parse_json(text):
     try:
         return json.loads(text)
     except json.decoder.JSONDecodeError:
         return None
 
-def remove_prefixes(text, prefixes):
-    if not isinstance(prefixes, (list, tuple)):
-        prefixes = [prefixes]
+def wrap_as_list(item):
+    """Wraps an item in a list, if it is not already iterable
 
-    for prefix in prefixes:
+    :param item: The item to wrap
+    :type item: object
+    :return: The wrapped item
+    :rtype: Union[list, tuple]
+    """
+    if not isinstance(item, (list, tuple)):
+        item = [item]
+    return item
+
+def remove_prefixes(text, prefixes):
+    for prefix in wrap_as_list(prefixes):
         if text.startswith(prefix):
             text = text[len(prefix):]
-
     return text
 
 
 def remove_suffixes(text, suffixes):
-    if not isinstance(suffixes, (list, tuple)):
-        suffixes = [suffixes]
-
-    for suffix in suffixes:
+    for suffix in wrap_as_list(suffixes):
         if text.endswith(suffix):
             text = text[0:-len(suffix):]
-
     return text
 
 
 def update_dict_without_overwrite(original, new):
     original.update({key: new[key] for key in new if key not in original})
+    return original
 
 
 def camel_case_split(word):
     return '_'.join(re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)).lower()
-
-
-def supports_colour():
-    """
-    Return True if the running system's terminal supports colour,
-    and False otherwise.
-    """
-    def vt_codes_enabled_in_windows_registry():
-        """
-        Check the Windows Registry to see if VT code handling has been enabled
-        by default, see https://superuser.com/a/1300251/447564.
-        """
-        try:
-            # winreg is only available on Windows.
-            import winreg
-        except ImportError:
-            return False
-        else:
-            reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Console')
-            try:
-                reg_key_value, _ = winreg.QueryValueEx(
-                    reg_key, 'VirtualTerminalLevel')
-            except FileNotFoundError:
-                return False
-            else:
-                return reg_key_value == 1
-
-    # isatty is not always implemented, #6223.
-    is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
-
-    return is_a_tty and (
-        # Windows Terminal supports VT codes.
-        # Microsoft Visual Studio Code's built-in terminal supports colours.
-
-        (sys.platform != 'win32') or ('ANSICON' in os.environ) or ('WT_SESSION' in os.environ) or (
-            os.environ.get('TERM_PROGRAM') == 'vscode') or (vt_codes_enabled_in_windows_registry())
-    )
-
-
-if supports_colour():
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter(
-        '[%(log_color)s%(levelname)s%(reset)s] %(message)s',
-        log_colors={
-            'DEBUG': 'cyan',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'bold_red',
-        })
-    )
-    logger = colorlog.getLogger()  # 'root'
-else:  # fallback support
-    import logging
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-    logger = logging.getLogger()
-
-
-logger.addHandler(handler)
-
-
-def pause(text='Press Enter to continue...'):
-    input(text)
-
-
-def set_log_level(level):
-    logger.setLevel(level.upper())
-
-
-def get_logger():
-    return logger
-
-
-def log(level, items, to_pause=False):
-    logger_at_level = getattr(logger, level, None)
-    if logger_at_level:
-        if not isinstance(items, (tuple, list)):
-            items = [items]
-        for item in items:
-            logger_at_level(item)
-
-        if to_pause:
-            pause()
 
 
 def replace_with_underscores(text, sep='-'):
@@ -386,8 +341,8 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
     """
     Ensure printing to standard output can be done safely (especially on Windows).
     There are usually issues with printing emojis and non utf-8 characters.
-
     """
+
     output_string = sep.join(map(lambda x: str(x), objects)) + end
 
     if out is None:
@@ -416,6 +371,9 @@ def nested_update(d, u):
             d[k] = v
     return d
 
+
+def pause(text='Press Enter to continue...'):
+    input(text)
 
 # Inspired by https://github.com/hero24/TimedInput/
 
@@ -510,10 +468,6 @@ class TimedGenerator:
             next_item = next(self.generator)
             self.reset_inactivity_timer()
             return next_item
-        except StopIteration as e:
-            # No more items to get. Temporarily save exception so that
-            # we can close the timers before exiting
-            to_raise = e
 
         except KeyboardInterrupt as e:
 
@@ -538,6 +492,12 @@ class TimedGenerator:
             else:  # both timers are still active, user sent a keyboard interrupt
                 to_raise = e
 
+        except Exception as e:
+            # Some other error. Always propogate.
+            # If e is StopIteration, there are no more items to get.
+            # We can close the timers before exiting
+            to_raise = e
+
         if to_raise:  # Something happened which will cause the generator to exit, cancel timers
             for timer in set_timers:
                 timer.cancel()
@@ -556,7 +516,7 @@ def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
         return TimedInput(timeout, prompt, default, *args, **kwargs).read()
 
 
-def interruptable_sleep(secs, poll_time=0.1):
+def interruptible_sleep(secs, poll_time=0.1):
     start_time = time.time()
 
     while time.time() - start_time <= secs:
@@ -568,7 +528,5 @@ def get_default_args(func):
     return {
         k: v.default
         for k, v in signature.parameters.items()
-        # if k != 'self'
         if v.default is not inspect.Parameter.empty
     }
-    # TODO get required args

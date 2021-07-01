@@ -7,6 +7,13 @@ from .common import BaseChatDownloader
 
 
 def get_all_sites(include_parent=False):
+    """Get all supported sites.
+
+    :param include_parent: Whether to include the BaseChatDownloader, defaults to False
+    :type include_parent: bool, optional
+    :return: A list of all supported ChatDownloader classes
+    :rtype: list
+    """
     return [
         value
         for value in globals().values()

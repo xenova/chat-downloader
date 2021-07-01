@@ -1,6 +1,7 @@
 import os
 import json
 import csv
+import shutil
 
 from ..utils import flatten_json
 
@@ -13,7 +14,14 @@ class CW:
     Otherwise, the writer can be explicitly closed.
     """
 
-    def __init__(self, file_name, overwrite=False):
+    def __init__(self, file_name, overwrite=True):
+        """Create a CW object.
+
+        :param file_name: The name of the file to write to
+        :type file_name: str
+        :param overwrite: Whether to overwrite if the file already exists, defaults to True
+        :type overwrite: bool, optional
+        """
         self.file_name = file_name
         # subclasses must set self.file
 
@@ -34,6 +42,16 @@ class CW:
         self.close()
 
     def write(self, item, flush=False):
+        """Write a chat item to the file. This method should be implemented in subclasses.
+
+        :param item: The chat item
+        :type item: dict
+        :param flush: Whether to force the file to be flushed after writing,
+            defaults to False
+        :type flush: bool, optional
+        :raises NotImplementedError: if the method is not implemented
+            and called from a subclass.
+        """
         raise NotImplementedError
 
     def flush(self):
@@ -45,7 +63,7 @@ class JSONCW(CW):
     Class used to control the continuous writing of a list of dictionaries to a JSON file.
     """
 
-    def __init__(self, file_name, overwrite=False, indent=None, separator=', ', indent_character=' ', sort_keys=True):
+    def __init__(self, file_name, overwrite=True, indent=None, separator=', ', indent_character=' ', sort_keys=True):
         super().__init__(file_name, overwrite)
         # open file for appending and reading in binary mode.
         self.file = open(self.file_name, 'rb+')
@@ -57,7 +75,9 @@ class JSONCW(CW):
             try:
                 previous_items = json.load(self.file)
             except json.decoder.JSONDecodeError:
+                # TODO create .tmp, file shutil.copy(), self.file.read()
                 pass
+
         self.file.truncate(0)  # empty file
 
         self.indent = indent
@@ -110,7 +130,7 @@ class CSVCW(CW):
     Class used to control the continuous writing of a list of dictionaries to a CSV file.
     """
 
-    def __init__(self, file_name, overwrite=False, sort_keys=True):
+    def __init__(self, file_name, overwrite=True, sort_keys=True):
         super().__init__(file_name, overwrite)
 
         self.file = open(self.file_name, 'a+', newline='',
@@ -162,7 +182,7 @@ class TXTCW(CW):
     Class used to control the continuous writing of a text to a TXT file.
     """
 
-    def __init__(self, file_name, overwrite=False):
+    def __init__(self, file_name, overwrite=True):
         super().__init__(file_name, overwrite)
         self.file = open(self.file_name, 'a',
                          encoding='utf-8')  # , buffering=1
@@ -186,6 +206,9 @@ class ContinuousWriter:
         new_kwargs = {
             key: kwargs[key] for key in kwargs if key in writer_class.__init__.__code__.co_varnames}
         self.writer = writer_class(file_name, **new_kwargs)
+
+    def is_default(self):
+        return isinstance(self.writer, TXTCW)
 
     def write(self, item, flush=False):
         self.writer.write(item, flush)
