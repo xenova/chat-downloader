@@ -40,7 +40,7 @@ from ..utils import (
 
 from ..debugging import log
 
-
+import random
 import re
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
@@ -53,6 +53,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._initialize_consent()
 
     _NAME = 'youtube.com'
 
@@ -1032,6 +1033,30 @@ class YouTubeChatDownloader(BaseChatDownloader):
             #         }
             #     }
             # }
+
+    _CONSENT_ID_REGEX = r'PENDING\+(\d+)'
+    # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/extractor/youtube.py#L251
+
+    def _initialize_consent(self):
+        if self.get_cookie_value('__Secure-3PSID'):
+            return
+
+        consent_id = None
+        consent = self.get_cookie_value('CONSENT')
+
+        if consent:
+            if 'YES' in consent:
+                return
+            consent_id_match = re.search(self._CONSENT_ID_REGEX, consent)
+
+            if consent_id_match:
+                consent_id = consent_id_match.group()
+
+        if not consent_id:
+            consent_id = random.randint(100, 999)
+
+        self.set_cookie_value('.youtube.com', 'CONSENT',
+                              'YES+cb.20210328-17-p0.en+FX+{}'.format(consent_id))
 
     def _get_initial_info(self, url):
         html = self._session_get(url).text
