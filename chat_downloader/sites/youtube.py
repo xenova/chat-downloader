@@ -423,25 +423,27 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                 else:  # is a normal message
                     message_info['message'] += run['text']
+
             elif 'emoji' in run:
                 emoji = run['emoji']
-                emoji_id = emoji['emojiId']
+                emoji_id = emoji.get('emojiId')
 
-                name = emoji['shortcuts'][0]
+                name = multi_get(emoji, 'shortcuts', 0)
 
-                if emoji_id and emoji_id not in message_emotes:
+                if name:
+                    if emoji_id and emoji_id not in message_emotes:
 
-                    # TODO change to remapping?
-                    message_emotes[emoji_id] = {
-                        'id': emoji_id,
-                        'name': name,
-                        'shortcuts': emoji.get('shortcuts'),
-                        'search_terms': emoji.get('searchTerms'),
-                        'images': YouTubeChatDownloader._parse_thumbnails(emoji.get('image', {})),
-                        'is_custom_emoji': emoji.get('isCustomEmoji', False)
-                    }
+                        # TODO change to remapping?
+                        message_emotes[emoji_id] = {
+                            'id': emoji_id,
+                            'name': name,
+                            'shortcuts': emoji.get('shortcuts'),
+                            'search_terms': emoji.get('searchTerms'),
+                            'images': YouTubeChatDownloader._parse_thumbnails(emoji.get('image', {})),
+                            'is_custom_emoji': emoji.get('isCustomEmoji', False)
+                        }
 
-                message_info['message'] += name
+                    message_info['message'] += name
 
             else:
                 # unknown run
@@ -1128,8 +1130,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
             else:
                 # Video exists, but you cannot view chat for some reason
 
-                error_runs = multi_get(conversation_bar, 'conversationBarRenderer', 'availabilityMessage', 'messageRenderer', 'text')
-                error_message = self._parse_runs(error_runs, False)['message'] if error_runs else 'Video does not have a chat replay.'
+                error_runs = multi_get(conversation_bar, 'conversationBarRenderer',
+                                       'availabilityMessage', 'messageRenderer', 'text')
+                error_message = self._parse_runs(error_runs, False)[
+                    'message'] if error_runs else 'Video does not have a chat replay.'
 
                 raise NoChatReplay(error_message)
 
