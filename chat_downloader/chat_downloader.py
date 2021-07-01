@@ -48,7 +48,8 @@ from .errors import (
     RetriesExceeded,
     NoContinuation,
     UserNotFound,
-    ChatGeneratorError
+    ChatGeneratorError,
+    ParsingError
 )
 
 
@@ -297,9 +298,11 @@ class ChatDownloader():
                         output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
 
                     if output_file.is_default():
-                        chat.callback = lambda x: output_file.write(chat.format(x), flush=True)
+                        chat.callback = lambda x: output_file.write(
+                            chat.format(x), flush=True)
                     else:
-                        chat.callback = lambda x: output_file.write(x, flush=True)
+                        chat.callback = lambda x: output_file.write(
+                            x, flush=True)
 
                 chat.site = site_object
 
@@ -405,7 +408,8 @@ def run(propagate_interrupt=False, **kwargs):
     ) as e:  # Expected errors
         log('error', e)
     except (
-        ChatGeneratorError
+        ChatGeneratorError,
+        ParsingError
     ) as e:  # Errors which may be bugs
         log('error', '{}. {}'.format(
             e, 'Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'))
