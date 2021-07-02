@@ -1253,10 +1253,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             continuation_params['context']['clickTracking'] = {
                                 'clickTrackingParams': click_tracking_params}
 
-                        log('debug', 'Continuation: {}'.format(continuation))
-
                         yt_info = self._session_post(
                             continuation_url, json=continuation_params).json()
+
+                    debug_info = {
+                        'click_tracking': continuation_params['context']['clickTracking'],
+                        'continuation': continuation_params['continuation']
+                    }
+                    log('debug', 'Continuation: {}'.format(debug_info))
 
                     info = multi_get(
                         yt_info, 'continuationContents', 'liveChatContinuation')
@@ -1493,6 +1497,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 continuation_key = try_get_first_key(cont)
                 continuation_info = cont[continuation_key]
 
+                log('debug', 'Continuation info: {}'.format(continuation_info))
+
                 if continuation_key in self._KNOWN_CHAT_CONTINUATIONS:
 
                     # set new chat continuation
@@ -1501,7 +1507,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     click_tracking_params = continuation_info.get(
                         'clickTrackingParams') or continuation_info.get('trackingParams')
-
                     # there is a chat continuation
                     no_continuation = False
 
