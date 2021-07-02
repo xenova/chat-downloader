@@ -4,6 +4,7 @@ from .youtube import YouTubeChatDownloader
 from .twitch import TwitchChatDownloader
 from .facebook import FacebookChatDownloader
 from .common import BaseChatDownloader
+from .younow import YouNowChatDownloader
 
 
 def get_all_sites(include_parent=False):
