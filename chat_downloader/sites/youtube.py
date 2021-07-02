@@ -1230,6 +1230,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
+        click_tracking_params = None
+
         message_count = 0
         first_time = True
         while True:
@@ -1245,6 +1247,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
+
+                        if click_tracking_params:
+                            continuation_params['context']['clickTracking'] = {
+                                'clickTrackingParams': click_tracking_params}
+
                         log('debug', 'Continuation: {}'.format(continuation))
 
                         yt_info = self._session_post(
@@ -1490,6 +1497,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     # set new chat continuation
                     # overwrite if there is continuation data
                     continuation = continuation_info.get('continuation')
+
+                    click_tracking_params = continuation_info.get(
+                        'clickTrackingParams') or continuation_info.get('trackingParams')
 
                     # there is a chat continuation
                     no_continuation = False
