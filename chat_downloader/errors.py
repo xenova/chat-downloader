@@ -75,10 +75,17 @@ class SiteNotSupported(ChatDownloaderError):
     pass
 
 
-class TwitchError(ChatDownloaderError):
+class SiteError(ChatDownloaderError):
+    """Raised when an error occurs with a specific site."""
+    pass
+
+class TwitchError(SiteError):
     """Raised when an error occurs with a Twitch video."""
     pass
 
+class YouNowError(SiteError):
+    """Raised when an error occurs with a YouNow livestream."""
+    pass
 
 class NoContinuation(ChatDownloaderError):
     """Raised when no continuation can be found."""
