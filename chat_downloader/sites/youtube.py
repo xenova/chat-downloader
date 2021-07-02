@@ -1205,10 +1205,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         cfg = re.search(self._YT_CFG_RE, html)
         yt_cfg_data = try_parse_json(cfg.group(1)) if cfg else {}
 
-        continuation_params = {
-            'context': yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
-        }
-
         continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(api_type)
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, (float, int)) else None
@@ -1232,17 +1228,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         click_tracking_params = None
 
+        innertube_context = yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
+
         message_count = 0
         first_time = True
         while True:
+            continuation_params = {
+                'context': innertube_context,
+                'continuation': continuation
+            }
+
             info = None
             for attempt_number in attempts(max_attempts):
 
                 try:
 
                     if not first_time:
-
-                        continuation_params['continuation'] = continuation
 
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
