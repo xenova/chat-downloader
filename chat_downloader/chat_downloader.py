@@ -49,7 +49,8 @@ from .errors import (
     NoContinuation,
     UserNotFound,
     ChatGeneratorError,
-    ParsingError
+    ParsingError,
+    SiteError
 )
 
 
@@ -404,7 +405,8 @@ def run(propagate_interrupt=False, **kwargs):
         InvalidURL,
         RetriesExceeded,
         NoContinuation,
-        UserNotFound
+        UserNotFound,
+        SiteError
     ) as e:  # Expected errors
         log('error', e)
     except (
