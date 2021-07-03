@@ -40,8 +40,10 @@ from ..utils import (
 
 from ..debugging import log
 
+import time
 import random
 import re
+import hashlib
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 from urllib import parse
@@ -1058,6 +1060,44 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.set_cookie_value('.youtube.com', 'CONSENT',
                               'YES+cb.20210328-17-p0.en+FX+{}'.format(consent_id))
 
+    def _generate_sapisidhash_header(self, origin='https://www.youtube.com'):
+
+        sapis_id = self.get_cookie_value('SAPISID')
+        sapisid_cookie = self.get_cookie_value('__Secure-3PSID') or sapis_id
+
+        if sapisid_cookie is None:
+            return
+
+        time_now = round(time.time())
+
+        # SAPISID cookie is required if not already present
+        if not sapis_id:
+            self.set_cookie_value(
+                '.youtube.com', 'SAPISID', sapisid_cookie, secure=True, expire_time=time_now + 3600)
+
+        # SAPISIDHASH algorithm from https://stackoverflow.com/a/32065323
+        sapisidhash = hashlib.sha1(
+            f'{time_now} {sapisid_cookie} {origin}'.encode('utf-8')).hexdigest()
+        return f'SAPISIDHASH {time_now}_{sapisidhash}'
+
+    def _generate_api_headers(self, ytcfg, visitor_data):
+        origin = 'https://www.youtube.com'
+        headers = {
+            'X-YouTube-Client-Name': str(ytcfg.get('INNERTUBE_CONTEXT_CLIENT_NAME')),
+            'X-YouTube-Client-Version': ytcfg.get('INNERTUBE_CLIENT_VERSION'),
+            'Origin': origin
+        }
+
+        if visitor_data:
+            headers['X-Goog-Visitor-Id'] = visitor_data
+
+        auth = self._generate_sapisidhash_header(origin)
+        if auth is not None:
+            headers['Authorization'] = auth
+            headers['X-Origin'] = origin
+
+        return headers
+
     def _get_initial_info(self, url):
         html = self._session_get(url).text
         yt = re.search(self._YT_INITIAL_DATA_RE, html)
@@ -1229,6 +1269,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
         click_tracking_params = None
 
         innertube_context = yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
+
+        visitor_data = multi_get(innertube_context, 'client', 'visitorData')
+
+        headers = self._generate_api_headers(yt_cfg_data, visitor_data)
+        headers.update({'content-type': 'application/json'})
+        self.update_session_headers(headers)
+        log('debug', 'Updated headers: {}'.format(
+            list(self.session.headers.keys())))
 
         message_count = 0
         first_time = True
