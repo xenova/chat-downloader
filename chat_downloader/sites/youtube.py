@@ -48,7 +48,6 @@ from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 from urllib import parse
 from datetime import datetime
-from base64 import b64decode
 
 
 class YouTubeChatDownloader(BaseChatDownloader):
@@ -273,9 +272,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _YT_VIDEO_TEMPLATE = _YT_HOME + '/watch?v={}'
 
     _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME + '/{}?continuation={}'
-    _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + \
-        b64decode(
-            'L3lvdXR1YmVpL3YxL2xpdmVfY2hhdC9nZXRfe30/a2V5PUFJemFTeUFPX0ZKMlNscVU4UTRTVEVITEdDaWx3X1k5XzExcWNXOA==').decode()
+    _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + '/youtubei/v1/live_chat/get_{}?key={}'
 
     _MESSAGE_GROUPS = {
         'messages': [
@@ -1019,23 +1016,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if playlist_video:
                 yield self._parse_video(playlist_video)
 
-            # "continuationItemRenderer":{
-            #     "trigger":"CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
-            #     "continuationEndpoint":{
-            #         "clickTrackingParams":"CCgQ7zsYACITCNT0zMKim-4CFU-V1QodgR4KyA==",
-            #         "commandMetadata":{
-            #             "webCommandMetadata":{
-            #             "sendPost":true,
-            #             "apiUrl":"/youtubei/v1/browse"
-            #             }
-            #         },
-            #         "continuationCommand":{
-            #             "token":"4qmFsgJhEiRWTFBMRXJ1a1gxVzFPWWpGeDJwRzh6aldpTXVQTUcwRi1MYkkaFENBRjZCbEJVT2tOSFVRJTNEJTNEmgIiUExFcnVrWDFXMU9ZakZ4MnBHOHpqV2lNdVBNRzBGLUxiSQ%3D%3D",
-            #             "request":"CONTINUATION_REQUEST_TYPE_BROWSE"
-            #         }
-            #     }
-            # }
-
     _CONSENT_ID_REGEX = r'PENDING\+(\d+)'
     # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/extractor/youtube.py#L251
 
@@ -1060,10 +1040,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.set_cookie_value('.youtube.com', 'CONSENT',
                               'YES+cb.20210328-17-p0.en+FX+{}'.format(consent_id))
 
-    def _generate_sapisidhash_header(self, origin='https://www.youtube.com'):
-
+    def _generate_sapisidhash_header(self):
         sapis_id = self.get_cookie_value('SAPISID')
-        sapisid_cookie = self.get_cookie_value('__Secure-3PSID') or sapis_id
+        sapisid_cookie = self.get_cookie_value('__Secure-3PAPISID') or sapis_id
 
         if sapisid_cookie is None:
             return
@@ -1077,26 +1056,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # SAPISIDHASH algorithm from https://stackoverflow.com/a/32065323
         sapisidhash = hashlib.sha1(
-            f'{time_now} {sapisid_cookie} {origin}'.encode('utf-8')).hexdigest()
+            f'{time_now} {sapisid_cookie} {self._YT_HOME}'.encode('utf-8')).hexdigest()
         return f'SAPISIDHASH {time_now}_{sapisidhash}'
-
-    def _generate_api_headers(self, ytcfg, visitor_data):
-        origin = 'https://www.youtube.com'
-        headers = {
-            'X-YouTube-Client-Name': str(ytcfg.get('INNERTUBE_CONTEXT_CLIENT_NAME')),
-            'X-YouTube-Client-Version': ytcfg.get('INNERTUBE_CLIENT_VERSION'),
-            'Origin': origin
-        }
-
-        if visitor_data:
-            headers['X-Goog-Visitor-Id'] = visitor_data
-
-        auth = self._generate_sapisidhash_header(origin)
-        if auth is not None:
-            headers['Authorization'] = auth
-            headers['X-Origin'] = origin
-
-        return headers
 
     def _get_initial_info(self, url):
         html = self._session_get(url).text
@@ -1114,6 +1075,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise ParsingError(
                 'Unable to parse initial video data. {}'.format(html))
 
+        details = {}
+
+        cfg = re.search(self._YT_CFG_RE, html)
+        details['ytcfg'] = try_parse_json(cfg.group(1)) if cfg else {}
+
         player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
         player_response_info = try_parse_json(
             player_response.group(1)) if player_response else None
@@ -1126,9 +1092,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         formats = streaming_data.get(
             'adaptiveFormats') or streaming_data.get('formats')
 
-        details = {
-            'start_time': float_or_none(multi_get(formats, 0, 'lastModified')),
-        }
+        details['start_time'] = float_or_none(
+            multi_get(formats, 0, 'lastModified'))
 
         # Try to get continuation info
         contents = yt_initial_data.get('contents') or {}
@@ -1237,15 +1202,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if not is_live:
             api_type += '_replay'
 
-        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
-            api_type, continuation)
-        # must run to get first few messages, otherwise might miss some
-        html, yt_info = self._get_initial_info(init_page)
+        yt_cfg_data = initial_info.get('ytcfg')
 
-        cfg = re.search(self._YT_CFG_RE, html)
-        yt_cfg_data = try_parse_json(cfg.group(1)) if cfg else {}
+        api_key = yt_cfg_data.get('INNERTUBE_API_KEY')
 
-        continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(api_type)
+        continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(
+            api_type, api_key)
         offset_milliseconds = (
             start_time * 1000) if isinstance(start_time, (float, int)) else None
 
@@ -1270,13 +1232,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         innertube_context = yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
 
-        visitor_data = multi_get(innertube_context, 'client', 'visitorData')
-
-        headers = self._generate_api_headers(yt_cfg_data, visitor_data)
-        headers.update({'content-type': 'application/json'})
-        self.update_session_headers(headers)
-        log('debug', 'Updated headers: {}'.format(
-            list(self.session.headers.keys())))
+        self.update_session_headers({
+            'x-goog-visitor-id': multi_get(innertube_context, 'client', 'visitorData'),
+            'x-youtube-client-name': str(yt_cfg_data.get('INNERTUBE_CONTEXT_CLIENT_NAME')),
+            'x-youtube-client-version': str(yt_cfg_data.get('INNERTUBE_CLIENT_VERSION')),
+            'origin': self._YT_HOME,
+            'content-type': 'application/json'
+        })
 
         message_count = 0
         first_time = True
@@ -1286,13 +1248,25 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'continuation': continuation
             }
 
+            # Update authentication header, if necessary
+            auth = self._generate_sapisidhash_header()
+            if auth:
+                self.update_session_headers({
+                    'authorization': auth,
+                    'x-origin': self._YT_HOME
+                })
+
             info = None
             for attempt_number in attempts(max_attempts):
 
                 try:
+                    if first_time:
+                        # must run to get first few messages, otherwise might miss some
+                        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
+                            api_type, continuation)
+                        html, yt_info = self._get_initial_info(init_page)
 
-                    if not first_time:
-
+                    else:
                         if not is_live and offset_milliseconds is not None:
                             continuation_params['currentPlayerState'] = {
                                 'playerOffsetMs': offset_milliseconds}
@@ -1305,13 +1279,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             continuation_url, json=continuation_params).json()
 
                     debug_info = {
-                        'click_tracking': continuation_params['context']['clickTracking'],
-                        'continuation': continuation_params['continuation']
+                        'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
+                        'continuation': multi_get(continuation_params, 'continuation')
                     }
                     log('debug', 'Continuation: {}'.format(debug_info))
 
                     info = multi_get(
                         yt_info, 'continuationContents', 'liveChatContinuation')
+
+                    logged_in_info = multi_get(
+                        yt_info, 'responseContext', 'serviceTrackingParams', 1, 'params', 0)
+                    log('debug', 'Logged-in info: {}'.format(logged_in_info))
 
                     if not info:
                         log('debug', 'No continuation information found: {}'.format(
@@ -1322,8 +1300,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                 except (JSONDecodeError, RequestException) as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
-                    self.clear_cookies()
-
                     continue
 
             actions = info.get('actions') or []
