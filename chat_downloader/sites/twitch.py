@@ -528,6 +528,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         'emotes': r('emotes', _parse_emotes),
         'flags': 'flags',
+        'first-msg': r('is_first_message', _parse_bool),
 
 
 
