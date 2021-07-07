@@ -22,7 +22,8 @@ requirements = [
     'regex',
     'argparse',
     'docstring-parser',
-    'colorlog'
+    'colorlog',
+    'websocket-client'
 ]
 
 setup(
