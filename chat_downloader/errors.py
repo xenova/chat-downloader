@@ -32,6 +32,11 @@ class UserNotFound(ChatDownloaderError):
     pass
 
 
+class NoVideos(ChatDownloaderError):
+    """Raised when a channel does not have any videos."""
+    pass
+
+
 class ParsingError(ChatDownloaderError):
     """Raised when video data cannot be parsed."""
     pass

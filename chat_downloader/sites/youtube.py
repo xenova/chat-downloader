@@ -15,7 +15,8 @@ from ..errors import (
     LoginRequired,
     VideoUnplayable,
     InvalidParameter,
-    UserNotFound
+    UserNotFound,
+    NoVideos
 )
 
 from ..utils import (
@@ -1019,7 +1020,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Check that the returned grid is what was asked for
         # YouTube tries to correct your mistake by selecting the uploads tab
         # if you try to access a tab that is not visible.
-        sub_menu_items = section_list_renderer['subMenu']['channelSubMenuRenderer']['contentTypeSubMenuItems']
+        sub_menu_items = multi_get(
+            section_list_renderer, 'subMenu', 'channelSubMenuRenderer', 'contentTypeSubMenuItems')
+        if not sub_menu_items:
+            raise NoVideos('This channel has no videos.')
+
         selected = list(filter(lambda x: x['selected'], sub_menu_items))
         if not selected or selected[0]['title'] != vid_type[1]:
             log('debug', '"{}" tab is not visible for this channel (i.e. there are no such videos).'.format(
