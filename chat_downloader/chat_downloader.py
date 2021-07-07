@@ -50,7 +50,8 @@ from .errors import (
     UserNotFound,
     ChatGeneratorError,
     ParsingError,
-    SiteError
+    SiteError,
+    NoVideos
 )
 
 
@@ -258,6 +259,7 @@ class ChatDownloader():
                 if not get_chat:
                     raise NotImplementedError(
                         '{} has not been implemented in {}.'.format(function_name, site.__name__))
+
                 chat = get_chat(match, params)
                 log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(
                     match, function_name, site.__name__))
@@ -298,12 +300,8 @@ class ChatDownloader():
                     output_file = ContinuousWriter(
                         output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
 
-                    if output_file.is_default():
-                        chat.callback = lambda x: output_file.write(
-                            chat.format(x), flush=True)
-                    else:
-                        chat.callback = lambda x: output_file.write(
-                            x, flush=True)
+                    chat.callback = lambda item : output_file.write(
+                            chat.format(item) if output_file.is_default() else item, flush=True)
 
                 chat.site = site_object
 
@@ -406,7 +404,8 @@ def run(propagate_interrupt=False, **kwargs):
         RetriesExceeded,
         NoContinuation,
         UserNotFound,
-        SiteError
+        SiteError,
+        NoVideos
     ) as e:  # Expected errors
         log('error', e)
     except (
