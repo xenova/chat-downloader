@@ -1646,8 +1646,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def _get_chat_by_user_args(self, user_video_args, params):
         # TODO add param for wait time
-        params['retry_timeout'] = 30
-        params['exit_on_fail'] = True
+        # params['exit_on_fail'] = True
 
         title = try_get_first_value(user_video_args)
 
@@ -1661,6 +1660,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # chat_item allows to change title and info based on new info
 
         list_of_vids_to_ignore = params.get('ignore') or []
+
+        sleep_amount = 30  # params.get('retry_timeout')
+        max_attempts = params.get('max_attempts')
+        retry_timeout = params.get('retry_timeout')
 
         while True:
             for video_type in ('live', 'upcoming'):
@@ -1680,12 +1683,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             'n upcoming' if video_type == 'upcoming' else '', video_title, video_id))
 
                         # update chat item by copying over
-                        chat_dict = {k: v for k,
-                                     v in chat.__dict__.items() if k != 'chat'}
+                        chat_dict = chat.__dict__.copy()
+                        for key in ('chat', 'callback'):
+                            chat_dict.pop(key, None)
+
                         for i in chat_dict:
                             setattr(chat_item, i, chat_dict[i])
 
                         yield from chat.chat
+                        break
 
                     except ChatDownloaderError as e:
                         # For some reason, doesn't work
@@ -1693,11 +1699,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             video['title'], video_id, e))
                         # TODO exit on error?
 
-            sleep_amount = 30
-            if isinstance(params['retry_timeout'], (float, int)):
-                sleep_amount = params['retry_timeout']
-
-            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying again in {} seconds.'.format(
+            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying in {} seconds.'.format(
                 sleep_amount))
             interruptible_sleep(sleep_amount)
 
