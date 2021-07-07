@@ -6,7 +6,7 @@ from .common import (
 )
 
 from ..errors import (
-    TwitchError,
+    SiteError,
     NoChatReplay,
     VideoUnavailable,
     UserNotFound
@@ -34,6 +34,11 @@ import base64
 
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
+
+
+class TwitchError(SiteError):
+    """Raised when an error occurs with a Twitch video."""
+    pass
 
 
 # TODO export as another module?

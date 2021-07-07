@@ -213,8 +213,8 @@ class Chat():
         """
 
         self.chat = chat
-
         self.callback = callback
+
         self.title = title
         self.duration = duration
         self.is_live = is_live
@@ -463,14 +463,6 @@ class BaseChatDownloader:
 
         return None
 
-    def get_chat(self, **kwargs):
-        """This method should be implemented in a subclass and should return
-        the appropriate `Chat` object with respect to the specified parameters.
-
-        :raises NotImplementedError: if not implemented and called from a subclass
-        """
-        raise NotImplementedError
-
     def generate_urls(self, **kwargs):
         """This method should be implemented in a subclass and should return
         a generator which yields URLs for testing.
@@ -508,15 +500,15 @@ class BaseChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, error, retry_timeout=None, text=None):
+    def retry(attempt_number, max_attempts, error=None, retry_timeout=None, text=None):
         """Retry to occur after an error occurs
 
         :param attempt_number: The current attempt number
         :type attempt_number: int
         :param max_attempts: The maximum number of attempts allowed
         :type max_attempts: int
-        :param error: The error which was raised
-        :type error: Exception
+        :param error: The error which was raised, defaults to None
+        :type error: Exception, optional
         :param retry_timeout: The number of seconds to sleep after failing,
             defaults to None (i.e. use exponential back-off)
         :type retry_timeout: float, optional
@@ -550,8 +542,10 @@ class BaseChatDownloader:
         else:
             sleep_text = ''
 
-        retry_text = 'Retry #{} {}. {} ({})'.format(
-            attempt_number, sleep_text, error, error.__class__.__name__)
+        retry_text = 'Retry #{} {}.'.format(attempt_number, sleep_text)
+
+        if isinstance(error, Exception):
+            retry_text += ' {} ({})'.format(error, error.__class__.__name__)
 
         log(
             'warning',
