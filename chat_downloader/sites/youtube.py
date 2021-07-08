@@ -1209,6 +1209,44 @@ class YouTubeChatDownloader(BaseChatDownloader):
         details['duration'] = int_or_none(video_details.get('lengthSeconds'))
         return details
 
+    def _extract_account_syncid(self, ytcfg):
+        sync_ids = ytcfg.get('DATASYNC_ID').split('||')
+        if len(sync_ids) >= 2 and sync_ids[1]:
+            # datasyncid is of the form "channel_syncid||user_syncid" for secondary channel
+            # and just "user_syncid||" for primary channel. We only want the channel_syncid
+            return sync_ids[0]
+
+        # ytcfg includes channel_syncid if on secondary channel
+        return ytcfg.get('DELEGATED_SESSION_ID')
+
+    def _generate_headers(self, ytcfg):
+        headers = {
+            'origin': self._YT_HOME,
+            'x-youtube-client-name': str(ytcfg.get('INNERTUBE_CONTEXT_CLIENT_NAME')),
+            'x-youtube-client-version': str(ytcfg.get('INNERTUBE_CLIENT_VERSION')),
+            'x-origin': self._YT_HOME,
+            'x-goog-authuser': '0'
+        }
+
+        identity_token = ytcfg.get('ID_TOKEN')
+        if identity_token:
+            headers['x-youtube-identity-token'] = identity_token
+
+        account_syncid = self._extract_account_syncid(ytcfg)
+        if account_syncid:
+            headers['x-goog-pageid'] = account_syncid
+
+        visitor_data = multi_get(
+            ytcfg, 'INNERTUBE_CONTEXT', 'client', 'visitorData')
+        if visitor_data:
+            headers['x-goog-visitor-id'] = visitor_data
+
+        auth = self._generate_sapisidhash_header()
+        if auth:
+            headers['authorization'] = auth
+
+        return headers
+
     def _get_chat_messages(self, initial_info, params):
 
         initial_continuation_info = initial_info.get('continuation_info') or {}
@@ -1239,9 +1277,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if not is_live:
             api_type += '_replay'
 
-        yt_cfg_data = initial_info.get('ytcfg')
+        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
+            api_type, continuation)
 
-        api_key = yt_cfg_data.get('INNERTUBE_API_KEY')
+        ytcfg = initial_info.get('ytcfg')
+
+        api_key = ytcfg.get('INNERTUBE_API_KEY')
 
         continuation_url = self._YOUTUBE_CHAT_API_TEMPLATE.format(
             api_type, api_key)
@@ -1265,20 +1306,20 @@ class YouTubeChatDownloader(BaseChatDownloader):
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
 
-        click_tracking_params = None
-
-        innertube_context = yt_cfg_data.get('INNERTUBE_CONTEXT') or {}
+        # Generate base headers and update session headers
+        self.update_session_headers(self._generate_headers(ytcfg))
 
         self.update_session_headers({
-            'x-goog-visitor-id': multi_get(innertube_context, 'client', 'visitorData'),
-            'x-youtube-client-name': str(yt_cfg_data.get('INNERTUBE_CONTEXT_CLIENT_NAME')),
-            'x-youtube-client-version': str(yt_cfg_data.get('INNERTUBE_CLIENT_VERSION')),
-            'origin': self._YT_HOME,
-            'content-type': 'application/json'
+            'content-type': 'application/json',
+            'referer': init_page
         })
+
+        innertube_context = ytcfg.get('INNERTUBE_CONTEXT') or {}
 
         message_count = 0
         first_time = True
+        click_tracking_params = None
+
         while True:
             continuation_params = {
                 'context': innertube_context,
@@ -1289,8 +1330,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             auth = self._generate_sapisidhash_header()
             if auth:
                 self.update_session_headers({
-                    'authorization': auth,
-                    'x-origin': self._YT_HOME
+                    'authorization': auth
                 })
 
             info = None
@@ -1299,8 +1339,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 try:
                     if first_time:
                         # must run to get first few messages, otherwise might miss some
-                        init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
-                            api_type, continuation)
                         html, yt_info = self._get_initial_info(init_page)
 
                     else:
@@ -1319,7 +1357,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
                         'continuation': multi_get(continuation_params, 'continuation')
                     }
-                    log('debug', 'Continuation: {}'.format(debug_info))
+                    log('debug', 'Continuation parameters: {}'.format(debug_info))
+                    log('debug', 'Session headers: {}'.format(
+                        ', '.join(self.session.headers.keys())))  # Only display keys
 
                     info = multi_get(
                         yt_info, 'continuationContents', 'liveChatContinuation')
