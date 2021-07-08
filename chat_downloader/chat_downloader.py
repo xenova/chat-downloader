@@ -15,12 +15,13 @@ from .sites.common import (
 from .sites import get_all_sites
 
 from .formatting.format import ItemFormatter
-from .utils import (
+from .utils.core import (
     safe_print,
     get_default_args,
-    update_dict_without_overwrite,
-    TimedGenerator
+    update_dict_without_overwrite
 )
+
+from .utils.timed_utils import TimedGenerator
 
 from .debugging import (
     log,
@@ -300,8 +301,8 @@ class ChatDownloader():
                     output_file = ContinuousWriter(
                         output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
 
-                    chat.callback = lambda item : output_file.write(
-                            chat.format(item) if output_file.is_default() else item, flush=True)
+                    chat.callback = lambda item: output_file.write(
+                        chat.format(item) if output_file.is_default() else item, flush=True)
 
                 chat.site = site_object
 

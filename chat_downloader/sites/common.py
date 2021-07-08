@@ -12,13 +12,13 @@ from ..errors import (
     UnexpectedError
 )
 
-from ..utils import (
+from ..utils.core import (
     get_title_of_webpage,
     pause,
-    timed_input,
     safe_print
 )
 
+from ..utils.timed_utils import timed_input
 from ..debugging import log
 
 
@@ -562,7 +562,6 @@ class BaseChatDownloader:
                 log('debug', 'Title: {}'.format(page_title))
 
         if must_sleep:
-            # time.sleep(time_to_sleep)
             timed_input(time_to_sleep)
         else:
             pause()

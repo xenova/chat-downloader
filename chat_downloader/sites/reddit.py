@@ -5,7 +5,7 @@ from .common import (
     Remapper as r
 )
 
-from ..utils import (
+from ..utils.core import (
     multi_get,
     int_or_none,
     attempts

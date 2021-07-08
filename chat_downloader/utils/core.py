@@ -1,6 +1,4 @@
 import inspect
-import threading
-import _thread
 import datetime
 import re
 import sys
@@ -140,11 +138,13 @@ def int_or_none(v, default=None):
     except (ValueError, TypeError):
         return default
 
+
 def float_or_none(v, default=None):
     try:
         return float(v)
     except (ValueError, TypeError):
         return default
+
 
 def str_or_none(v, default=None):
     try:
@@ -173,6 +173,7 @@ def try_parse_json(text):
     except json.decoder.JSONDecodeError:
         return None
 
+
 def wrap_as_list(item):
     """Wraps an item in a list, if it is not already iterable
 
@@ -184,6 +185,7 @@ def wrap_as_list(item):
     if not isinstance(item, (list, tuple)):
         item = [item]
     return item
+
 
 def remove_prefixes(text, prefixes):
     for prefix in wrap_as_list(prefixes):
@@ -374,153 +376,6 @@ def nested_update(d, u):
 
 def pause(text='Press Enter to continue...'):
     input(text)
-
-# Inspired by https://github.com/hero24/TimedInput/
-
-
-class TimedInput(threading.Thread):
-    """ Timed input reader """
-
-    def get_input(self):
-        """ Actual function for reading the input """
-        try:
-            print(self.prompt, end='', flush=True)
-            self.input = input()
-        except EOFError:
-            pass
-
-    def __init__(self, timeout, prompt='', default=None, *args, **kwargs):
-        """
-        TimedInput(
-            timeout -> amount of seconds to wait for the input,
-            prompt -> optionl prompt to display while asking for input,
-            default -> string to return in case of timeout,
-            *args/**kwargs -> any additional arguments are passed down to Thread
-                            constructor
-        )
-        Creates an object for reading input, that times out after `timeout` amount
-                of seconds.
-        """
-        self.timeout = timeout
-        self.prompt = prompt
-        self.input = default
-        super().__init__(target=self.get_input, *args, **kwargs)
-        self.daemon = True
-
-    def join(self):
-        """ The actual timeout happens here """
-        super().join(self.timeout)
-        return self.input
-
-    def read(self):
-        """ Reads the input from the reader """
-        self.start()
-        return self.join()
-
-
-class TimedGenerator:
-    """
-    Add timing functionality to generator objects.
-
-    Used to create timed-generator objects as well as add inactivity functionality
-    (i.e. return if no items have been generated in a given time period)
-    """
-
-    def __init__(self, generator, timeout=None, inactivity_timeout=None, on_timeout=None, on_inactivity_timeout=None):
-        self.generator = generator
-        self.timeout = timeout
-        self.inactivity_timeout = inactivity_timeout
-
-        self.on_timeout = on_timeout
-        self.on_inactivity_timeout = on_inactivity_timeout
-
-        self.timer = self.inactivity_timer = None
-
-        if self.timeout is not None:
-            self.start_timer()
-
-        if self.inactivity_timeout is not None:
-            self.start_inactivity_timer()
-
-    def start_timer(self):
-        self.timer = threading.Timer(self.timeout, _thread.interrupt_main)
-        self.timer.start()
-
-    def start_inactivity_timer(self):
-        self.inactivity_timer = threading.Timer(
-            self.inactivity_timeout, _thread.interrupt_main)
-        self.inactivity_timer.start()
-
-    def reset_inactivity_timer(self):
-        if self.inactivity_timer:
-            self.inactivity_timer.cancel()
-            self.start_inactivity_timer()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        to_raise = None
-        set_timers = [timer for timer in (
-            self.timer, self.inactivity_timer) if timer is not None]
-
-        try:
-            next_item = next(self.generator)
-            self.reset_inactivity_timer()
-            return next_item
-
-        except KeyboardInterrupt as e:
-
-            if not set_timers:
-                # Neither timer has been set, so we treat this
-                # as a normal KeyboardInterrupt. No need to cancel
-                # timers afterwards, we can exit here.
-                raise e
-
-            # get expired timers
-            expired_timers = [
-                timer for timer in set_timers if not timer.is_alive()]
-            if expired_timers:
-                # Some timer expired
-                first_expired = expired_timers[0]
-
-                to_raise = StopIteration
-                function = self.on_timeout if (
-                    first_expired == self.timer) else self.on_inactivity_timeout
-                self._run_function(function)
-
-            else:  # both timers are still active, user sent a keyboard interrupt
-                to_raise = e
-
-        except Exception as e:
-            # Some other error. Always propogate.
-            # If e is StopIteration, there are no more items to get.
-            # We can close the timers before exiting
-            to_raise = e
-
-        if to_raise:  # Something happened which will cause the generator to exit, cancel timers
-            for timer in set_timers:
-                timer.cancel()
-
-            raise to_raise
-
-    def _run_function(self, function):
-        if callable(function):
-            function()
-
-
-def timed_input(timeout=None, prompt='', default=None, *args, **kwargs):
-    if timeout is None:
-        return input(prompt)
-    else:
-        return TimedInput(timeout, prompt, default, *args, **kwargs).read()
-
-
-def interruptible_sleep(secs, poll_time=0.1):
-    start_time = time.time()
-
-    while time.time() - start_time <= secs:
-        time.sleep(poll_time)
 
 
 def get_default_args(func):

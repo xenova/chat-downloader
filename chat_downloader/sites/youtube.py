@@ -18,8 +18,9 @@ from ..errors import (
     UserNotFound,
     NoVideos
 )
+from ..utils.timed_utils import interruptible_sleep
 
-from ..utils import (
+from ..utils.core import (
     try_get,
     multi_get,
     time_to_seconds,
@@ -35,7 +36,6 @@ from ..utils import (
     camel_case_split,
     ensure_seconds,
     attempts,
-    interruptible_sleep,
     try_parse_json
 )
 

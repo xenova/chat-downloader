@@ -12,7 +12,7 @@ from ..errors import (
     UserNotFound
 )
 
-from ..utils import (
+from ..utils.core import (
     ensure_seconds,
     timestamp_to_microseconds,
     seconds_to_time,
