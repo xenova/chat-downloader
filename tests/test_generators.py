@@ -83,7 +83,8 @@ for site in get_all_sites():
     try:
         print('Generating', args['max_tests_per_site'],
               'tests for', site.__name__)
-        urls = itertools.islice(downloader.create_session(site).generate_urls(), args['max_tests_per_site'])
+        urls = itertools.islice(downloader.create_session(
+            site).generate_urls(), args['max_tests_per_site'])
         list_of_urls = list(urls)
         num_tests = len(list_of_urls)
         padding = len(str(num_tests))
@@ -101,12 +102,12 @@ for site in get_all_sites():
     except NotImplementedError:
         pass  # No generator, skip
 
-print('Running test cases:')
 if __name__ == '__main__':
+    print('Running test cases:')
     unittest.main()
 
     # python tests/test_generators.py --args "--max_tests_per_site 500 --timeout 120 --livestream_limit 20 --vod_limit 50 --clip_limit 50"
 
-    # pytest -v tests/test_generators.py
-    # pytest -v tests/test_generators.py -k YouTubeChatDownloader
-    # pytest -v tests/test_generators.py -k TwitchChatDownloader
+    # pytest -n 4 -v tests/test_generators.py
+    # pytest -n 4 -v tests/test_generators.py -k YouTubeChatDownloader
+    # pytest -n 4 -v tests/test_generators.py -k TwitchChatDownloader
