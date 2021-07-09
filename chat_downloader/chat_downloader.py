@@ -1,6 +1,5 @@
 """Main module."""
 import sys
-import re
 import itertools
 import time
 

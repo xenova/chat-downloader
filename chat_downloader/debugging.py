@@ -2,15 +2,15 @@
 
 import sys
 import os
-import colorlog
-
 import chat_downloader
 
-# Source: https://github.com/django/django/blob/master/django/core/management/color.py
+
 def supports_colour():
     """
     Return True if the running system's terminal supports colour,
     and False otherwise.
+
+    Adapted from https://github.com/django/django/blob/master/django/core/management/color.py
     """
     def vt_codes_enabled_in_windows_registry():
         """
@@ -45,6 +45,7 @@ def supports_colour():
 
 
 if supports_colour():
+    import colorlog
     handler = colorlog.StreamHandler()
     handler.setFormatter(colorlog.ColoredFormatter(
         '[%(log_color)s%(levelname)s%(reset)s] %(message)s',

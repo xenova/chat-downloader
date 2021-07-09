@@ -21,7 +21,6 @@ from ..errors import (
 from ..utils.timed_utils import interruptible_sleep
 
 from ..utils.core import (
-    try_get,
     multi_get,
     time_to_seconds,
     seconds_to_time,
@@ -48,7 +47,6 @@ import hashlib
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 from urllib import parse
-from datetime import datetime
 
 
 class YouTubeChatDownloader(BaseChatDownloader):
@@ -1266,7 +1264,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         continuation_items = list(initial_continuation_info.items())
         if len(continuation_items) < 2:
             raise NoContinuation(
-                'Initial continuation information could not be found.'.format(initial_continuation_info))
+                'Initial continuation information could not be found: {}'.format(initial_continuation_info))
 
         continuation_index = 0 if chat_type == 'Top' else 1
         continuation = continuation_items[continuation_index][1]
@@ -1707,8 +1705,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         list_of_vids_to_ignore = params.get('ignore') or []
 
         sleep_amount = 30  # params.get('retry_timeout')
-        max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         while True:
             for video_type in ('live', 'upcoming'):

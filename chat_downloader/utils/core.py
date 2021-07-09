@@ -5,7 +5,6 @@ import sys
 import locale
 import collections.abc
 import io
-import time
 import json
 
 
@@ -76,7 +75,7 @@ def ensure_seconds(time, default=None):
     :return: The corresponding number of seconds
     :rtype: float
     """
-    if time is None:  # if time is none, return default
+    if time is None:
         return default
 
     try:

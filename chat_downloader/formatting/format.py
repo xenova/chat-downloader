@@ -68,7 +68,7 @@ class ItemFormatter:
                     if index == 'timestamp':
                         value = microseconds_to_timestamp(
                             value, formatting)
-                    elif index == '...': # TODO add others
+                    elif index == '...':  # TODO add others
                         pass
 
                 # Apply separator
