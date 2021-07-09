@@ -2,7 +2,7 @@ import re
 import os
 import json
 
-from ..utils import (
+from ..utils.core import (
     nested_update,
     multi_get,
     microseconds_to_timestamp

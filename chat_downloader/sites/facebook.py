@@ -4,7 +4,7 @@ from .common import (
     Remapper as r,
     Image
 )
-from ..utils import (
+from ..utils.core import (
     remove_prefixes,
     multi_get,
     try_get_first_value,

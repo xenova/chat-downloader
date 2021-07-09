@@ -15,12 +15,13 @@ from .sites.common import (
 from .sites import get_all_sites
 
 from .formatting.format import ItemFormatter
-from .utils import (
+from .utils.core import (
     safe_print,
     get_default_args,
-    update_dict_without_overwrite,
-    TimedGenerator
+    update_dict_without_overwrite
 )
+
+from .utils.timed_utils import TimedGenerator
 
 from .debugging import (
     log,
@@ -49,7 +50,9 @@ from .errors import (
     NoContinuation,
     UserNotFound,
     ChatGeneratorError,
-    ParsingError
+    ParsingError,
+    SiteError,
+    NoVideos
 )
 
 
@@ -257,6 +260,7 @@ class ChatDownloader():
                 if not get_chat:
                     raise NotImplementedError(
                         '{} has not been implemented in {}.'.format(function_name, site.__name__))
+
                 chat = get_chat(match, params)
                 log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(
                     match, function_name, site.__name__))
@@ -297,12 +301,8 @@ class ChatDownloader():
                     output_file = ContinuousWriter(
                         output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
 
-                    if output_file.is_default():
-                        chat.callback = lambda x: output_file.write(
-                            chat.format(x), flush=True)
-                    else:
-                        chat.callback = lambda x: output_file.write(
-                            x, flush=True)
+                    chat.callback = lambda item: output_file.write(
+                        chat.format(item) if output_file.is_default() else item, flush=True)
 
                 chat.site = site_object
 
@@ -404,7 +404,9 @@ def run(propagate_interrupt=False, **kwargs):
         InvalidURL,
         RetriesExceeded,
         NoContinuation,
-        UserNotFound
+        UserNotFound,
+        SiteError,
+        NoVideos
     ) as e:  # Expected errors
         log('error', e)
     except (

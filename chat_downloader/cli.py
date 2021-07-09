@@ -15,7 +15,7 @@ from .metadata import (
     __program__
 )
 
-from .utils import (
+from .utils.core import (
     get_default_args,
     int_or_none
 )

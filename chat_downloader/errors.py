@@ -26,9 +26,16 @@ class VideoNotFound(ChatDownloaderError):
     """Raised when video cannot be found."""
     pass
 
+
 class UserNotFound(ChatDownloaderError):
     """Raised when user cannot be found."""
     pass
+
+
+class NoVideos(ChatDownloaderError):
+    """Raised when a channel does not have any videos."""
+    pass
+
 
 class ParsingError(ChatDownloaderError):
     """Raised when video data cannot be parsed."""
@@ -55,6 +62,11 @@ class NoChatReplay(ChatDownloaderError):
     pass
 
 
+class ChatDisabled(ChatDownloaderError):
+    """Raised when the chat is disabled."""
+    pass
+
+
 class URLNotProvided(ChatDownloaderError):
     """Raised when no url is provided."""
     pass
@@ -75,8 +87,8 @@ class SiteNotSupported(ChatDownloaderError):
     pass
 
 
-class TwitchError(ChatDownloaderError):
-    """Raised when an error occurs with a Twitch video."""
+class SiteError(ChatDownloaderError):
+    """Raised when an error occurs with a specific site."""
     pass
 
 
