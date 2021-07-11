@@ -5,9 +5,17 @@ import json
 from ..utils.core import (
     nested_update,
     multi_get,
-    microseconds_to_timestamp
+    microseconds_to_timestamp,
+    seconds_to_time,
+    time_to_seconds
 )
 from copy import deepcopy
+
+
+from ..errors import (
+    FormatNotFound,
+    FormatFileNotFound
+)
 
 
 class ItemFormatter:
@@ -23,13 +31,21 @@ class ItemFormatter:
         :param path: Path of the format file, defaults to None
         :type path: str, optional
         """
+        default_path = os.path.join(os.path.dirname(
+            os.path.realpath(__file__)), 'custom_formats.json')
 
-        if path is None or not os.path.exists(path):
-            path = os.path.join(os.path.dirname(
-                os.path.realpath(__file__)), 'custom_formats.json')
+        with open(default_path) as default_formats:
+            self.format_file = json.load(default_formats)
 
-        with open(path) as custom_formats:
-            self.format_file = json.load(custom_formats)
+        if path is not None:
+            if not os.path.exists(path):
+                raise FormatFileNotFound(
+                    'Format file not found: "{}"'.format(path))
+
+            with open(path) as custom_formats:
+                self.format_file.update(json.load(custom_formats))
+
+        print(self.format_file)
 
     def _replace(self, match, item, format_object):
         """Replace a match object with
@@ -62,14 +78,18 @@ class ItemFormatter:
                 template = formatting_info
             elif isinstance(formatting_info, dict):
                 template = formatting_info.get('template') or ''
-
                 formatting = formatting_info.get('format')
                 if formatting:
                     if index == 'timestamp':
                         value = microseconds_to_timestamp(
                             value, formatting)
-                    elif index == '...':  # TODO add others
-                        pass
+                    elif index == 'time_text':
+                        collapse_leading_zeroes = formatting_info.get(
+                            'collapse_leading_zeroes')
+                        value = seconds_to_time(time_to_seconds(
+                            value), formatting, collapse_leading_zeroes)
+                    else:
+                        pass   # TODO add others
 
                 # Apply separator
                 separator = formatting_info.get('separator')
@@ -106,8 +126,13 @@ class ItemFormatter:
         """
         default_format_object = self.format_file.get('default')
         if format_object is None:
-            format_object = self.format_file.get(
-                format_name, default_format_object)
+            format_object = self.format_file.get(format_name)
+            if not format_object:
+                if format_name != 'default':
+                    raise FormatNotFound(
+                        'Format not found: "{}"'.format(format_name))
+                else:
+                    format_object = default_format_object  # Set to default
 
         if isinstance(format_object, list):
             does_match = False
