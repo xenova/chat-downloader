@@ -1036,7 +1036,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             if not info:
                 break
 
-            videos = info[0]['data']['user']['videos']
+            videos = multi_get(info, 0, 'data', 'user', 'videos')
+
+            if not videos:
+                break
 
             edges = videos['edges']
             remaining_count -= len(edges)
