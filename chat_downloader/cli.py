@@ -17,7 +17,8 @@ from .metadata import (
 
 from .utils.core import (
     get_default_args,
-    int_or_none
+    int_or_none,
+    splitter
 )
 
 
@@ -79,9 +80,6 @@ def main():
 
     add_chat_param(time_group, '--start_time', '-s')
     add_chat_param(time_group, '--end_time', '-e')
-
-    def splitter(s):
-        return [item.strip() for item in re.split(r'[\s,;]+', s)]
 
     # Specify message types/groups
     type_group = parser.add_argument_group('Message Type Arguments')
