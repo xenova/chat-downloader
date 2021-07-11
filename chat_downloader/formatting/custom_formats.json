@@ -37,6 +37,15 @@
             }
         }
     },
+    "12_hour": {
+        "inherit": "default",
+        "keys": {
+            "timestamp": {
+                "template": "{} | ",
+                "format": "%I:%M %p"
+            }
+        }
+    },
     "twitch": [
         {
             "matching": [
