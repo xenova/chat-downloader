@@ -100,3 +100,17 @@ class NoContinuation(ChatDownloaderError):
 class CookieError(ChatDownloaderError):
     """Raised when an error occurs while loading a cookie file."""
     pass
+
+
+class FormatError(ChatDownloaderError):
+    """Raised when a formatting error occurs"""
+    pass
+
+
+class FormatNotFound(FormatError):
+    """Raised when a specified format can not be found"""
+    pass
+
+class FormatFileNotFound(FormatError):
+    """Raised when the format file can not be found"""
+    pass
