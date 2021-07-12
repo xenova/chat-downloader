@@ -15,20 +15,6 @@
             "message": ": {}"
         }
     },
-    "youtube":[
-        {
-            "matching":[
-                "viewer_engagement_message",
-                "deleted_message",
-                "ban_user"
-            ],
-            "template":"{time_text|timestamp}{message}",
-            "inherit": "default",
-            "keys": {
-                "message": "{}"
-            }
-        }
-    ],
     "24_hour": {
         "inherit": "default",
         "keys": {
@@ -46,6 +32,30 @@
             }
         }
     },
+    "padded_time": {
+        "inherit": "default",
+        "keys": {
+            "time_text": {
+                "template": "{} | ",
+                "format": "{:02}:{:02}:{:02}",
+                "collapse_leading_zeroes": true
+            }
+        }
+    },
+    "youtube":[
+        {
+            "matching":[
+                "viewer_engagement_message",
+                "deleted_message",
+                "ban_user"
+            ],
+            "template":"{time_text|timestamp}{message}",
+            "inherit": "default",
+            "keys": {
+                "message": "{}"
+            }
+        }
+    ],
     "twitch": [
         {
             "matching": [
@@ -76,8 +86,6 @@
                 "message": "{}"
             }
         },
-
-
         {
             "matching": [
                 "room_state"
