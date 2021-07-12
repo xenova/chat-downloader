@@ -45,8 +45,6 @@ class ItemFormatter:
             with open(path) as custom_formats:
                 self.format_file.update(json.load(custom_formats))
 
-        print(self.format_file)
-
     def _replace(self, match, item, format_object):
         """Replace a match object with
 
@@ -142,10 +140,8 @@ class ItemFormatter:
                 message_type = item.get('message_type')
                 if isinstance(matching, list):
                     does_match = message_type in matching
-                elif matching == 'all':
-                    does_match = True
                 else:
-                    does_match = message_type == matching
+                    does_match = matching == 'all' or message_type == matching
 
                 if does_match:
                     format_object = fmt
