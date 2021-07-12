@@ -67,7 +67,7 @@ docs: ## generate Sphinx HTML documentation and README
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/index.html
-	cd docs && python generate_readme.py > ../README.rst
+	cd docs && python scripts/generate_readme.py > ../README.rst
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
