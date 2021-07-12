@@ -39,20 +39,10 @@ from requests.exceptions import (
 from .errors import (
     URLNotProvided,
     SiteNotSupported,
-    LoginRequired,
-    VideoUnavailable,
-    NoChatReplay,
-    VideoUnplayable,
-    InvalidParameter,
     InvalidURL,
-    RetriesExceeded,
-    NoContinuation,
-    UserNotFound,
+    ChatDownloaderError,
     ChatGeneratorError,
     ParsingError,
-    SiteError,
-    NoVideos,
-    FormatError
 )
 
 
@@ -398,27 +388,13 @@ def run(propagate_interrupt=False, **kwargs):
             '' if chat.is_live else ' replay'))
 
     except (
-        URLNotProvided,
-        SiteNotSupported,
-        LoginRequired,
-        VideoUnavailable,
-        NoChatReplay,
-        VideoUnplayable,
-        InvalidParameter,
-        InvalidURL,
-        RetriesExceeded,
-        NoContinuation,
-        UserNotFound,
-        SiteError,
-        NoVideos,
-        FormatError
-    ) as e:  # Expected errors
-        log('error', e)
-    except (
         ChatGeneratorError,
         ParsingError
     ) as e:  # Errors which may be bugs
         log('error', '{}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'.format(e))
+
+    except ChatDownloaderError as e:  # Expected errors
+        log('error', e)
 
     except ConnectionError as e:
         log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
