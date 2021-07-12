@@ -132,6 +132,7 @@ def main():
     add_chat_param(output_group, '--output', '-o')
     add_chat_param(output_group, '--overwrite', is_boolean_flag=True)
     add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
+    add_chat_param(output_group, '--json_lines', is_boolean_flag=True)
     add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')

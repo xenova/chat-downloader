@@ -2,6 +2,7 @@
 import sys
 import itertools
 import time
+import json
 
 from urllib.parse import urlparse
 
@@ -103,6 +104,7 @@ class ChatDownloader():
                  overwrite=True,
                  sort_keys=True,
                  indent=4,
+                 json_lines=False,
 
                  # Formatting
                  format=SiteDefault('format'),
@@ -177,6 +179,9 @@ class ChatDownloader():
             nonnumerical input is provided, this will be used to indent
             the objects. Defaults to 4
         :type indent: Union[int, str], optional
+        :param json_lines: Output each chat item on a separate line, in JSON
+            format. This has no effect for .csv or .json files. Defaults to False
+        :type json_lines: bool, optional
         :param format: Specify how messages should be formatted for printing,
             defaults to the site's default value
         :type format: SiteDefault, optional
@@ -295,8 +300,19 @@ class ChatDownloader():
                     output_file = ContinuousWriter(
                         params['output'], indent=params['indent'], sort_keys=params['sort_keys'], overwrite=params['overwrite'])
 
-                    chat.callback = lambda item: output_file.write(
-                        chat.format(item) if output_file.is_default() else item, flush=True)
+                    def _write_function(item):
+
+                        if output_file.is_default():  # not JSON or CSV
+                            if params['json_lines']:  # print json lines of item
+                                item = json.dumps(
+                                    item, sort_keys=params['sort_keys'])
+                            else:
+                                # print formatted item
+                                item = chat.format(item)
+
+                        output_file.write(item, flush=True)
+
+                    chat.callback = _write_function
 
                 chat.site = site_object
 
