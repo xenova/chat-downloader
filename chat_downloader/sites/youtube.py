@@ -1378,6 +1378,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     if not info:
                         log('debug', 'No continuation information found: {}'.format(
                             yt_info))
+
+                        # Check for errors:
+                        error = yt_info.get('error')
+                        if error:
+                            error_code = error.get('code')
+                            error_message = error.get('message')
+
+                            if error_code // 100 == 5:  # Server error, retry
+                                self.retry(
+                                    attempt_number, max_attempts, retry_timeout=retry_timeout, text=error_message)
+                                continue
+
                         return
 
                     break  # successful retrieve
