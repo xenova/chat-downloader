@@ -54,7 +54,7 @@ def seconds_to_time(seconds, format='{}:{:02}:{:02}', remove_leading_zeroes=True
     h, remainder = divmod(abs(int(seconds)), 3600)
     m, s = divmod(remainder, 60)
     time_string = format.format(h, m, s)
-    return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', time_string) if remove_leading_zeroes else time_string
+    return ('-' if seconds < 0 else '') + (re.sub(r'^0:0?', '', time_string) if remove_leading_zeroes else time_string)
 
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
