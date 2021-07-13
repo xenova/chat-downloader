@@ -262,7 +262,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         # style_infos
         donation_comment_text = item.pop('donation_comment_text', None)
         if donation_comment_text:
-            entity = multi_get(donation_comment_text, 'ranges', 0, 'entity') or {}
+            entity = multi_get(donation_comment_text,
+                               'ranges', 0, 'entity') or {}
 
             for key in entity:
                 r.remap(
@@ -717,6 +718,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 }
 
                 yield temp
+
     def _get_chat_by_video_id(self, match, params):
         return self.get_chat_by_video_id(match.group('id'), params)
 

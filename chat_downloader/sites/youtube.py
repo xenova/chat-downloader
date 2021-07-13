@@ -21,7 +21,6 @@ from ..errors import (
 from ..utils.timed_utils import interruptible_sleep
 
 from ..utils.core import (
-    try_get,
     multi_get,
     time_to_seconds,
     seconds_to_time,
@@ -48,7 +47,6 @@ import hashlib
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 from urllib import parse
-from datetime import datetime
 
 
 class YouTubeChatDownloader(BaseChatDownloader):
@@ -434,8 +432,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return default_text
 
     @ staticmethod
+    def _parse_header_text(info):
+        return YouTubeChatDownloader._parse_runs(info)['message'] or YouTubeChatDownloader._get_simple_text(info)
+
+    @ staticmethod
     def _parse_runs(run_info, parse_links=True):
         """ Reads and parses YouTube formatted messages (i.e. runs). """
+
+        # TODO separate _parse_runs logic?
+
         message_info = {
             'message': ''
         }
@@ -545,6 +550,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
             # has no current video time information
             # (usually live video or a sub-item)
 
+        if 'message' not in info:  # Ensure the parsed item contains the 'message' key
+            info['message'] = None
+
         return info
 
     @ staticmethod
@@ -599,11 +607,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # https://yt3.ggpht.com/ytc/AAUvwnhBYeK7_iQTJbXe6kIMpMlCI2VsVHhb6GBJuYeZ
 
         thumbnails = item.get('thumbnails') or []
-        final = list(map(lambda x: Image(
-            x.get('url'),
-            x.get('width'),
-            x.get('height'),
-        ).json(), thumbnails))
+        final = list(map(lambda x: Image(**x).json(), thumbnails))
 
         if len(final) > 0:
             final.insert(0, Image(
@@ -700,7 +704,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'customThumbnail': r('badge_icons', _parse_thumbnails),
 
         # membership_item
-        'headerSubtext': r(None, _parse_runs, True),
+        'headerPrimaryText': r('header_primary_text', _parse_header_text),
+        'headerSubtext': r('header_secondary_text', _parse_header_text),
         'sponsorPhoto': r('sponsor_icons', _parse_thumbnails),
 
         # ticker_paid_sticker_item
@@ -759,6 +764,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _KEYS_TO_IGNORE = [
         # to actually ignore
         'contextMenuAccessibility', 'contextMenuEndpoint', 'trackingParams', 'accessibility',
+
+        'empty',  # signals liveChatMembershipItemRenderer has no message body
 
         'contextMenuButton',
 
@@ -1266,7 +1273,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         continuation_items = list(initial_continuation_info.items())
         if len(continuation_items) < 2:
             raise NoContinuation(
-                'Initial continuation information could not be found.'.format(initial_continuation_info))
+                'Initial continuation information could not be found: {}'.format(initial_continuation_info))
 
         continuation_index = 0 if chat_type == 'Top' else 1
         continuation = continuation_items[continuation_index][1]
@@ -1371,6 +1378,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     if not info:
                         log('debug', 'No continuation information found: {}'.format(
                             yt_info))
+
+                        # Check for errors:
+                        error = yt_info.get('error')
+                        if error:
+                            error_code = error.get('code')
+                            error_message = error.get('message')
+
+                            if error_code // 100 == 5:  # Server error, retry
+                                self.retry(
+                                    attempt_number, max_attempts, retry_timeout=retry_timeout, text=error_message)
+                                continue
+
                         return
 
                     break  # successful retrieve
@@ -1707,8 +1726,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         list_of_vids_to_ignore = params.get('ignore') or []
 
         sleep_amount = 30  # params.get('retry_timeout')
-        max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         while True:
             for video_type in ('live', 'upcoming'):

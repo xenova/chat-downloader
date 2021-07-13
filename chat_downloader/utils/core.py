@@ -5,8 +5,11 @@ import sys
 import locale
 import collections.abc
 import io
-import time
 import json
+
+
+def splitter(s):
+    return [item.strip() for item in re.split(r'[\s,;]+', s)]
 
 
 def timestamp_to_microseconds(timestamp):
@@ -36,19 +39,22 @@ def time_to_seconds(time):
     return int(sum(abs(int(x)) * 60 ** i for i, x in enumerate(reversed(time.replace(',', '').split(':')))) * (-1 if time[0] == '-' else 1))
 
 
-def seconds_to_time(seconds):
-    """Convert seconds to timestamp. Note that leading zeroes are omitted
-        when seconds > 60
+def seconds_to_time(seconds, format='{}:{:02}:{:02}', remove_leading_zeroes=True):
+    """Convert seconds to timestamp.
 
     :param seconds: Number of seconds
     :type seconds: int
+    :param format: The format string with elements representing hours, minutes and seconds. Defaults to '{}:{:02}:{:02}'
+    :type format: str, optional
+    :param remove_leading_zeroes: Whether to remove leading zeroes when seconds > 60, defaults to True
+    :type remove_leading_zeroes: bool, optional
     :return: The corresponding timestamp string
     :rtype: str
     """
-    h, remainder = divmod(abs(seconds), 3600)
+    h, remainder = divmod(abs(int(seconds)), 3600)
     m, s = divmod(remainder, 60)
-    time_string = '{}:{:02}:{:02}'.format(int(h), int(m), int(s))
-    return ('-' if s < 0 else '') + re.sub(r'^0:0?', '', str(time_string))
+    time_string = format.format(h, m, s)
+    return ('-' if seconds < 0 else '') + re.sub(r'^0:0?', '', time_string) if remove_leading_zeroes else time_string
 
 
 def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
@@ -76,7 +82,7 @@ def ensure_seconds(time, default=None):
     :return: The corresponding number of seconds
     :rtype: float
     """
-    if time is None:  # if time is none, return default
+    if time is None:
         return default
 
     try:
@@ -368,7 +374,11 @@ def safe_print(*objects, sep=' ', end='\n', out=None, encoding=None, flush=False
 def nested_update(d, u):
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):
-            d[k] = nested_update(d.get(k, {}), v)
+            a = d.get(k, {})
+            if isinstance(a, dict):
+                d[k] = nested_update(a, v)
+            else:
+                d[k] = v
         else:
             d[k] = v
     return d

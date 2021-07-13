@@ -17,7 +17,8 @@ from .metadata import (
 
 from .utils.core import (
     get_default_args,
-    int_or_none
+    int_or_none,
+    splitter
 )
 
 
@@ -80,9 +81,6 @@ def main():
     add_chat_param(time_group, '--start_time', '-s')
     add_chat_param(time_group, '--end_time', '-e')
 
-    def splitter(s):
-        return [item.strip() for item in re.split(r'[\s,;]+', s)]
-
     # Specify message types/groups
     type_group = parser.add_argument_group('Message Type Arguments')
     type_options = type_group.add_mutually_exclusive_group()
@@ -134,6 +132,7 @@ def main():
     add_chat_param(output_group, '--output', '-o')
     add_chat_param(output_group, '--overwrite', is_boolean_flag=True)
     add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
+    add_chat_param(output_group, '--json_lines', is_boolean_flag=True)
     add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')

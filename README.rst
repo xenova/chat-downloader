@@ -77,8 +77,8 @@ Command line
                            [--ignore IGNORE]
                            [--message_receive_timeout MESSAGE_RECEIVE_TIMEOUT]
                            [--buffer_size BUFFER_SIZE] [--output OUTPUT]
-                           [--overwrite] [--sort_keys] [--indent INDENT]
-                           [--pause_on_debug | --exit_on_debug]
+                           [--overwrite] [--sort_keys] [--json_lines]
+                           [--indent INDENT] [--pause_on_debug | --exit_on_debug]
                            [--logging {none,debug,info,warning,error,critical} | --testing | --verbose | --quiet]
                            [--cookies COOKIES] [--proxy PROXY]
                            url

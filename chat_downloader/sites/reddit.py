@@ -11,7 +11,7 @@ from ..utils.core import (
     attempts
 )
 
-from ..errors import(
+from ..errors import (
     SiteError,
     VideoNotFound,
     UnexpectedError,
@@ -23,7 +23,6 @@ from json.decoder import JSONDecodeError
 
 import json
 import websocket
-import socket
 import time
 
 
@@ -155,7 +154,8 @@ class RedditChatDownloader(BaseChatDownloader):
             if is_live and socket_url:
 
                 # Create chat object
-                chat_item = Chat(title=title, is_live=is_live)
+                chat_item = Chat(title=title, is_live=is_live,
+                                 start_time=start_time)
                 chat_item.chat = self._get_chat_messages_by_socket(
                     socket_url, params)
 
@@ -218,10 +218,10 @@ class RedditChatDownloader(BaseChatDownloader):
                         self._debug_log(
                             params, 'Unknown message type: {}'.format(message_type), data)
 
-                except websocket.WebSocketTimeoutException as e:
+                except websocket.WebSocketTimeoutException:
                     pass
 
-                except (ConnectionError, websocket.WebSocketException) as e:
+                except (ConnectionError, websocket.WebSocketException):
                     # Close old connection
                     ws.close()
 
@@ -251,7 +251,7 @@ class RedditChatDownloader(BaseChatDownloader):
 
                 message = 'Response from Reddit: "{}"'.format(data)
 
-            except (JSONDecodeError, RequestException) as e:
+            except (JSONDecodeError, RequestException):
                 pass
 
             self.retry(attempt_number, max_attempts, text=message)

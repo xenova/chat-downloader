@@ -1,8 +1,8 @@
 """Main module."""
 import sys
-import re
 import itertools
 import time
+import json
 
 from urllib.parse import urlparse
 
@@ -40,19 +40,10 @@ from requests.exceptions import (
 from .errors import (
     URLNotProvided,
     SiteNotSupported,
-    LoginRequired,
-    VideoUnavailable,
-    NoChatReplay,
-    VideoUnplayable,
-    InvalidParameter,
     InvalidURL,
-    RetriesExceeded,
-    NoContinuation,
-    UserNotFound,
+    ChatDownloaderError,
     ChatGeneratorError,
     ParsingError,
-    SiteError,
-    NoVideos
 )
 
 
@@ -113,6 +104,7 @@ class ChatDownloader():
                  overwrite=True,
                  sort_keys=True,
                  indent=4,
+                 json_lines=False,
 
                  # Formatting
                  format=SiteDefault('format'),
@@ -187,6 +179,9 @@ class ChatDownloader():
             nonnumerical input is provided, this will be used to indent
             the objects. Defaults to 4
         :type indent: Union[int, str], optional
+        :param json_lines: Output each chat item on a separate line, in JSON
+            format. This has no effect for .csv or .json files. Defaults to False
+        :type json_lines: bool, optional
         :param format: Specify how messages should be formatted for printing,
             defaults to the site's default value
         :type format: SiteDefault, optional
@@ -270,16 +265,19 @@ class ChatDownloader():
                         'No valid generator found in {} for url "{}"'.format(
                             site.__name__, url))
 
-                if isinstance(max_messages, int):
-                    chat.chat = itertools.islice(chat.chat, max_messages)
+                if isinstance(params['max_messages'], int):
+                    chat.chat = itertools.islice(
+                        chat.chat, params['max_messages'])
+                else:
+                    pass  # TODO throw error
 
-                if timeout is not None or inactivity_timeout is not None:
+                if params['timeout'] is not None or params['inactivity_timeout'] is not None:
                     # Generator requires timing functionality
 
                     chat.chat = TimedGenerator(
-                        chat.chat, timeout, inactivity_timeout)
+                        chat.chat, params['timeout'], params['inactivity_timeout'])
 
-                    if isinstance(timeout, (float, int)):
+                    if isinstance(params['timeout'], (float, int)):
                         start = time.time()
 
                         def log_on_timeout():
@@ -287,22 +285,34 @@ class ChatDownloader():
                                 time.time() - start))
                         setattr(chat.chat, 'on_timeout', log_on_timeout)
 
-                    if isinstance(inactivity_timeout, (float, int)):
+                    if isinstance(params['inactivity_timeout'], (float, int)):
                         def log_on_inactivity_timeout():
                             log('debug', 'Inactivity timeout occurred after {} seconds.'.format(
-                                inactivity_timeout))
+                                params['inactivity_timeout']))
                         setattr(chat.chat, 'on_inactivity_timeout',
                                 log_on_inactivity_timeout)
 
-                formatter = ItemFormatter(format_file)
-                chat.format = lambda x: formatter.format(x, format_name=format)
+                formatter = ItemFormatter(params['format_file'])
+                chat.format = lambda x: formatter.format(
+                    x, format_name=params['format'])
 
-                if output:
+                if params['output']:
                     output_file = ContinuousWriter(
-                        output, indent=indent, sort_keys=sort_keys, overwrite=overwrite)
+                        params['output'], indent=params['indent'], sort_keys=params['sort_keys'], overwrite=params['overwrite'])
 
-                    chat.callback = lambda item: output_file.write(
-                        chat.format(item) if output_file.is_default() else item, flush=True)
+                    def _write_function(item):
+
+                        if output_file.is_default():  # not JSON or CSV
+                            if params['json_lines']:  # print json lines of item
+                                item = json.dumps(
+                                    item, sort_keys=params['sort_keys'])
+                            else:
+                                # print formatted item
+                                item = chat.format(item)
+
+                        output_file.write(item, flush=True)
+
+                    chat.callback = _write_function
 
                 chat.site = site_object
 
@@ -394,27 +404,13 @@ def run(propagate_interrupt=False, **kwargs):
             '' if chat.is_live else ' replay'))
 
     except (
-        URLNotProvided,
-        SiteNotSupported,
-        LoginRequired,
-        VideoUnavailable,
-        NoChatReplay,
-        VideoUnplayable,
-        InvalidParameter,
-        InvalidURL,
-        RetriesExceeded,
-        NoContinuation,
-        UserNotFound,
-        SiteError,
-        NoVideos
-    ) as e:  # Expected errors
-        log('error', e)
-    except (
         ChatGeneratorError,
         ParsingError
     ) as e:  # Errors which may be bugs
-        log('error', '{}. {}'.format(
-            e, 'Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'))
+        log('error', '{}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'.format(e))
+
+    except ChatDownloaderError as e:  # Expected errors
+        log('error', e)
 
     except ConnectionError as e:
         log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))

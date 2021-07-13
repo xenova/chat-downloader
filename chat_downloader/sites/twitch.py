@@ -527,6 +527,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'reply-parent-display-name': 'in_reply_to_author_display_name',
         'reply-parent-user-login': 'in_reply_to_author_name',
 
+        'crowd-chant-parent-msg-id': 'crowd_chant_in_reply_to_message_id',
 
         'custom-reward-id': 'custom_reward_id',
 
@@ -1036,7 +1037,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             if not info:
                 break
 
-            videos = info[0]['data']['user']['videos']
+            videos = multi_get(info, 0, 'data', 'user', 'videos')
+
+            if not videos:
+                break
 
             edges = videos['edges']
             remaining_count -= len(edges)
