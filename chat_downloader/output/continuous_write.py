@@ -3,7 +3,7 @@ import json
 import csv
 import shutil
 
-from ..utils import flatten_json
+from ..utils.core import flatten_json
 
 
 class CW:

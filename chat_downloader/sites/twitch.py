@@ -6,13 +6,13 @@ from .common import (
 )
 
 from ..errors import (
-    TwitchError,
+    SiteError,
     NoChatReplay,
     VideoUnavailable,
     UserNotFound
 )
 
-from ..utils import (
+from ..utils.core import (
     ensure_seconds,
     timestamp_to_microseconds,
     seconds_to_time,
@@ -34,6 +34,11 @@ import base64
 
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
+
+
+class TwitchError(SiteError):
+    """Raised when an error occurs with a Twitch video."""
+    pass
 
 
 # TODO export as another module?
@@ -522,12 +527,14 @@ class TwitchChatDownloader(BaseChatDownloader):
         'reply-parent-display-name': 'in_reply_to_author_display_name',
         'reply-parent-user-login': 'in_reply_to_author_name',
 
+        'crowd-chant-parent-msg-id': 'crowd_chant_in_reply_to_message_id',
 
         'custom-reward-id': 'custom_reward_id',
 
 
         'emotes': r('emotes', _parse_emotes),
         'flags': 'flags',
+        'first-msg': r('is_first_message', _parse_bool),
 
 
 
@@ -1030,7 +1037,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             if not info:
                 break
 
-            videos = info[0]['data']['user']['videos']
+            videos = multi_get(info, 0, 'data', 'user', 'videos')
+
+            if not videos:
+                break
 
             edges = videos['edges']
             remaining_count -= len(edges)

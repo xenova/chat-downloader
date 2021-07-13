@@ -26,9 +26,16 @@ class VideoNotFound(ChatDownloaderError):
     """Raised when video cannot be found."""
     pass
 
+
 class UserNotFound(ChatDownloaderError):
     """Raised when user cannot be found."""
     pass
+
+
+class NoVideos(ChatDownloaderError):
+    """Raised when a channel does not have any videos."""
+    pass
+
 
 class ParsingError(ChatDownloaderError):
     """Raised when video data cannot be parsed."""
@@ -55,6 +62,11 @@ class NoChatReplay(ChatDownloaderError):
     pass
 
 
+class ChatDisabled(ChatDownloaderError):
+    """Raised when the chat is disabled."""
+    pass
+
+
 class URLNotProvided(ChatDownloaderError):
     """Raised when no url is provided."""
     pass
@@ -70,22 +82,15 @@ class ChatGeneratorError(ChatDownloaderError):
     pass
 
 
-class SiteNotSupported(ChatDownloaderError):
-    """Raised when the url is valid, but the site is not supported."""
-    pass
-
-
 class SiteError(ChatDownloaderError):
     """Raised when an error occurs with a specific site."""
     pass
 
-class TwitchError(SiteError):
-    """Raised when an error occurs with a Twitch video."""
+
+class SiteNotSupported(SiteError):
+    """Raised when the url is valid, but the site is not supported."""
     pass
 
-class YouNowError(SiteError):
-    """Raised when an error occurs with a YouNow livestream."""
-    pass
 
 class NoContinuation(ChatDownloaderError):
     """Raised when no continuation can be found."""
@@ -94,4 +99,19 @@ class NoContinuation(ChatDownloaderError):
 
 class CookieError(ChatDownloaderError):
     """Raised when an error occurs while loading a cookie file."""
+    pass
+
+
+class FormatError(ChatDownloaderError):
+    """Raised when a formatting error occurs"""
+    pass
+
+
+class FormatNotFound(FormatError):
+    """Raised when a specified format can not be found"""
+    pass
+
+
+class FormatFileNotFound(FormatError):
+    """Raised when the format file can not be found"""
     pass

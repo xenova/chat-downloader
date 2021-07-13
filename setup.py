@@ -22,7 +22,8 @@ requirements = [
     'regex',
     'argparse',
     'docstring-parser',
-    'colorlog'
+    'colorlog',
+    'websocket-client'
 ]
 
 setup(
@@ -58,13 +59,14 @@ setup(
             'wheel',
             'tox',
             'pytest',
+            'pytest-xdist',
             'sphinx',
             'sphinx-rtd-theme',
             'sphinxcontrib-programoutput'
         ]
     },
     license='MIT license',
-    long_description=readme, # + '\n\n' + history,
+    long_description=readme,  # + '\n\n' + history,
     long_description_content_type='text/x-rst',
     include_package_data=True,
     keywords='python chat downloader youtube twitch',

@@ -15,6 +15,33 @@
             "message": ": {}"
         }
     },
+    "24_hour": {
+        "inherit": "default",
+        "keys": {
+            "timestamp": {
+                "format": "%H:%M"
+            }
+        }
+    },
+    "12_hour": {
+        "inherit": "default",
+        "keys": {
+            "timestamp": {
+                "template": "{} | ",
+                "format": "%I:%M %p"
+            }
+        }
+    },
+    "padded_time": {
+        "inherit": "default",
+        "keys": {
+            "time_text": {
+                "template": "{} | ",
+                "format": "{:02}:{:02}:{:02}",
+                "collapse_leading_zeroes": true
+            }
+        }
+    },
     "youtube":[
         {
             "matching":[
@@ -29,14 +56,6 @@
             }
         }
     ],
-    "24_hour": {
-        "inherit": "default",
-        "keys": {
-            "timestamp": {
-                "format": "%H:%M"
-            }
-        }
-    },
     "twitch": [
         {
             "matching": [
@@ -67,8 +86,6 @@
                 "message": "{}"
             }
         },
-
-
         {
             "matching": [
                 "room_state"
