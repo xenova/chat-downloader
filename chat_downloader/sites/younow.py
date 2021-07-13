@@ -5,20 +5,26 @@ from .common import (
     Remapper as r
 )
 
-from ..utils import (
+from ..utils.core import (
     multi_get,
     int_or_none,
     attempts,
-    interruptible_sleep
 )
 
+from ..utils.timed_utils import interruptible_sleep
+
 from ..errors import (
-    YouNowError
+    SiteError
 )
 
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 import hashlib
+
+
+class YouNowError(SiteError):
+    """Raised when an error occurs with a YouNow livestream."""
+    pass
 
 
 class YouNowChatDownloader(BaseChatDownloader):
