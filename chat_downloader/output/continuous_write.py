@@ -177,6 +177,21 @@ class CSVCW(CW):
             self.flush()
 
 
+class JSONLCW(CW):
+    """
+    Class used to control the continuous writing of a JSON lines.
+    """
+
+    def __init__(self, file_name, overwrite=True, sort_keys=True):
+        super().__init__(file_name, overwrite)
+        self.file = open(self.file_name, 'a', encoding='utf-8')
+        self.sort_keys = sort_keys
+
+    def write(self, item, flush=False):
+        print(json.dumps(item, sort_keys=self.sort_keys),
+              file=self.file, flush=flush)
+
+
 class TXTCW(CW):
     """
     Class used to control the continuous writing of a text to a TXT file.
@@ -195,6 +210,7 @@ class ContinuousWriter:
     _SUPPORTED_WRITERS = {
         'json': JSONCW,
         'csv': CSVCW,
+        'jsonl': JSONLCW,
         'txt': TXTCW
     }
 
