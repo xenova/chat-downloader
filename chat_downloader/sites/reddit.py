@@ -39,7 +39,7 @@ class RedditError(SiteError):
 
 class RedditChatDownloader(BaseChatDownloader):
 
-    _REDDIT_HOMEPAGE = 'https://www.reddit.com/'
+    _REDDIT_HOMEPAGE = 'https://www.reddit.com'
     _INITIAL_INFO_REGEX = r'(?:window\.___r)\s*=\s*({.+?})\s*;<\/script>'
 
     def __init__(self, **kwargs):
@@ -97,6 +97,9 @@ class RedditChatDownloader(BaseChatDownloader):
         'link_id': 'message_id',
         'name': 'message_name',
 
+        'score': 'score',
+        'context': r('url', lambda x: RedditChatDownloader._REDDIT_HOMEPAGE+x)
+
         # Unused
         # 'comment_type':'comment_type',
         # 'attribs':[],
@@ -107,7 +110,6 @@ class RedditChatDownloader(BaseChatDownloader):
         # 'subreddit_name_prefixed':'r/RedditSessions',
         # 'full_date':'2021-07-02T16:12:00+00:00',
         # 'collapsed_in_crowd_control':false,
-        # 'score':1,
         # 'flair_css_class':'flair-None',
         # 'author_is_default_icon':true,
         # 'author_flair_richtext':[],
@@ -120,9 +122,11 @@ class RedditChatDownloader(BaseChatDownloader):
         # '_id36':'h3tiznf',
         # 'author_flair_text':'None',
         # 'author_flair_background_color':'None',
-        # 'context':'/r/RedditSessions/comments/occfxu/i_exist_therefore_i_jam_clarinetpiano_2h_avg/h3tiznf/',
         # 'distinguished':'None'
     }
+
+    _KNOWN_MESSAGE_TYPES = ['new_comment', 'delete_comment',
+                            'remove_comment', 'update_comment_score']
 
     @staticmethod
     def _parse_item(item):
@@ -254,7 +258,7 @@ class RedditChatDownloader(BaseChatDownloader):
 
                     message_type = data.get('type')
 
-                    if message_type in ('new_comment', 'delete_comment', 'remove_comment'):
+                    if message_type in self._KNOWN_MESSAGE_TYPES:
                         payload = data.get('payload')
 
                         parsed = self._parse_item(payload)
