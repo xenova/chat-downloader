@@ -8,7 +8,9 @@ from .common import (
 from ..utils.core import (
     multi_get,
     int_or_none,
-    attempts
+    attempts,
+    try_parse_json,
+    get_title_of_webpage
 )
 
 from ..errors import (
@@ -18,12 +20,16 @@ from ..errors import (
     ChatDisabled
 )
 
+from ..debugging import log
+
+
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 
 import json
 import websocket
 import time
+import re
 
 
 class RedditError(SiteError):
@@ -33,8 +39,31 @@ class RedditError(SiteError):
 
 class RedditChatDownloader(BaseChatDownloader):
 
+    _REDDIT_HOMEPAGE = 'https://www.reddit.com/'
+    _INITIAL_INFO_REGEX = r'(?:window\.___r)\s*=\s*({.+?})\s*;<\/script>'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        max_attempts = 10
+
+        for attempt_number in attempts(max_attempts):
+            initial_data = self._session_get(self._REDDIT_HOMEPAGE).text
+            info = re.search(self._INITIAL_INFO_REGEX, initial_data)
+
+            if info:
+                info = try_parse_json(info.group(1))
+                break
+            else:
+                title = get_title_of_webpage(initial_data)
+                self.retry(attempt_number, max_attempts, text=title)
+                continue
+
+        bearer = multi_get(info, 'user', 'session', 'accessToken')
+        if bearer:
+            self.update_session_headers({
+                'authorization': 'Bearer {}'.format(bearer)
+            })
 
     _NAME = 'reddit.com'
 
@@ -123,35 +152,54 @@ class RedditChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
+    _FALLBACK_API_TEMPLATE = 'https://gateway.reddit.com/desktopapi/v1/postcomments/t3_{}?limit=1'
 
     def get_chat_by_stream_id(self, stream_id, params, attempt_number=0):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
-        initial_info = self._try_get_info(
-            self._API_TEMPLATE.format(stream_id), params)
-        status = initial_info.get('status')
-        status_message = initial_info.get('status_message')
-        data = initial_info.get('data')
+        fallback = attempt_number % 2 == 1
+
+        if not fallback:
+            initial_info = self._try_get_info(
+                self._API_TEMPLATE.format(stream_id), params)
+
+            status = initial_info.get('status')
+            status_message = initial_info.get('status_message')
+            data = initial_info.get('data')
+
+        else:  # fallback
+            log('debug', 'Using fallback API')
+
+            initial_info = self._try_get_info(
+                self._FALLBACK_API_TEMPLATE.format(stream_id), params)
+
+            data = multi_get(initial_info, 'posts', 't3_{}'.format(stream_id))
+            status = 'success' if data else None
 
         if status == 'success':
             chat_disabled = data.get('chat_disabled')
             if chat_disabled:
                 raise ChatDisabled('Chat is disabled for this stream.')
 
-            post_info = data.get('post')
-            stream_info = data.get('stream')
+            post_info = data.get('post') or data
+            stream_info = data.get('stream') or data
 
             title = post_info.get('title')
 
             state = stream_info.get('state')
-            is_live = state == 'IS_LIVE'  # 'ENDED'
-            start_time = stream_info.get('publish_at') * 1000
+            is_live = (state == 'IS_LIVE' or fallback)  # 'ENDED'
+            start_time = (stream_info.get('publish_at')
+                          or stream_info.get('created')) * 1000
 
             socket_url = post_info.get('liveCommentsWebsocket')
 
             if is_live and socket_url:
+
+                if not socket_url.startswith('wss://'):
+                    raise RedditError(
+                        'Invalid websocket URL: {}'.format(socket_url))
 
                 # Create chat object
                 chat_item = Chat(title=title, is_live=is_live,
@@ -240,6 +288,7 @@ class RedditChatDownloader(BaseChatDownloader):
 
         for attempt_number in attempts(max_attempts):
             message = None
+            error = None
 
             try:
                 info = self._session_get_json(self._BROADCAST_API_URL)
@@ -251,10 +300,10 @@ class RedditChatDownloader(BaseChatDownloader):
 
                 message = 'Response from Reddit: "{}"'.format(data)
 
-            except (JSONDecodeError, RequestException):
-                pass
+            except (JSONDecodeError, RequestException) as e:
+                error = e
 
-            self.retry(attempt_number, max_attempts, text=message)
+            self.retry(attempt_number, max_attempts, error, text=message)
 
         for stream in data:
             yield multi_get(stream, 'post', 'url')
