@@ -79,7 +79,64 @@ class RedditChatDownloader(BaseChatDownloader):
         'format': 'default',  # TODO create reddit format
     }
 
-    _TESTS = []
+    _TESTS = [
+        # Different URLS
+        {
+            'name': 'Get chat messages from past broadcast #1',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/pan/f6zbwb',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+
+
+        {
+            'name': 'Get chat messages from past broadcast #2',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/f6vx11',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Get chat messages from past broadcast #3',
+            'params': {
+                'url': 'https://www.reddit.com/r/pan/comments/fkzhjg',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Get chat messages from past broadcast #4',
+            'params': {
+                'url': 'https://www.reddit.com/comments/fox5px',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+
+        {
+            'name': 'Chat replay with start and end times',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/pan/lmvsbl',
+                'start_time': 123,
+                'end_time': 456,
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        }
+
+    ]
 
     # Regex provided by youtube-dl
 
@@ -121,7 +178,7 @@ class RedditChatDownloader(BaseChatDownloader):
         # "associated_award":null,
         # "distinguished":null
 
-        ## Live (websockets)
+        # Live (websockets)
         'author_icon_img': 'author_profile_img',  # TODO parse into sizes
         'author_snoovatar_img': 'author_snoovatar_img',
         'author_is_default_icon': 'author_is_default_icon',
@@ -193,7 +250,7 @@ class RedditChatDownloader(BaseChatDownloader):
     _KNOWN_MESSAGE_TYPES = ['new_comment', 'delete_comment',
                             'remove_comment', 'update_comment_score']
 
-    @staticmethod
+    @ staticmethod
     def _parse_item(item, start_time=None):
 
         info = r.remap_dict(item, RedditChatDownloader._REMAPPING)
@@ -303,6 +360,7 @@ class RedditChatDownloader(BaseChatDownloader):
         def create_connection():
             for attempt_number in attempts(max_attempts):
                 try:
+                    log('debug', 'Connecting to socket: {}'.format(socket_url))
                     ws = websocket.create_connection(socket_url)
 
                     # timeout needed for polling (allow keyboard interrupts)
