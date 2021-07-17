@@ -15,6 +15,11 @@ from ..utils.core import (
     regex_search,
 )
 
+from ..errors import (
+    SiteError,
+    VideoUnavailable
+)
+
 from ..debugging import log
 
 import html
@@ -24,6 +29,11 @@ import xml.etree.ElementTree as ET
 import isodate
 from json.decoder import JSONDecodeError
 from requests.exceptions import RequestException
+
+
+class FacebookError(SiteError):
+    """Raised when an error occurs with a Facebook video."""
+    pass
 
 
 class FacebookChatDownloader(BaseChatDownloader):
@@ -49,27 +59,14 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         datr = regex_search(initial_data, self._INITIAL_DATR_REGEX)
         if not datr:
-            print('unable to get datr cookie')
-            raise Exception  # TODO
-
-        sb = self.get_cookie_value('sb')
-        fr = self.get_cookie_value('fr')
-
-        # print('sb:', sb, flush=True)
-        # print('fr:', fr, flush=True)
-        # print('datr:', datr, flush=True)
+            raise FacebookError(
+                'Unable to set datr cookie: {}'.format(initial_data))
+        self.set_cookie_value('.facebook.com', 'datr', datr)
 
         lsd = regex_search(initial_data, self._INITIAL_LSD_REGEX)
         if not lsd:
-            print('no lsd info')
-            raise Exception  # TODO
-
-        request_headers = {
-            # TODO sb and fr unnecessary?
-            # wd=1122x969;
-            'Cookie': 'sb={}; fr={}; datr={};'.format(sb, fr, datr)
-        }
-        self.update_session_headers(request_headers)
+            raise FacebookError(
+                'Unable to set lsd cookie: {}'.format(initial_data))
 
         self.data = {
             # TODO need things like jazoest? (and other stuff from hidden elements/html)
@@ -93,20 +90,21 @@ class FacebookChatDownloader(BaseChatDownloader):
     }
 
     _TESTS = [
-
+        # Unavailable (private?)
+        # https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/
     ]
 
     _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
         '/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
 
-    def _parse_fb_json(self, info):
+    @staticmethod
+    def _parse_fb_json(info):
         text_to_parse = remove_prefixes(info, 'for (;;);')
         return json.loads(text_to_parse)
 
     _VOD_COMMENTS_API = _FB_HOMEPAGE + '/videos/vodcomments/'
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
     _VIDEO_URL_FORMAT = _FB_HOMEPAGE + '/video.php?v={}'
-    # _VIDEO_TITLE_REGEX = r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']\s*/>'
 
     def _attempt_fb_retrieve(self, url, max_attempts, retry_timeout=None, fb_json=False, is_json=True, **post_kwargs):
         for attempt_number in attempts(max_attempts):
@@ -127,6 +125,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             except RequestException as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
+
+    _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
     def _get_initial_info(self, video_id, params):
         info = {}
@@ -149,13 +149,14 @@ class FacebookChatDownloader(BaseChatDownloader):
         if len(tags) >= 2:
             info['title'] = tags[0]
             info['username'] = tags[1]
+
         else:  # Fallback
             video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
             for attempt_number in attempts(max_attempts):
                 try:
                     video_html = self._session_get(video_page_url).text
                     match = regex_search(
-                        video_html, r'<meta name=".*title" content="([^"]+)"\s*/>')
+                        video_html, self._VIDEO_TITLE_REGEX)
                     if match:
                         info['title'] = html.unescape(match)
                     break
@@ -164,6 +165,9 @@ class FacebookChatDownloader(BaseChatDownloader):
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
+        if not instances:
+            log('debug', 'Data: {}'.format(json_data))
+            raise VideoUnavailable('Video unavailable (may be private)')
 
         video_data = {}
         for item in instances:
@@ -171,12 +175,11 @@ class FacebookChatDownloader(BaseChatDownloader):
                 video_item = item[2][0]
                 if video_item.get('video_id'):
                     video_data = video_item['videoData'][0]
-                    # print(video_data)
                     break
-        # print(video_data)
+
         if not video_data:
-            print('unable to get video data')
-            raise Exception
+            raise FacebookError(
+                'Unable to get video data: {}'.format(instances))
 
         dash_manifest = video_data.get('dash_manifest')
 
@@ -230,17 +233,15 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     @staticmethod
     def _parse_attachment_info(original_item):
-        item = {}
 
         if isinstance(original_item, (list, tuple)) and len(original_item) > 0:
             original_item = original_item[0]
 
         if not original_item:
-            return item
+            return {}
 
-        for key in original_item:
-            r.remap(item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING,
-                    key, original_item[key])
+        item = r.remap_dict(
+            original_item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING)
 
         # VideoTipJarPayment
         quantity = item.get('quantity')
@@ -262,9 +263,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             entity = multi_get(donation_comment_text,
                                'ranges', 0, 'entity') or {}
 
-            for key in entity:
-                r.remap(
-                    item, FacebookChatDownloader._TARGET_MEDIA_REMAPPING, key, entity[key])
+            item = r.remap_dict(
+                entity, FacebookChatDownloader._TARGET_MEDIA_REMAPPING)
             item['text'] = donation_comment_text.get('text')
 
         # DEBUGGING
@@ -274,7 +274,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             print('unknown attachment type:', original_type_name)
             print(original_item)
             print(item)
-            input()
+            raise Exception
 
         return item
 
@@ -334,14 +334,12 @@ class FacebookChatDownloader(BaseChatDownloader):
         attachment = multi_get(item, 'style_type_renderer', 'attachment')
         if not attachment:
             # TODO debug log
-            print('NO ATTACHMENT')
-            print(item)
+            # 'No attachment: {}'.format(item)
             return parsed
 
         # set texts:
-        for key in attachment:
-            r.remap(parsed, FacebookChatDownloader._ATTACHMENT_REMAPPING,
-                    key, attachment[key])
+        parsed = r.remap_dict(
+            attachment, FacebookChatDownloader._ATTACHMENT_REMAPPING)
 
         for key in ('target', 'media', 'style_infos'):
             if parsed.get(key) == {}:
@@ -352,7 +350,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             print('MISSING ATTACHMENT KEYS:', missing_keys)
             print(item)
             print(parsed)
-            input()
+            raise Exception
 
         return parsed
 
@@ -473,21 +471,18 @@ class FacebookChatDownloader(BaseChatDownloader):
     }
 
     @ staticmethod
-    def _parse_live_stream_node(node):
-        # if info is None:
-        #     info = {}
-        info = {}
+    def _parse_live_stream_node(node, params=None):
+        if params is None:
+            params = {}
 
-        for key in node:
-            r.remap(info, FacebookChatDownloader._REMAPPING, key, node[key])
+        info = r.remap_dict(node, FacebookChatDownloader._REMAPPING)
 
         author_info = info.pop('author', {})
         BaseChatDownloader._move_to_dict(
             info, 'author', create_when_empty=True)
 
-        for key in author_info:
-            r.remap(
-                info['author'], FacebookChatDownloader._AUTHOR_REMAPPING, key, author_info[key])
+        info['author'] = r.remap_dict(
+            author_info, FacebookChatDownloader._AUTHOR_REMAPPING)
 
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []
@@ -504,7 +499,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         in_reply_to = info.pop('comment_parent', None)
         if isinstance(in_reply_to, dict) and in_reply_to:
             info['in_reply_to'] = FacebookChatDownloader._parse_live_stream_node(
-                in_reply_to)
+                in_reply_to, params)
 
         time_in_seconds = info.get('time_in_seconds')
         if time_in_seconds is not None:
@@ -523,8 +518,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         if info.get('attachments') == []:
             info.pop('attachments')
-            # print("AAAAAAAA")
-            # print(info.get('attachments'), node)
+            # TODO debug
 
         return info
 
@@ -544,7 +538,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             # &first=12&after=<end_cursor>
         }
         data.update(self.data)
-        # p = (), params=p
 
         first_try = True
 
@@ -558,53 +551,53 @@ class FacebookChatDownloader(BaseChatDownloader):
                 headers=self._FB_HEADERS, data=data
             )
 
-            feedback = multi_get(json_data, 'data', 'video', 'feedback') or {}
+            feedback = multi_get(json_data, 'data', 'video', 'feedback')
             if not feedback:
-                print('no feedback')  # TODO debug
-                print(json_data, flush=True)
+                log('debug', 'No feedback: {}'.format(json_data))
                 continue
 
             top_level_comments = multi_get(
                 json_data, 'data', 'video', 'feedback', 'top_level_comments')
-            edges = top_level_comments.get('edges')[::-1]  # reverse order
 
             errors = json_data.get('errors')
             if errors:
                 # TODO will usually resume getting chat..
                 # maybe add timeout?
-                print('ERRORS DETECTED')
-                print(errors)
+                log('debug', 'Errors detected: {}'.format(errors))
                 continue
+
+            if not top_level_comments:
+                log('debug', 'No top level comments: {}'.format(json_data))
+                continue
+
+            edges = reversed(top_level_comments.get('edges'))  # reverse order
+
             # TODO - get pagination working
             # page_info = top_level_comments.get('page_info')
             # after = page_info.get('end_cursor')
+            # has_next_page = page_info.get('has_next_page')
+
             num_to_add = 0
             for edge in edges:
                 node = edge.get('node')
                 if not node:
-                    # TODO debug
-                    print('no node found in edge')
-                    print(edge)
+                    log('debug', 'No node found in edge: {}'.format(edge))
                     continue
+
                 comment_id = node.get('id')
 
                 # remove items that have already been parsed
                 if comment_id in last_ids:
-                    # print('=', end='', flush=True)
+                    print('skip', comment_id)
                     continue
 
                 last_ids.append(comment_id)
 
                 last_ids = last_ids[-buffer_size:]  # force x items
 
-                if not node:
-                    # TODO debug
-                    print('no node', edge)
-                    continue
-
                 parsed_node = FacebookChatDownloader._parse_live_stream_node(
-                    node)
-                # TODO determine whether to add or not
+                    node, params)
+                # TODO determine whether to add or not (message types/groups)
 
                 num_to_add += 1
 
@@ -616,10 +609,6 @@ class FacebookChatDownloader(BaseChatDownloader):
                     'warning',
                     'Messages may be coming in faster than requests are being made.'
                 )
-
-            if not top_level_comments:
-                print('err2')
-                print(json_data)
 
             if first_try:
                 first_try = False
@@ -633,11 +622,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         # https://curl.trillworks.com/
         # timeout_duration = 10  # TODO make this modifiable
 
-        initial_request_params = (
-            ('eft_id', video_id),
-            ('target_ufi_instance_id', 'u_2_1'),
-            # ('should_backfill', 'false'), # used when seeking? - # TODO true on first try?
-        )
+        request_params = {
+            'eft_id': video_id,
+            'target_ufi_instance_id': 'u_2_1',
+            # 'should_backfill': 'false' # used when seeking? - # TODO true on first try?
+        }
 
         time_increment = 60  # Facebook gets messages by the minute
         # TODO make this modifiable
@@ -650,15 +639,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         next_start_time = max(start_time, 0)
         end_time = min(end_time, max_duration)
 
-        # print(next_start_time, end_time, type(next_start_time), type(end_time))
-        # return
-        # total = []
         while True:
             next_end_time = min(next_start_time + time_increment, end_time)
-            times = (('start_time', next_start_time),
-                     ('end_time', next_end_time))
 
-            request_params = initial_request_params + times
+            request_params['start_time'] = next_start_time
+            request_params['end_time'] = next_end_time
 
             json_data = self._attempt_fb_retrieve(
                 self._VOD_COMMENTS_API,
@@ -797,12 +782,13 @@ class FacebookChatDownloader(BaseChatDownloader):
             edges = top_live.get('edges') or []
 
             for edge in edges:
-                count += 1
-                if count > limit:
+                if count >= limit:
                     return
+
                 url = multi_get(edge, 'node', 'url')
                 if url:
                     yield url
+                    count += 1
 
             page_info = top_live.get('page_info')
 
