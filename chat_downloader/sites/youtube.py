@@ -541,7 +541,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     info['time_in_seconds'] = time_to_seconds(time_text)
             else:
                 # recreate time text from time in seconds
-                info['time_text'] = seconds_to_time(int(time_in_seconds))
+                info['time_text'] = seconds_to_time(time_in_seconds)
 
         elif time_text is not None:  # doesn't have time in seconds, but has time text
             info['time_in_seconds'] = time_to_seconds(time_text)
