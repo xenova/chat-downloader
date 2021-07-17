@@ -32,7 +32,7 @@ from ..debugging import log
 
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
-
+import random
 import json
 import websocket
 import time
@@ -501,7 +501,16 @@ class RedditChatDownloader(BaseChatDownloader):
             log('debug', 'Total number of messages: {}'.format(count))
 
     _BROADCAST_API_URL = 'https://strapi.reddit.com/broadcasts'  # ?page_size=x
-    _RPAN_API_URL = 'https://www.reddit.com/r/pan/new.json'
+    _RPAN_API_URL = 'https://www.reddit.com/r/{}/new.json'
+
+    # RPAN subreddits
+    # https://en.wikipedia.org/wiki/Reddit_Public_Access_Network
+    # Broadcasting is being rolled out to more and more subreddits, but the following are the official RPAN subreddits:
+    _RPAN_SUBREDDITS = ['TheRedditStudio', 'AnimalsOnReddit', 'DistantSocializing',
+                        'GlamourSchool', 'HeadlineWorthy', 'LGBT', 'ReadWithMe',
+                        'RedditInTheKitchen', 'RedditMasterClasses', 'RedditSessions',
+                        'RedditSets', 'ShortCircuit', 'TalentShow', 'TheArtistStudio',
+                        'TheGamerLounge', 'TheYouShow', 'WhereIntheWorld', 'pan']
 
     def generate_urls(self, **kwargs):
         # TODO add sort-by-viewers option
@@ -542,10 +551,12 @@ class RedditChatDownloader(BaseChatDownloader):
             'limit': limit
         }
 
+        api_url = self._RPAN_API_URL.format(
+            random.choice(self._RPAN_SUBREDDITS))
         count = 0
         while True:
             rpan_info = self._try_get_info(
-                self._RPAN_API_URL, max_attempts, params=past_params)
+                api_url, max_attempts, params=past_params)
 
             rpan_data = rpan_info.get('data')
 
