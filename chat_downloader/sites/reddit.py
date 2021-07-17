@@ -18,7 +18,6 @@ from ..utils.core import (
     seconds_to_time
 )
 
-from ..utils.timed_utils import interruptible_sleep
 
 from ..errors import (
     SiteError,
@@ -499,8 +498,6 @@ class RedditChatDownloader(BaseChatDownloader):
                     count += 1
 
             log('debug', 'Total number of messages: {}'.format(count))
-
-            interruptible_sleep(0.5)
 
     _BROADCAST_API_URL = 'https://strapi.reddit.com/broadcasts'  # ?page_size=x
     _RPAN_API_URL = 'https://www.reddit.com/r/pan/new.json'
