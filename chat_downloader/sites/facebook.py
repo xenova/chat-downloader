@@ -12,11 +12,12 @@ from ..utils.core import (
     camel_case_split,
     ensure_seconds,
     attempts,
-    get_title_of_webpage,
+    regex_search,
 )
 
 from ..debugging import log
 
+import html
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -147,24 +148,23 @@ class FacebookChatDownloader(BaseChatDownloader):
         )
 
         markup = multi_get(json_data, 'payload', 'video', 'markup', '__html')
-        video_markup = ET.fromstring(markup) if markup else ''
-        tags = [x.text for x in video_markup.findall(
-            './/span[@class="_50f7"]')]
+        tags = [x.text for x in ET.fromstring(markup).findall(
+            './/span[@class="_50f7"]')] if markup else []
+
         if len(tags) >= 2:
             info['title'] = tags[0]
             info['username'] = tags[1]
-        else:
+        else:  # Fallback
             video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
             for attempt_number in attempts(max_attempts):
                 try:
-                    html = self._session_get(video_page_url).text
-                    match = get_title_of_webpage(html)
+                    video_html = self._session_get(video_page_url).text
+                    match = regex_search(
+                        video_html, r'<meta name=".*title" content="([^"]+)"\s*/>')
                     if match:
-                        title_info = match.split(' - ', 1)
-                        if len(title_info) == 2:
-                            info['username'] = title_info[0]
-                            info['title'] = title_info[1]
+                        info['title'] = html.unescape(match)
                     break
+
                 except RequestException as e:
                     self.retry(attempt_number, max_attempts, e, retry_timeout)
 
@@ -676,7 +676,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             next_start_time = next_end_time
 
             if next_start_time >= end_time:
-                print('end')
                 return
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads')
@@ -685,11 +684,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             for payload in payloads:
                 time_offset = payload.get('timeoffset')
-                # print(test)
 
                 ufipayload = payload.get('ufipayload')
                 if not ufipayload:
-                    print('no ufipayload', payload)
                     continue
 
                 # ['comments'][0]['body']['text']
