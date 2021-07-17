@@ -35,7 +35,8 @@ from ..utils.core import (
     camel_case_split,
     ensure_seconds,
     attempts,
-    try_parse_json
+    try_parse_json,
+    regex_search
 )
 
 from ..debugging import log
@@ -1073,10 +1074,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if consent:
             if 'YES' in consent:
                 return
-            consent_id_match = re.search(self._CONSENT_ID_REGEX, consent)
 
-            if consent_id_match:
-                consent_id = consent_id_match.group()
+            consent_id = regex_search(consent, self._CONSENT_ID_REGEX)
 
         if not consent_id:
             consent_id = random.randint(100, 999)
@@ -1105,8 +1104,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def _get_initial_info(self, url):
         html = self._session_get(url).text
-        yt = re.search(self._YT_INITIAL_DATA_RE, html)
-        yt_initial_data = try_parse_json(yt.group(1)) if yt else None
+        yt = regex_search(html, self._YT_INITIAL_DATA_RE)
+        yt_initial_data = try_parse_json(yt) if yt else None
         return html, yt_initial_data
 
     def _get_initial_video_info(self, video_id):
@@ -1121,12 +1120,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         details = {}
 
-        cfg = re.search(self._YT_CFG_RE, html)
-        details['ytcfg'] = try_parse_json(cfg.group(1)) if cfg else {}
+        cfg = regex_search(html, self._YT_CFG_RE)
+        details['ytcfg'] = try_parse_json(cfg) if cfg else {}
 
-        player_response = re.search(self._YT_INITIAL_PLAYER_RESPONSE_RE, html)
+        player_response = regex_search(
+            html, self._YT_INITIAL_PLAYER_RESPONSE_RE)
         player_response_info = try_parse_json(
-            player_response.group(1)) if player_response else None
+            player_response) if player_response else None
 
         if not player_response_info:
             log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))

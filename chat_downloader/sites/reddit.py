@@ -15,7 +15,8 @@ from ..utils.core import (
     try_get,
     chunks,
     ensure_seconds,
-    seconds_to_time
+    seconds_to_time,
+    regex_search
 )
 
 
@@ -55,10 +56,10 @@ class RedditChatDownloader(BaseChatDownloader):
 
         for attempt_number in attempts(max_attempts):
             initial_data = self._session_get(self._REDDIT_HOMEPAGE).text
-            info = re.search(self._INITIAL_INFO_REGEX, initial_data)
 
+            info = regex_search(initial_data, self._INITIAL_INFO_REGEX)
             if info:
-                info = try_parse_json(info.group(1))
+                info = try_parse_json(info)
                 break
             else:
                 title = get_title_of_webpage(initial_data)

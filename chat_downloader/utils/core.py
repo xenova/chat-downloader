@@ -133,9 +133,9 @@ def try_get(src, getter, expected_type=None):
                 return v
 
 
-def regex_search(text, pattern):
+def regex_search(text, pattern, group=1, default=None):
     match = re.search(pattern, text)
-    return match.group(1) if match else None
+    return match.group(group) if match else default
 
 def get_title_of_webpage(html):
     match = re.search('<title(?:[^>]*)>(.*?)</title>', html)

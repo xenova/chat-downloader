@@ -47,10 +47,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             self._FB_HOMEPAGE,
             headers=self._FB_HEADERS, allow_redirects=False).text
 
-        datr = re.search(self._INITIAL_DATR_REGEX, initial_data)
-        if datr:
-            datr = datr.group(1)
-        else:
+        datr = regex_search(initial_data, self._INITIAL_DATR_REGEX)
+        if not datr:
             print('unable to get datr cookie')
             raise Exception  # TODO
 
@@ -61,13 +59,10 @@ class FacebookChatDownloader(BaseChatDownloader):
         # print('fr:', fr, flush=True)
         # print('datr:', datr, flush=True)
 
-        lsd_info = re.search(self._INITIAL_LSD_REGEX, initial_data)
-        if not lsd_info:
+        lsd = regex_search(initial_data, self._INITIAL_LSD_REGEX)
+        if not lsd:
             print('no lsd info')
             raise Exception  # TODO
-
-        lsd = lsd_info.group(1)
-        # print('lsd:', lsd, flush=True)
 
         request_headers = {
             # TODO sb and fr unnecessary?
