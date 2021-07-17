@@ -134,8 +134,23 @@ class RedditChatDownloader(BaseChatDownloader):
             'expected_result': {
                 'messages_condition': lambda messages: len(messages) > 0,
             }
-        }
+        },
 
+        # Anomalies
+        {
+            'name': 'Connection issues',
+            'params': {
+                'url': 'https://www.reddit.com/r/talentShow/comments/ofkm5s/carving_a_wood_vase/',
+                'timeout': 5
+            }
+        },
+        {
+            'name': "This broadcast programme is off-air (has not started or has ended)",
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/RedditMasterClasses/olw6ww',
+                'timeout': 5
+            }
+        },
     ]
 
     # Regex provided by youtube-dl
@@ -310,11 +325,17 @@ class RedditChatDownloader(BaseChatDownloader):
 
             stream_info = data.get('stream')
 
+            if not stream_info:
+                raise RedditError('Stream info not found: {}'.format(data))
+
             title = post_info.get('title')
 
             state = stream_info.get('state')
-            is_live = state == 'IS_LIVE'
-            start_time = stream_info.get('hls_exists_at') * 1000
+            is_live = state in ('IS_LIVE', 'NOT_STARTED')  # ENDED
+            start_time = (stream_info.get('hls_exists_at') or stream_info.get(
+                'publish_at') or stream_info.get('update_at'))
+            if start_time:
+                start_time *= 1000
 
             socket_url = post_info.get('liveCommentsWebsocket')
 
@@ -461,7 +482,8 @@ class RedditChatDownloader(BaseChatDownloader):
             start_time = float('-inf')
 
         else:
-            utc_start_time = start_time*1e6 + stream_start_time
+            utc_start_time = start_time*1e6 + \
+                (stream_start_time or time.time()*1e3)
 
             def _binary_search(low, high):
 
@@ -506,11 +528,13 @@ class RedditChatDownloader(BaseChatDownloader):
     # RPAN subreddits
     # https://en.wikipedia.org/wiki/Reddit_Public_Access_Network
     # Broadcasting is being rolled out to more and more subreddits, but the following are the official RPAN subreddits:
-    _RPAN_SUBREDDITS = ['TheRedditStudio', 'AnimalsOnReddit', 'DistantSocializing',
-                        'GlamourSchool', 'HeadlineWorthy', 'LGBT', 'ReadWithMe',
-                        'RedditInTheKitchen', 'RedditMasterClasses', 'RedditSessions',
-                        'RedditSets', 'ShortCircuit', 'TalentShow', 'TheArtistStudio',
+    _RPAN_SUBREDDITS = ['AnimalsOnReddit', 'DistantSocializing', 'GlamourSchool',
+                        'HeadlineWorthy', 'LGBT', 'ReadWithMe', 'RedditInTheKitchen',
+                        'RedditMasterClasses', 'RedditSessions', 'RedditSets',
+                        'ShortCircuit', 'TalentShow', 'TheArtistStudio',
                         'TheGamerLounge', 'TheYouShow', 'WhereIntheWorld', 'pan']
+
+    # 'TheRedditStudio' - {"reason": "private", "message": "Forbidden", "error": 403}
 
     def generate_urls(self, **kwargs):
         # TODO add sort-by-viewers option
@@ -559,6 +583,8 @@ class RedditChatDownloader(BaseChatDownloader):
                 api_url, max_attempts, params=past_params)
 
             rpan_data = rpan_info.get('data')
+            if not rpan_data:
+                break
 
             children = rpan_data.get('children') or []
 
