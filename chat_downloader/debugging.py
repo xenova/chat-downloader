@@ -40,7 +40,7 @@ def log(level, items, to_pause=False, to_exit=False):
 
         if to_exit and TESTING_MODE in (TestingModes.EXIT_ON_ERROR, TestingModes.EXIT_ON_DEBUG):
             raise TestingException(
-                'Testing exception encountered, exiting program.')
+                'Testing exception encountered, exiting program')
 
         if to_pause and TESTING_MODE in (TestingModes.PAUSE_ON_ERROR, TestingModes.PAUSE_ON_DEBUG):
             input('Press Enter to continue...')

@@ -26,7 +26,8 @@ from .utils.timed_utils import TimedGenerator
 from .debugging import (
     log,
     set_testing_mode,
-    TestingModes
+    TestingModes,
+    TestingException
 )
 
 from .output.continuous_write import ContinuousWriter
@@ -43,7 +44,7 @@ from .errors import (
     InvalidURL,
     ChatDownloaderError,
     ChatGeneratorError,
-    ParsingError,
+    ParsingError
 )
 
 
@@ -364,7 +365,8 @@ def run(propagate_interrupt=False, **kwargs):
 
     except (
         ChatGeneratorError,
-        ParsingError
+        ParsingError,
+        TestingException
     ) as e:  # Errors which may be bugs
         log('error', '{}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'.format(e))
 
