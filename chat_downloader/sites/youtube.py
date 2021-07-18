@@ -1245,6 +1245,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if account_syncid:
             headers['x-goog-pageid'] = account_syncid
 
+        session_index = ytcfg.get('SESSION_INDEX')
+        if account_syncid or session_index:
+            headers['x-goog-authuser'] = session_index or 0
+
         visitor_data = multi_get(
             ytcfg, 'INNERTUBE_CONTEXT', 'client', 'visitorData')
         if visitor_data:
