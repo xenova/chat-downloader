@@ -312,23 +312,6 @@ class BaseChatDownloader:
 
         return item.get('message_type') in valid_message_types
 
-    @staticmethod
-    def _debug_log(params, *items):
-        """Method which simplifies the logging of debugging messages
-
-        :param params: Dictionary of parameters sent to the `get_chat` method
-        :type params: dict
-        :raises UnexpectedError: if something unexpected occurs, but is only
-            used when debugging
-        """
-        log(
-            'debug',
-            items,
-            params.get('pause_on_debug')
-        )
-        if params.get('exit_on_debug'):
-            raise UnexpectedError(items)
-
     def __init__(self,
                  **kwargs
                  ):

@@ -27,7 +27,10 @@ from ..errors import (
     ChatDisabled
 )
 
-from ..debugging import log
+from ..debugging import (
+    log,
+    debug_log
+)
 
 
 from requests.exceptions import RequestException
@@ -409,8 +412,10 @@ class RedditChatDownloader(BaseChatDownloader):
                         yield parsed
 
                     else:
-                        self._debug_log(
-                            params, 'Unknown message type: {}'.format(message_type), data)
+                        debug_log(
+                            'Unknown message type: {}'.format(
+                                message_type), data
+                        )
 
                 except websocket.WebSocketTimeoutException:
                     pass

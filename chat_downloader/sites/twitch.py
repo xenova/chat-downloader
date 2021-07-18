@@ -24,7 +24,10 @@ from ..utils.core import (
     attempts
 )
 
-from ..debugging import log
+from ..debugging import (
+    log,
+    debug_log
+)
 
 import re
 import json
@@ -1194,14 +1197,13 @@ class TwitchChatDownloader(BaseChatDownloader):
                 missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
                 if missing_keys:
-                    self._debug_log(params,
-                                    'Missing keys found: {}'.format(
-                                        missing_keys),
-                                    'Original data: {}'.format(comment),
-                                    'Parsed data: {}'.format(data),
-                                    comment.keys(),
-                                    TwitchChatDownloader._KNOWN_COMMENT_KEYS
-                                    )
+                    debug_log(
+                        'Missing keys found: {}'.format(missing_keys),
+                        'Original data: {}'.format(comment),
+                        'Parsed data: {}'.format(data),
+                        comment.keys(),
+                        TwitchChatDownloader._KNOWN_COMMENT_KEYS
+                    )
 
                 time_in_seconds = data.get('time_in_seconds', 0)
 
@@ -1381,11 +1383,9 @@ class TwitchChatDownloader(BaseChatDownloader):
             elif key_length == 2:
                 pass
             else:
-                log('debug', [
+                debug_log(
                     'Invalid badge found: {}.'.format(badge),
-                    'Badge information: {}.'.format(badges),
-                ],
-                    params.get('pause_on_debug')
+                    'Badge information: {}.'.format(badges)
                 )
                 continue  # TODO debug
 
@@ -1403,11 +1403,9 @@ class TwitchChatDownloader(BaseChatDownloader):
         if new_message_type:
             info['message_type'] = new_message_type
         else:
-            log('debug', [
+            debug_log(
                 'Unknown message type: {}'.format(original_message_type),
-                'Parsed data: {}'.format(info),
-            ],
-                params.get('pause_on_debug')
+                'Parsed data: {}'.format(info)
             )
 
     @staticmethod
@@ -1420,11 +1418,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                     map(lambda x: int(x), emote['locations'][0].split('-')))
                 emote['name'] = message[first_location[0]:first_location[1] + 1]
             except Exception:
-                log('debug', [
+                debug_log(
                     'Invalid emote: {}'.format(emote),
                     'Message: {}'.format(message)
-                ],
-                    params.get('pause_on_debug')
                 )
                 continue
 
@@ -1445,11 +1441,9 @@ class TwitchChatDownloader(BaseChatDownloader):
             elif key_length == 2:
                 pass
             else:
-                log('debug', [
+                debug_log(
                     'Invalid item found: {}.'.format(item),
                     'All items: {}.'.format(split_info),
-                ],
-                    params.get('pause_on_debug')
                 )
                 continue
 
@@ -1623,13 +1617,12 @@ class TwitchChatDownloader(BaseChatDownloader):
                             missing_keys = data.keys() - TwitchChatDownloader._KNOWN_IRC_KEYS
 
                             if missing_keys:
-                                self._debug_log(params,
-                                                'Missing keys found: {}'.format(
-                                                    missing_keys),
-                                                'Original data: {}'.format(
-                                                    match.groups()),
-                                                'Parsed data: {}'.format(data)
-                                                )
+                                debug_log(
+                                    'Missing keys found: {}'.format(
+                                        missing_keys),
+                                    'Original data: {}'.format(match.groups()),
+                                    'Parsed data: {}'.format(data)
+                                )
                             # check whether to skip this message or not, based on its type
 
                             to_add = self._must_add_item(

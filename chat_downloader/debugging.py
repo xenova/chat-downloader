@@ -4,6 +4,52 @@ import sys
 import os
 import chat_downloader
 
+from enum import Enum
+
+
+class TestingException(Exception):
+    """Raised when something unexpected happens while in testing mode"""
+
+
+class TestingModes(Enum):
+    # Currently unused
+    EXIT_ON_ERROR = 4
+    PAUSE_ON_ERROR = 3
+
+    # In use
+    EXIT_ON_DEBUG = 2
+    PAUSE_ON_DEBUG = 1
+    NONE = 0
+
+
+TESTING_MODE = TestingModes.NONE
+
+
+def set_testing_mode(new_mode):
+    global TESTING_MODE
+    TESTING_MODE = new_mode
+
+
+def log(level, items, to_pause=False, to_exit=False):
+    logger_at_level = getattr(logger, level, None)
+    if logger_at_level:
+        if not isinstance(items, (tuple, list)):
+            items = [items]
+        for item in items:
+            logger_at_level(item)
+
+        if to_exit and TESTING_MODE in (TestingModes.EXIT_ON_ERROR, TestingModes.EXIT_ON_DEBUG):
+            raise TestingException(
+                'Testing exception encountered, exiting program.')
+
+        if to_pause and TESTING_MODE in (TestingModes.PAUSE_ON_ERROR, TestingModes.PAUSE_ON_DEBUG):
+            input('Press Enter to continue...')
+
+
+def debug_log(*items):
+    """Method which simplifies the logging of debugging messages"""
+    log('debug', items, True, True)
+
 
 def supports_colour():
     """
@@ -83,15 +129,3 @@ def set_log_level(level):
 
 def disable_logger():
     logger.disabled = True
-
-
-def log(level, items, to_pause=False):
-    logger_at_level = getattr(logger, level, None)
-    if logger_at_level:
-        if not isinstance(items, (tuple, list)):
-            items = [items]
-        for item in items:
-            logger_at_level(item)
-
-        if to_pause:
-            input('Press Enter to continue...')

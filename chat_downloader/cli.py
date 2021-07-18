@@ -21,6 +21,11 @@ from .utils.core import (
     splitter
 )
 
+from .debugging import (
+    disable_logger,
+    set_log_level
+)
+
 
 def main():
 
@@ -55,7 +60,7 @@ def main():
 
         if is_boolean_flag:
             # If True by default, set action to store_false
-            # If False by default, set action to store_false
+            # If False by default, set action to store_true
 
             default = kwargs.pop('default', None)
             kwargs['action'] = 'store_{}'.format(
@@ -134,25 +139,25 @@ def main():
     add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
     add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
+    # Debugging only available from the CLI
     debug_group = parser.add_argument_group('Debugging/Testing Arguments')
 
     on_debug_options = debug_group.add_mutually_exclusive_group()
-    add_chat_param(on_debug_options, '--pause_on_debug', is_boolean_flag=True)
-    add_chat_param(on_debug_options, '--exit_on_debug', is_boolean_flag=True)
+    on_debug_options.add_argument('--pause_on_debug', action='store_true',
+                                  help='Pause on certain debug messages, defaults to False')
+    on_debug_options.add_argument('--exit_on_debug', action='store_true',
+                                  help='Exit when something unexpected happens, defaults to False')
 
     debug_options = debug_group.add_mutually_exclusive_group()
+    debug_options.add_argument('--logging', choices=['none', 'debug', 'info', 'warning', 'error', 'critical'],
+                               help='Level of logging to display, defaults to info', default='info')
 
-    # overwrite default from method
-    get_chat_info['logging']['default'] = 'info'
-
-    add_chat_param(debug_options, '--logging',
-                   choices=['none', 'debug', 'info', 'warning', 'error', 'critical'])
-
-    add_chat_param(debug_options, '--testing', is_boolean_flag=True)
-    add_chat_param(debug_options, '--verbose', '-v', is_boolean_flag=True)
-    add_chat_param(debug_options, '--quiet', '-q', is_boolean_flag=True)
-
-    # TODO Add --do_not_print option
+    debug_options.add_argument('--testing', action='store_true',
+                               help='Enable testing mode. This is equivalent to setting logging to debug and enabling pause_on_debug. Defaults to False')
+    debug_options.add_argument('--verbose', '-v', action='store_true',
+                               help='Print various debugging information. This is equivalent to setting logging to debug. Defaults to False')
+    debug_options.add_argument('--quiet', '-q', action='store_true',
+                               help='Activate quiet mode (hide all output), defaults to False')
 
     # INIT PARAMS
     init_group = parser.add_argument_group('Initialisation Arguments')
@@ -165,6 +170,19 @@ def main():
     parser._optionals.title = 'General Arguments'
 
     args = parser.parse_args()
+
+    # Modify debugging args:
+    if args.testing:
+        args.logging = 'debug'
+        args.exit_on_debug = True
+
+    if args.verbose:
+        args.logging = 'debug'
+
+    if args.quiet or args.logging == 'none':
+        disable_logger()
+    else:
+        set_log_level(args.logging)
 
     # Run with these arguments
     run(**args.__dict__)

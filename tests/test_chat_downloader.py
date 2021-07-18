@@ -11,6 +11,10 @@ from chat_downloader.sites import (
     get_all_sites,
     BaseChatDownloader
 )
+from chat_downloader.debugging import (
+    set_testing_mode,
+    TestingModes as Modes
+)
 
 
 class TestChatDownloader(unittest.TestCase):
@@ -20,12 +24,10 @@ class TestChatDownloader(unittest.TestCase):
 def generator(site, test):
 
     def test_template(self):
+
         site_object = ChatDownloader()
         try:
             params = test['params']
-
-            if not params.get('logging'):  # if it is not set, make it 'none'
-                params['logging'] = 'none'
 
             expected_result = test.get('expected_result') or {}
 
@@ -94,7 +96,9 @@ for site in get_all_sites(True):
 
         del test_method
 
+set_testing_mode(Modes.EXIT_ON_DEBUG)
 if __name__ == '__main__':
+
     # Test all sites:
     # python tests/test_chat_downloader.py
     # or
@@ -107,4 +111,4 @@ if __name__ == '__main__':
     unittest.main()
 
 
-# print('asdasd')
+# pytest -v tests/test_chat_downloader.py::TestChatDownloader::test_YouTubeChatDownloader_1  --log-cli-level=DEBUG -s ttt/

@@ -39,7 +39,7 @@ from ..utils.core import (
     regex_search
 )
 
-from ..debugging import log
+from ..debugging import (log, debug_log)
 
 import time
 import random
@@ -1129,7 +1129,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             player_response) if player_response else None
 
         if not player_response_info:
-            log('warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
+            log(
+                'warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
             player_response_info = {}
 
         streaming_data = player_response_info.get('streamingData') or {}
@@ -1198,7 +1199,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     error_message = '{}: {}'.format(status, error_message)
                     raise VideoUnavailable(error_message)
             elif not contents:
-                log('debug', 'Initial YouTube data: {}'.format(yt_initial_data))
+                log('debug', 'Initial YouTube data: {}'.format(
+                    yt_initial_data))
                 raise VideoUnavailable(
                     'Unable to find initial video contents.')
             else:
@@ -1481,13 +1483,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             data.update(parsed_contents)
                             data['header_message'] = header_message
                         else:
-                            self._debug_log(params,
-                                            'No bannerRenderer item',
-                                            'Action type: {}'.format(
-                                                original_action_type),
-                                            'Action: {}'.format(action),
-                                            'Parsed data: {}'.format(data)
-                                            )
+                            debug_log(
+                                'No bannerRenderer item',
+                                'Action type: {}'.format(
+                                    original_action_type),
+                                'Action: {}'.format(action),
+                                'Parsed data: {}'.format(data)
+                            )
 
                     elif original_action_type in self._KNOWN_REMOVE_BANNER_TYPES:
                         original_item = action
@@ -1499,12 +1501,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         # ignore these
                     else:
                         # not processing these
-                        self._debug_log(params,
-                                        'Unknown action: {}'.format(
-                                            original_action_type),
-                                        action,
-                                        data
-                                        )
+                        debug_log(
+                            'Unknown action: {}'.format(
+                                original_action_type),
+                            action,
+                            data
+                        )
 
                     test_for_missing_keys = original_item.get(
                         original_message_type, {}).keys()
@@ -1512,23 +1514,21 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     # print(action)
                     if not data:  # TODO debug
-                        self._debug_log(params,
-                                        'Parse of action returned empty results: {}'.format(
-                                            original_action_type),
-                                        action
-                                        )
+                        debug_log(
+                            'Parse of action returned empty results: {}'.format(
+                                original_action_type),
+                            action
+                        )
 
                     if missing_keys:  # TODO debugging for missing keys
-                        self._debug_log(params,
-                                        'Missing keys found: {}'.format(
-                                            missing_keys),
-                                        'Message type: {}'.format(
-                                            original_message_type),
-                                        'Action type: {}'.format(
-                                            original_action_type),
-                                        'Action: {}'.format(action),
-                                        'Parsed data: {}'.format(data)
-                                        )
+                        debug_log(
+                            'Missing keys found: {}'.format(missing_keys),
+                            'Message type: {}'.format(original_message_type),
+                            'Action type: {}'.format(
+                                original_action_type),
+                            'Action: {}'.format(action),
+                            'Parsed data: {}'.format(data)
+                        )
 
                     if original_message_type:
 
@@ -1542,25 +1542,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             continue
                             # skip placeholder items
                         elif original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
-                            self._debug_log(params,
-                                            'Unknown message type "{}" for action "{}"'.format(
-                                                original_message_type,
-                                                original_action_type
-                                            ),
-                                            'New message type: {}'.format(
-                                                data['message_type']),
-                                            'Action: {}'.format(action),
-                                            'Parsed data: {}'.format(data)
-                                            )
+                            debug_log('Unknown message type "{}" for action "{}"'.format(
+                                original_message_type,
+                                original_action_type
+                            ),
+                                'New message type: {}'.format(
+                                data['message_type']),
+                                'Action: {}'.format(action),
+                                'Parsed data: {}'.format(data))
 
                     else:  # no type # can ignore message
-                        self._debug_log(params,
-                                        'No message type',
-                                        'Action type: {}'.format(
-                                            original_action_type),
-                                        'Action: {}'.format(action),
-                                        'Parsed data: {}'.format(data)
-                                        )
+                        debug_log(
+                            'No message type',
+                            'Action type: {}'.format(original_action_type),
+                            'Action: {}'.format(action),
+                            'Parsed data: {}'.format(data)
+                        )
                         continue
 
                     # check whether to skip this message or not, based on its type
@@ -1599,7 +1596,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     message_count += 1
                     yield data
 
-                log('debug', 'Total number of messages: {}'.format(message_count))
+                log('debug', 'Total number of messages: {}'.format(
+                    message_count))
 
             elif not is_live:
                 # no more actions to process in a chat replay
@@ -1617,7 +1615,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 continuation_key = try_get_first_key(cont)
                 continuation_info = cont[continuation_key]
 
-                log('debug', 'Continuation info: {}'.format(continuation_info))
+                log('debug', 'Continuation info: {}'.format(
+                    continuation_info))
 
                 if continuation_key in self._KNOWN_CHAT_CONTINUATIONS:
 
@@ -1634,11 +1633,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     pass
                     # ignore these continuations
                 else:
-                    self._debug_log(params,
-                                    'Unknown continuation: {}'.format(
-                                        continuation_key),
-                                    cont
-                                    )
+                    debug_log(
+                        'Unknown continuation: {}'.format(continuation_key),
+                        cont
+                    )
 
                 # sometimes continuation contains timeout info
                 sleep_duration = continuation_info.get('timeoutMs')

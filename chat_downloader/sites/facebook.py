@@ -20,7 +20,7 @@ from ..errors import (
     VideoUnavailable
 )
 
-from ..debugging import log
+from ..debugging import (log, debug_log)
 
 import html
 import json
@@ -270,11 +270,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         # DEBUGGING
         original_type_name = original_item.get('__typename')
         if original_type_name not in FacebookChatDownloader._KNOWN_ATTACHMENT_TYPES:
-            print('debug')
-            print('unknown attachment type:', original_type_name)
-            print(original_item)
-            print(item)
-            raise Exception
+            debug_log(
+                'Unknown attachment type: {}'.format(original_type_name),
+                original_item,
+                item
+            )
 
         return item
 
@@ -333,8 +333,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         parsed = {}
         attachment = multi_get(item, 'style_type_renderer', 'attachment')
         if not attachment:
-            # TODO debug log
-            # 'No attachment: {}'.format(item)
+            debug_log('No attachment: {}'.format(item))
             return parsed
 
         # set texts:
@@ -347,10 +346,11 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         missing_keys = attachment.keys() - FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
         if missing_keys:
-            print('MISSING ATTACHMENT KEYS:', missing_keys)
-            print(item)
-            print(parsed)
-            raise Exception
+            debug_log(
+                'Missing attachment keys: {}'.format(missing_keys),
+                item,
+                parsed
+            )
 
         return parsed
 
@@ -588,7 +588,6 @@ class FacebookChatDownloader(BaseChatDownloader):
 
                 # remove items that have already been parsed
                 if comment_id in last_ids:
-                    print('skip', comment_id)
                     continue
 
                 last_ids.append(comment_id)
