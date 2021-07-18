@@ -178,8 +178,8 @@ class FacebookChatDownloader(BaseChatDownloader):
                     break
 
         if not video_data:
-            raise FacebookError(
-                'Unable to get video data: {}'.format(instances))
+            log('debug', 'Instances: {}'.format(instances))
+            raise FacebookError('Unable to get video data')
 
         dash_manifest = video_data.get('dash_manifest')
 
@@ -188,7 +188,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             info['duration'] = isodate.parse_duration(
                 dash_manifest_xml.attrib['mediaPresentationDuration']).total_seconds()
 
-        info['is_live'] = video_data['is_live_stream']
+        info['is_live'] = video_data.get('is_live_stream', False)
         return info
 
     @staticmethod
@@ -514,12 +514,10 @@ class FacebookChatDownloader(BaseChatDownloader):
             info.pop('message', None)  # remove if empty
 
         # remove the following if empty:
-        if info.get('reactions') == {}:  # no reactions
+        if info.get('reactions') == {}:
             info.pop('reactions')
-
         if info.get('attachments') == []:
             info.pop('attachments')
-            # TODO debug
 
         return info
 
@@ -669,10 +667,8 @@ class FacebookChatDownloader(BaseChatDownloader):
                 if not ufipayload:
                     continue
 
-                # ['comments'][0]['body']['text']
                 comment = multi_get(ufipayload, 'comments', 0)
                 if not comment:
-                    # TODO debug
                     continue
 
                 # pinned_comments = ufipayload.get('pinnedcomments')

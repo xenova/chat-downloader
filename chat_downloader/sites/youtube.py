@@ -1516,15 +1516,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         original_message_type, {}).keys()
                     missing_keys = test_for_missing_keys - self._KNOWN_KEYS
 
-                    # print(action)
-                    if not data:  # TODO debug
+                    if not data:
                         debug_log(
                             'Parse of action returned empty results: {}'.format(
                                 original_action_type),
                             action
                         )
 
-                    if missing_keys:  # TODO debugging for missing keys
+                    if missing_keys:
                         debug_log(
                             'Missing keys found: {}'.format(missing_keys),
                             'Message type: {}'.format(original_message_type),
@@ -1546,14 +1545,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             continue
                             # skip placeholder items
                         elif original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
-                            debug_log('Unknown message type "{}" for action "{}"'.format(
-                                original_message_type,
-                                original_action_type
-                            ),
+                            debug_log(
+                                'Unknown message type "{}" for action "{}"'.format(
+                                    original_message_type, original_action_type),
                                 'New message type: {}'.format(
-                                data['message_type']),
+                                    data['message_type']),
                                 'Action: {}'.format(action),
-                                'Parsed data: {}'.format(data))
+                                'Parsed data: {}'.format(data)
+                            )
 
                     else:  # no type # can ignore message
                         debug_log(
@@ -1593,9 +1592,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     # if data.get('time_in_seconds') is None and data.get('timestamp') is not None:
                     #     data['time_in_seconds'] = (data['timestamp'] - stream_start_time)/1e6
                     #     data['time_text'] = seconds_to_time(int(data['time_in_seconds']))
-
-                    #     pass
-                    # valid timing, add
 
                     message_count += 1
                     yield data

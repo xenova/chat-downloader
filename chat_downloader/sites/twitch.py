@@ -74,21 +74,6 @@ class TwitchChatIRC():
     def recv(self, buffer_size):
         return self.socket.recv(buffer_size).decode('utf-8', 'ignore')
 
-    # def recvall(self, buffer_size):
-    #     fragments = []  # faster than byte string
-    #     while True:
-    #         part = self.socket.recv(buffer_size)
-    #         fragments.append(part)
-
-    #         # attempt to decode this, otherwise the last byte was incomplete
-    #         # in this case, get more data
-    #         try:
-    #             # if len(part) < buffer_size:
-    #             return b''.join(fragments).decode('utf-8') # , 'ignore'
-    #         except UnicodeDecodeError:
-    #             # print('error', data)
-    #             continue
-
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
 
@@ -444,7 +429,8 @@ class TwitchChatDownloader(BaseChatDownloader):
         # 'msg-param-charity':'charity',
         # 'msg-param-bits-amount':'bits_amount',
         # 'msg-param-total':'total',
-        # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase# 'msg-param-sub-benefit-end-month':'sub_benChatDownloader       # 'msg-param-userID':'user_id',
+        # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase#
+        # 'msg-param-userID':'user_id',
         #
         # 'msg-param-cumulative-tenure-months':'cumulative_tenure_months',
         # 'msg-param-should-share-streak-tenure':'should-share-streak-tenure',
@@ -811,9 +797,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             self._SUBSCRIBER_BADGE_INFO[channel_id] = self._session_get_json(
                 url).get('badge_sets') or {}
 
-        # print(self._SUBSCRIBER_BADGE_INFO)
-        # print(self._SUBSCRIBER_BADGE_INFO.keys())
-
     @ staticmethod
     def _parse_item(item, offset):
         info = {}
@@ -844,7 +827,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         # TODO add user colour to author dict
         # TODO check this works
         # author_colour
-        # print()
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
@@ -1382,7 +1364,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     'Invalid badge found: {}.'.format(badge),
                     'Badge information: {}.'.format(badges)
                 )
-                continue  # TODO debug
+                continue
 
             info.append(TwitchChatDownloader._parse_badge_info(
                 split[0], split[1], channel_id))
@@ -1485,6 +1467,11 @@ class TwitchChatDownloader(BaseChatDownloader):
             else:
                 # unknown action type
                 info['action_type'] = original_action_type
+                debug_log([
+                    'Unknown action type: {}'.format(info['action_type']),
+                    match,
+                    info
+                ])
 
         original_message_type = info.get('message_type')
         if original_message_type:
@@ -1697,31 +1684,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             duration=None,
             is_live=is_live
         )
-
-    # def get_chat(self,
-    #              **kwargs
-    #              ):
-
-    #     # get video id
-    #     url = kwargs.get('url')
-
-    #     for regex, function_name in self._REGEX_FUNCTION_MAP:
-    #         match = re.search(regex, url)
-    #         if match:
-    #             return getattr(self, function_name)(match.group('id'), kwargs)
-
-        # if(match):
-        #     match.group('id')
-        #     return self.get_chat_by_video_id(match.group('id'), params)
-
-        # if(match.group('id')):  # normal youtube video
-        #     return
-
-        # else:  # TODO add profile, etc.
-        #     pass
-
-    # def get_chat_messages(self, url):
-    #     pass
 
     # # e.g. 'https://www.twitch.tv/spamfish/videos?filter=all'
     # _VALID_VIDEOS_URL = r'https?://(?:(?:www|go|m)\.)?twitch\.tv/(?P<id>[^/]+)/(?:videos|profile)'
