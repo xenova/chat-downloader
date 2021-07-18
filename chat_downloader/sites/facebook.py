@@ -318,6 +318,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         'style_infos': r('style_infos', _parse_attachment_info),
 
         'attachment_text': r('text', _get_text),
+
+        '__typename': 'type'
     }
 
     _IGNORE_ATTACHMENT_KEYS = [
@@ -412,7 +414,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         'ChatCommandResult',
 
         'CommentMessageInfo',
-        'FundraiserForStoryDonationAttachmentStyleInfo'
+        'FundraiserForStoryDonationAttachmentStyleInfo',
+
+        'Event'
     ]
 
     _REMAPPING = {
