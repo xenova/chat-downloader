@@ -815,10 +815,8 @@ class TwitchChatDownloader(BaseChatDownloader):
         # print(self._SUBSCRIBER_BADGE_INFO.keys())
 
     @ staticmethod
-    def _parse_item(item, offset, params=None):
+    def _parse_item(item, offset):
         info = {}
-        if params is None:
-            params = {}
 
         for key in item:
             r.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
@@ -853,7 +851,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         original_message_type = info.get('message_type')
         if original_message_type:
             TwitchChatDownloader._set_message_type(
-                info, original_message_type, params)
+                info, original_message_type)
         else:
             info['message_type'] = 'text_message'
 
@@ -1191,7 +1189,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             comments = info.get('comments') or []
             for comment in comments:
-                data = self._parse_item(comment, offset, params)
+                data = self._parse_item(comment, offset)
 
                 # test for missing keys
                 missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
@@ -1366,13 +1364,10 @@ class TwitchChatDownloader(BaseChatDownloader):
         return new_badge
 
     @staticmethod
-    def _parse_irc_badges(badges, channel_id, params=None):
+    def _parse_irc_badges(badges, channel_id):
         info = []
         if not badges:
             return info
-
-        if params is None:
-            params = {}
 
         for badge in badges.split(','):
             split = badge.split('/', 1)
@@ -1394,9 +1389,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         return info
 
     @staticmethod
-    def _set_message_type(info, original_message_type, params=None):
-        if params is None:
-            params = {}
+    def _set_message_type(info, original_message_type):
         new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
             original_message_type)
 
@@ -1409,9 +1402,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             )
 
     @staticmethod
-    def _add_text_for_emotes(message, emote_list, params=None):
-        if params is None:
-            params = {}
+    def _add_text_for_emotes(message, emote_list):
         for emote in emote_list:
             try:
                 first_location = list(
@@ -1425,10 +1416,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 continue
 
     @staticmethod
-    def _parse_irc_item(match, params=None):
+    def _parse_irc_item(match):
         info = {}
-        if params is None:
-            params = {}
 
         split_info = match.group(1).split(';')
 
@@ -1457,17 +1446,17 @@ class TwitchChatDownloader(BaseChatDownloader):
             emotes = info.pop('emotes', None)
             if emotes:
                 TwitchChatDownloader._add_text_for_emotes(
-                    info['message'], emotes, params)
+                    info['message'], emotes)
                 info['emotes'] = emotes
 
         author_badge_metadata = info.pop('author_badge_metadata', [])
         author_badges = info.pop('author_badges', [])
 
         info['author_badges'] = TwitchChatDownloader._parse_irc_badges(
-            author_badges, info.get('channel_id'), params)
+            author_badges, info.get('channel_id'))
 
         badge_metadata = TwitchChatDownloader._parse_irc_badges(
-            author_badge_metadata, info.get('channel_id'), params)
+            author_badge_metadata, info.get('channel_id'))
 
         subscriber_badge = next(
             (x for x in info['author_badges'] if x.get('name') == 'subscriber'), None)
@@ -1500,7 +1489,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         original_message_type = info.get('message_type')
         if original_message_type:
             TwitchChatDownloader._set_message_type(
-                info, original_message_type, params)
+                info, original_message_type)
         else:
             info['message_type'] = info['action_type']
 
@@ -1611,7 +1600,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                         for match in matches:
 
-                            data = self._parse_irc_item(match, params)
+                            data = self._parse_irc_item(match)
 
                             # test for missing keys
                             missing_keys = data.keys() - TwitchChatDownloader._KNOWN_IRC_KEYS

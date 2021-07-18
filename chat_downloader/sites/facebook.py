@@ -475,10 +475,7 @@ class FacebookChatDownloader(BaseChatDownloader):
     }
 
     @ staticmethod
-    def _parse_live_stream_node(node, params=None):
-        if params is None:
-            params = {}
-
+    def _parse_live_stream_node(node):
         info = r.remap_dict(node, FacebookChatDownloader._REMAPPING)
 
         author_info = info.pop('author', {})
@@ -503,7 +500,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         in_reply_to = info.pop('comment_parent', None)
         if isinstance(in_reply_to, dict) and in_reply_to:
             info['in_reply_to'] = FacebookChatDownloader._parse_live_stream_node(
-                in_reply_to, params)
+                in_reply_to)
 
         time_in_seconds = info.get('time_in_seconds')
         if time_in_seconds is not None:
@@ -599,7 +596,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 last_ids = last_ids[-buffer_size:]  # force x items
 
                 parsed_node = FacebookChatDownloader._parse_live_stream_node(
-                    node, params)
+                    node)
                 # TODO determine whether to add or not (message types/groups)
 
                 num_to_add += 1
