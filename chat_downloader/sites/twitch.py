@@ -425,10 +425,17 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         'msg-param-fun-string': 'fun_string',
 
+        # charity
+        'msg-param-charity': 'charity',
+        'msg-param-charity-name': 'charity_name',
+        'msg-param-charity-hashtag': 'charity_hashtag',
+        'msg-param-charity-learn-more': 'charity_link',
+        'msg-param-charity-hours-remaining': 'charity_hours_remaining',
+        'msg-param-charity-days-remaining': 'charity_days_remaining',
+        'msg-param-total': 'charity_total_raised',
+
         # not come across yet, but other tools have it:
-        # 'msg-param-charity':'charity',
         # 'msg-param-bits-amount':'bits_amount',
-        # 'msg-param-total':'total',
         # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase#
         # 'msg-param-userID':'user_id',
         #
@@ -437,11 +444,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # 'msg-param-min-cheer-amount' :'minimum_cheer_amount',
         # 'msg-param-gift-name':'gift_name',
 
-        # 'msg-param-charity-hashtag':'charity_hashtag',
-        # 'msg-param-charity-hours-remaining':'charity_hours_remaining',
-        # 'msg-param-charity-days-remaining':'charity_days_remaining',
-        # 'msg-param-charity-name':'charity_name',
-        # 'msg-param-charity-learn-more':'charity_learn_more',
+
 
 
         # to remove later
@@ -733,6 +736,9 @@ class TwitchChatDownloader(BaseChatDownloader):
         'chants': {
             'crowd-chant': 'crowd_chant'
         },
+        'charity': {
+            'charity': 'charity'
+        },
         'other': {
             'cmds_available': 'cmds_available',
             'unrecognized_cmd': 'unrecognized_cmd',
@@ -803,7 +809,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         for key in item:
             r.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
-                    key, item[key])  # , True
+                    key, item[key])
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -858,7 +864,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     }
 
     def _download_base_gql(self, ops):
-        return self._session_post(self._GQL_API_URL, data=json.dumps(ops).encode(), headers={
+        return self._session_post(self._GQL_API_URL, json=ops, headers={
             'Content-Type': 'text/plain;charset=UTF-8',
             'Client-ID': self._CLIENT_ID
         }).json()
@@ -1297,8 +1303,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             is_live=False
         )
 
-    # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
-
     _MESSAGE_REGEX = re.compile(
         r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:.+#\S+)?(?:.:)*([^\r\n]*)', re.MULTILINE)
     # Groups:
@@ -1411,7 +1415,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 keys.append(True)
             elif key_length == 2:
                 pass
-            else:
+            else:  # TODO never reaches this
                 debug_log(
                     'Invalid item found: {}.'.format(item),
                     'All items: {}.'.format(split_info),
@@ -1672,9 +1676,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             raise UserNotFound('Unable to find user: "{}"'.format(stream_id))
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
-        title = multi_get(stream_info, 'lastBroadcast',
-                          'title') if is_live else None
         channel_id = multi_get(stream_info, 'channel', 'id')
+        title = multi_get(stream_info, 'lastBroadcast',
+                          'title') if is_live else stream_id
+
         self._update_subscriber_badge_info(channel_id)
 
         return Chat(
