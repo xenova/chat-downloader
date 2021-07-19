@@ -172,9 +172,9 @@ def main():
     args = parser.parse_args()
 
     # Modify debugging args:
-    if args.testing:
+    if args.testing: # (only for CLI)
         args.logging = 'debug'
-        args.exit_on_debug = True
+        args.pause_on_debug = True
 
     if args.verbose:
         args.logging = 'debug'
