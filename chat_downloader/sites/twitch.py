@@ -430,9 +430,9 @@ class TwitchChatDownloader(BaseChatDownloader):
         'msg-param-charity-name': 'charity_name',
         'msg-param-charity-hashtag': 'charity_hashtag',
         'msg-param-charity-learn-more': 'charity_link',
-        'msg-param-charity-hours-remaining': 'charity_hours_remaining',
-        'msg-param-charity-days-remaining': 'charity_days_remaining',
-        'msg-param-total': 'charity_total_raised',
+        'msg-param-charity-hours-remaining': r('charity_hours_remaining', int_or_none),
+        'msg-param-charity-days-remaining': r('charity_days_remaining', int_or_none),
+        'msg-param-total': r('charity_total_raised', int_or_none),
 
         # not come across yet, but other tools have it:
         # 'msg-param-bits-amount':'bits_amount',
