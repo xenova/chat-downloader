@@ -9,6 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 from chat_downloader import (run, ChatDownloader)
 from chat_downloader.sites import get_all_sites
 from chat_downloader.utils.core import splitter
+from chat_downloader.debugging import (
+    set_testing_mode,
+    TestingModes as Modes
+)
 
 args = {
     'timeout': 60,
@@ -61,8 +65,7 @@ def generator(site, url):
         params = {
             'url': url,
             'timeout': args['timeout'],
-            'exit_on_debug': True,
-            'quiet': True,
+            'quiet': True
         }
 
         print('\r ➤ ', url)
@@ -113,6 +116,7 @@ for site in get_all_sites():
     except NotImplementedError:
         pass  # No generator, skip
 
+set_testing_mode(Modes.EXIT_ON_DEBUG)
 if __name__ == '__main__':
     print('Running test cases:')
     unittest.main()
@@ -123,4 +127,13 @@ if __name__ == '__main__':
     # pytest -n 4 -v tests/test_generators.py -k "YouTubeChatDownloader or TwitchChatDownloader"
     # pytest -n 4 -v tests/test_generators.py
     # pytest -n 4 -v tests/test_generators.py -k YouTubeChatDownloader
+    # pytest -n 4 -v tests/test_generators.py -k FacebookChatDownloader
     # pytest -n 4 -v tests/test_generators.py -k TwitchChatDownloader
+    # pytest -n 4 -v tests/test_generators.py -k RedditChatDownloader
+
+    # pytest -v tests/test_generators.py -k "YouTubeChatDownloader or TwitchChatDownloader"
+    # pytest -v tests/test_generators.py
+    # pytest -v tests/test_generators.py -k YouTubeChatDownloader
+    # pytest -v tests/test_generators.py -k FacebookChatDownloader
+    # pytest -v tests/test_generators.py -k TwitchChatDownloader
+    # pytest -v tests/test_generators.py -k RedditChatDownloader

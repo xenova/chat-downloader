@@ -24,7 +24,10 @@ from ..utils.core import (
     attempts
 )
 
-from ..debugging import log
+from ..debugging import (
+    log,
+    debug_log
+)
 
 import re
 import json
@@ -70,21 +73,6 @@ class TwitchChatIRC():
 
     def recv(self, buffer_size):
         return self.socket.recv(buffer_size).decode('utf-8', 'ignore')
-
-    # def recvall(self, buffer_size):
-    #     fragments = []  # faster than byte string
-    #     while True:
-    #         part = self.socket.recv(buffer_size)
-    #         fragments.append(part)
-
-    #         # attempt to decode this, otherwise the last byte was incomplete
-    #         # in this case, get more data
-    #         try:
-    #             # if len(part) < buffer_size:
-    #             return b''.join(fragments).decode('utf-8') # , 'ignore'
-    #         except UnicodeDecodeError:
-    #             # print('error', data)
-    #             continue
 
     def join_channel(self, channel_name):
         channel_lower = channel_name.lower()
@@ -437,22 +425,26 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         'msg-param-fun-string': 'fun_string',
 
+        # charity
+        'msg-param-charity': 'charity',
+        'msg-param-charity-name': 'charity_name',
+        'msg-param-charity-hashtag': 'charity_hashtag',
+        'msg-param-charity-learn-more': 'charity_link',
+        'msg-param-charity-hours-remaining': r('charity_hours_remaining', int_or_none),
+        'msg-param-charity-days-remaining': r('charity_days_remaining', int_or_none),
+        'msg-param-total': r('charity_total_raised', int_or_none),
+
         # not come across yet, but other tools have it:
-        # 'msg-param-charity':'charity',
         # 'msg-param-bits-amount':'bits_amount',
-        # 'msg-param-total':'total',
-        # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase# 'msg-param-sub-benefit-end-month':'sub_benChatDownloader       # 'msg-param-userID':'user_id',
+        # 'msg-param-streak-tenure-months':'streak_tenureBaseChatDownloaderBase#
+        # 'msg-param-userID':'user_id',
         #
         # 'msg-param-cumulative-tenure-months':'cumulative_tenure_months',
         # 'msg-param-should-share-streak-tenure':'should-share-streak-tenure',
         # 'msg-param-min-cheer-amount' :'minimum_cheer_amount',
         # 'msg-param-gift-name':'gift_name',
 
-        # 'msg-param-charity-hashtag':'charity_hashtag',
-        # 'msg-param-charity-hours-remaining':'charity_hours_remaining',
-        # 'msg-param-charity-days-remaining':'charity_days_remaining',
-        # 'msg-param-charity-name':'charity_name',
-        # 'msg-param-charity-learn-more':'charity_learn_more',
+
 
 
         # to remove later
@@ -744,6 +736,9 @@ class TwitchChatDownloader(BaseChatDownloader):
         'chants': {
             'crowd-chant': 'crowd_chant'
         },
+        'charity': {
+            'charity': 'charity'
+        },
         'other': {
             'cmds_available': 'cmds_available',
             'unrecognized_cmd': 'unrecognized_cmd',
@@ -808,18 +803,13 @@ class TwitchChatDownloader(BaseChatDownloader):
             self._SUBSCRIBER_BADGE_INFO[channel_id] = self._session_get_json(
                 url).get('badge_sets') or {}
 
-        # print(self._SUBSCRIBER_BADGE_INFO)
-        # print(self._SUBSCRIBER_BADGE_INFO.keys())
-
     @ staticmethod
-    def _parse_item(item, offset, params=None):
+    def _parse_item(item, offset):
         info = {}
-        if params is None:
-            params = {}
 
         for key in item:
             r.remap(info, TwitchChatDownloader._COMMENT_REMAPPING,
-                    key, item[key])  # , True
+                    key, item[key])
 
         if 'time_in_seconds' in info:
             info['time_in_seconds'] -= offset
@@ -843,14 +833,13 @@ class TwitchChatDownloader(BaseChatDownloader):
         # TODO add user colour to author dict
         # TODO check this works
         # author_colour
-        # print()
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
         original_message_type = info.get('message_type')
         if original_message_type:
             TwitchChatDownloader._set_message_type(
-                info, original_message_type, params)
+                info, original_message_type)
         else:
             info['message_type'] = 'text_message'
 
@@ -875,7 +864,7 @@ class TwitchChatDownloader(BaseChatDownloader):
     }
 
     def _download_base_gql(self, ops):
-        return self._session_post(self._GQL_API_URL, data=json.dumps(ops).encode(), headers={
+        return self._session_post(self._GQL_API_URL, json=ops, headers={
             'Content-Type': 'text/plain;charset=UTF-8',
             'Client-ID': self._CLIENT_ID
         }).json()
@@ -1188,20 +1177,19 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             comments = info.get('comments') or []
             for comment in comments:
-                data = self._parse_item(comment, offset, params)
+                data = self._parse_item(comment, offset)
 
                 # test for missing keys
                 missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
 
                 if missing_keys:
-                    self._debug_log(params,
-                                    'Missing keys found: {}'.format(
-                                        missing_keys),
-                                    'Original data: {}'.format(comment),
-                                    'Parsed data: {}'.format(data),
-                                    comment.keys(),
-                                    TwitchChatDownloader._KNOWN_COMMENT_KEYS
-                                    )
+                    debug_log(
+                        'Missing keys found: {}'.format(missing_keys),
+                        'Original data: {}'.format(comment),
+                        'Parsed data: {}'.format(data),
+                        comment.keys(),
+                        TwitchChatDownloader._KNOWN_COMMENT_KEYS
+                    )
 
                 time_in_seconds = data.get('time_in_seconds', 0)
 
@@ -1315,8 +1303,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             is_live=False
         )
 
-    # e.g. @badge-info=;badges=;client-nonce=c5fbf6b9f6b249353811c21dfffe0321;color=#FF69B4;display-name=sumz5;emotes=;flags=;id=340fec40-f54c-4393-a044-bf62c636e98b;mod=0;room-id=86061418;subscriber=0;tmi-sent-ts=1607447245754;turbo=0;user-id=611966876;user-type= :sumz5!sumz5@sumz5.tmi.twitch.tv PRIVMSG #5uppp :PROXIMITY?
-
     _MESSAGE_REGEX = re.compile(
         r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:.+#\S+)?(?:.:)*([^\r\n]*)', re.MULTILINE)
     # Groups:
@@ -1364,13 +1350,10 @@ class TwitchChatDownloader(BaseChatDownloader):
         return new_badge
 
     @staticmethod
-    def _parse_irc_badges(badges, channel_id, params=None):
+    def _parse_irc_badges(badges, channel_id):
         info = []
         if not badges:
             return info
-
-        if params is None:
-            params = {}
 
         for badge in badges.split(','):
             split = badge.split('/', 1)
@@ -1381,58 +1364,46 @@ class TwitchChatDownloader(BaseChatDownloader):
             elif key_length == 2:
                 pass
             else:
-                log('debug', [
+                debug_log(
                     'Invalid badge found: {}.'.format(badge),
-                    'Badge information: {}.'.format(badges),
-                ],
-                    params.get('pause_on_debug')
+                    'Badge information: {}.'.format(badges)
                 )
-                continue  # TODO debug
+                continue
 
             info.append(TwitchChatDownloader._parse_badge_info(
                 split[0], split[1], channel_id))
         return info
 
     @staticmethod
-    def _set_message_type(info, original_message_type, params=None):
-        if params is None:
-            params = {}
+    def _set_message_type(info, original_message_type):
         new_message_type = TwitchChatDownloader._MESSAGE_TYPE_REMAPPING.get(
             original_message_type)
 
         if new_message_type:
             info['message_type'] = new_message_type
         else:
-            log('debug', [
+            debug_log(
                 'Unknown message type: {}'.format(original_message_type),
-                'Parsed data: {}'.format(info),
-            ],
-                params.get('pause_on_debug')
+                'Parsed data: {}'.format(info)
             )
 
     @staticmethod
-    def _add_text_for_emotes(message, emote_list, params=None):
-        if params is None:
-            params = {}
+    def _add_text_for_emotes(message, emote_list):
         for emote in emote_list:
             try:
                 first_location = list(
                     map(lambda x: int(x), emote['locations'][0].split('-')))
                 emote['name'] = message[first_location[0]:first_location[1] + 1]
             except Exception:
-                log('debug', [
+                debug_log(
                     'Invalid emote: {}'.format(emote),
                     'Message: {}'.format(message)
-                ],
-                    params.get('pause_on_debug')
                 )
                 continue
 
     @staticmethod
-    def _parse_irc_item(match, params=None):
+    def _parse_irc_item(match):
         info = {}
-        if params is None:
-            params = {}
 
         split_info = match.group(1).split(';')
 
@@ -1444,12 +1415,10 @@ class TwitchChatDownloader(BaseChatDownloader):
                 keys.append(True)
             elif key_length == 2:
                 pass
-            else:
-                log('debug', [
+            else:  # TODO never reaches this
+                debug_log(
                     'Invalid item found: {}.'.format(item),
                     'All items: {}.'.format(split_info),
-                ],
-                    params.get('pause_on_debug')
                 )
                 continue
 
@@ -1463,17 +1432,17 @@ class TwitchChatDownloader(BaseChatDownloader):
             emotes = info.pop('emotes', None)
             if emotes:
                 TwitchChatDownloader._add_text_for_emotes(
-                    info['message'], emotes, params)
+                    info['message'], emotes)
                 info['emotes'] = emotes
 
         author_badge_metadata = info.pop('author_badge_metadata', [])
         author_badges = info.pop('author_badges', [])
 
         info['author_badges'] = TwitchChatDownloader._parse_irc_badges(
-            author_badges, info.get('channel_id'), params)
+            author_badges, info.get('channel_id'))
 
         badge_metadata = TwitchChatDownloader._parse_irc_badges(
-            author_badge_metadata, info.get('channel_id'), params)
+            author_badge_metadata, info.get('channel_id'))
 
         subscriber_badge = next(
             (x for x in info['author_badges'] if x.get('name') == 'subscriber'), None)
@@ -1502,11 +1471,16 @@ class TwitchChatDownloader(BaseChatDownloader):
             else:
                 # unknown action type
                 info['action_type'] = original_action_type
+                debug_log([
+                    'Unknown action type: {}'.format(info['action_type']),
+                    match,
+                    info
+                ])
 
         original_message_type = info.get('message_type')
         if original_message_type:
             TwitchChatDownloader._set_message_type(
-                info, original_message_type, params)
+                info, original_message_type)
         else:
             info['message_type'] = info['action_type']
 
@@ -1617,19 +1591,18 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                         for match in matches:
 
-                            data = self._parse_irc_item(match, params)
+                            data = self._parse_irc_item(match)
 
                             # test for missing keys
                             missing_keys = data.keys() - TwitchChatDownloader._KNOWN_IRC_KEYS
 
                             if missing_keys:
-                                self._debug_log(params,
-                                                'Missing keys found: {}'.format(
-                                                    missing_keys),
-                                                'Original data: {}'.format(
-                                                    match.groups()),
-                                                'Parsed data: {}'.format(data)
-                                                )
+                                debug_log(
+                                    'Missing keys found: {}'.format(
+                                        missing_keys),
+                                    'Original data: {}'.format(match.groups()),
+                                    'Parsed data: {}'.format(data)
+                                )
                             # check whether to skip this message or not, based on its type
 
                             to_add = self._must_add_item(
@@ -1703,9 +1676,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             raise UserNotFound('Unable to find user: "{}"'.format(stream_id))
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
-        title = multi_get(stream_info, 'lastBroadcast',
-                          'title') if is_live else None
         channel_id = multi_get(stream_info, 'channel', 'id')
+        title = multi_get(stream_info, 'lastBroadcast',
+                          'title') if is_live else stream_id
+
         self._update_subscriber_badge_info(channel_id)
 
         return Chat(
@@ -1715,31 +1689,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             duration=None,
             is_live=is_live
         )
-
-    # def get_chat(self,
-    #              **kwargs
-    #              ):
-
-    #     # get video id
-    #     url = kwargs.get('url')
-
-    #     for regex, function_name in self._REGEX_FUNCTION_MAP:
-    #         match = re.search(regex, url)
-    #         if match:
-    #             return getattr(self, function_name)(match.group('id'), kwargs)
-
-        # if(match):
-        #     match.group('id')
-        #     return self.get_chat_by_video_id(match.group('id'), params)
-
-        # if(match.group('id')):  # normal youtube video
-        #     return
-
-        # else:  # TODO add profile, etc.
-        #     pass
-
-    # def get_chat_messages(self, url):
-    #     pass
 
     # # e.g. 'https://www.twitch.tv/spamfish/videos?filter=all'
     # _VALID_VIDEOS_URL = r'https?://(?:(?:www|go|m)\.)?twitch\.tv/(?P<id>[^/]+)/(?:videos|profile)'

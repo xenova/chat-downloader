@@ -156,7 +156,7 @@ Supported sites:
 
 -  YouTube.com - Livestreams, past broadcasts and premieres.
 -  Twitch.tv - Livestreams, past broadcasts and clips.
--  Reddit.com - Livestreams (past broadcasts in development)
+-  Reddit.com - Livestreams, past broadcasts
 -  Facebook.com (currently in development) - Livestreams and past
    broadcasts.
 

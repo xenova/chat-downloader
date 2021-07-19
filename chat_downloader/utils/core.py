@@ -133,6 +133,10 @@ def try_get(src, getter, expected_type=None):
                 return v
 
 
+def regex_search(text, pattern, group=1, default=None):
+    match = re.search(pattern, text)
+    return match.group(group) if match else default
+
 def get_title_of_webpage(html):
     match = re.search('<title(?:[^>]*)>(.*?)</title>', html)
     return match.group(1) if match else None
@@ -225,8 +229,11 @@ def multi_get(dictionary, *keys, default=None):
     for key in keys:
         if isinstance(current, dict):
             current = current.get(key, default)
-        elif isinstance(current, (list, tuple)) and isinstance(key, int) and key < len(current):
-            current = current[key]
+        elif isinstance(current, (list, tuple)) and isinstance(key, int):
+            try:
+                current = current[key]
+            except IndexError:
+                return default
         else:
             return default
     return current
@@ -395,3 +402,9 @@ def get_default_args(func):
         for k, v in signature.parameters.items()
         if v.default is not inspect.Parameter.empty
     }
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]

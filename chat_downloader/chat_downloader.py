@@ -25,8 +25,9 @@ from .utils.timed_utils import TimedGenerator
 
 from .debugging import (
     log,
-    disable_logger,
-    set_log_level
+    set_testing_mode,
+    TestingModes,
+    TestingException
 )
 
 from .output.continuous_write import ContinuousWriter
@@ -43,7 +44,7 @@ from .errors import (
     InvalidURL,
     ChatDownloaderError,
     ChatGeneratorError,
-    ParsingError,
+    ParsingError
 )
 
 
@@ -87,14 +88,6 @@ class ChatDownloader():
                  timeout=None,
                  inactivity_timeout=None,
                  max_messages=None,
-
-                 # Logging/debugging
-                 logging='none',
-                 pause_on_debug=False,
-                 exit_on_debug=False,
-                 testing=False,
-                 verbose=False,
-                 quiet=False,
 
                  message_groups=SiteDefault('message_groups'),
                  message_types=None,
@@ -144,22 +137,6 @@ class ChatDownloader():
         :param max_messages: Maximum number of messages to retrieve, defaults
             to None (unlimited)
         :type max_messages: int, optional
-        :param logging: Level of logging to display, defaults to 'none'
-            ('info' if run from the CLI)
-        :type logging: str, optional
-        :param pause_on_debug: Pause on certain debug messages, defaults to False
-        :type pause_on_debug: bool, optional
-        :param exit_on_debug: Exit when something unexpected happens, defaults
-            to False
-        :type exit_on_debug: bool, optional
-        :param testing: Enable testing mode. This is equivalent to setting
-            logging to debug and enabling pause_on_debug. Defaults to False
-        :type testing: bool, optional
-        :param verbose: Print various debugging information. This is equivalent
-            to setting logging to debug. Defaults to False
-        :type verbose: bool, optional
-        :param quiet: Activate quiet mode (hide all output), defaults to False
-        :type quiet: bool, optional
         :param message_groups: List of messages groups (a predefined,
             site-specific collection of message types) to include
         :type message_groups: SiteDefault, optional
@@ -210,18 +187,6 @@ class ChatDownloader():
 
         if not url:
             raise URLNotProvided('No URL provided.')
-
-        if testing:
-            logging = 'debug'
-            pause_on_debug = True
-
-        if verbose:
-            logging = 'debug'
-
-        if quiet or logging == 'none':
-            disable_logger()
-        else:
-            set_log_level(logging)
 
         original_params = locals()
         original_params.pop('self')
@@ -357,6 +322,12 @@ def run(propagate_interrupt=False, **kwargs):
     Create a single session and get the chat using the specified parameters.
     """
 
+    # Set testing mode
+    if kwargs.get('exit_on_debug'):
+        set_testing_mode(TestingModes.EXIT_ON_DEBUG)
+    elif kwargs.get('pause_on_debug'):
+        set_testing_mode(TestingModes.PAUSE_ON_DEBUG)
+
     init_param_names = get_default_args(ChatDownloader.__init__)
     program_param_names = get_default_args(ChatDownloader.get_chat)
 
@@ -394,7 +365,8 @@ def run(propagate_interrupt=False, **kwargs):
 
     except (
         ChatGeneratorError,
-        ParsingError
+        ParsingError,
+        TestingException
     ) as e:  # Errors which may be bugs
         log('error', '{}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'.format(e))
 
@@ -402,7 +374,8 @@ def run(propagate_interrupt=False, **kwargs):
         log('error', e)
 
     except ConnectionError as e:
-        log('error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
+        log(
+            'error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
 
     except RequestException as e:
         log('error', e)
