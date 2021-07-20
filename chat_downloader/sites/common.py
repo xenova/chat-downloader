@@ -9,7 +9,8 @@ from ..errors import (
     InvalidParameter,
     RetriesExceeded,
     CookieError,
-    UnexpectedError
+    UnexpectedError,
+    URLNotProvided
 )
 
 from ..utils.core import (
@@ -223,6 +224,9 @@ class Chat():
         # TODO
         # author/user/uploader/creator
 
+        self._output_writer = None
+        self._output_callback = None
+
     def __iter__(self):
         """Allows the object to be iterable
 
@@ -231,16 +235,36 @@ class Chat():
         """
         return self
 
+    def attach_writer(self, writer):
+        # writer is a ContinuousWriter
+        self._output_writer = writer
+        if self._output_writer.is_default():
+            self._output_callback = lambda item: self._output_writer.write(
+                self.format(item), flush=True)
+        else:
+            self._output_callback = lambda item: self._output_writer.write(
+                item, flush=True)
+
     def __next__(self):
         """Get the next chat message from the generator
 
         :return: The next chat item
         :rtype: dict
         """
-        item = next(self.chat)
-        if self.callback:
-            self.callback(item)
-        return item
+        try:
+            item = next(self.chat)
+            if self.callback:  # user-defined callback
+                self.callback(item)
+
+            if self._output_callback:  # output callback
+                self._output_callback(item)
+
+            return item
+        except StopIteration as e:
+            # Safely close output file when done
+            if self._output_writer is not None:
+                self._output_writer.close()
+            raise e
 
     def print_formatted(self, item):
         """Safely print the formatted message
