@@ -989,7 +989,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # 'contentTags': 'tags'
     }
 
-    def get_user_videos(self, username, limit=30, video_type=None, sort='TIME'):
+    def get_user_videos(self, username, limit=None, video_type=None, sort='TIME'):
         # Name -> broadcastType
 
         # Collections (ChannelCollectionsContent)
@@ -1004,9 +1004,12 @@ class TwitchChatDownloader(BaseChatDownloader):
         # Sort -> videoSort
         # VIEWS
         # TIME
+        if limit is None:
+            limit = float('inf')
 
         remaining_count = limit
-        # offset = 0
+        cursor = None
+
         while True:
             num_to_get = max(min(remaining_count, 30), 0)  # in this call
             if num_to_get <= 0:
@@ -1021,6 +1024,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                     'videoSort': sort
                 }
             }]
+            if cursor:
+                query[0]['variables']['cursor'] = cursor
 
             info = self._download_gql(query)
             if not info:
@@ -1035,7 +1040,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             remaining_count -= len(edges)
 
             for edge in edges:
-                node = edge['node'] or {}
+                cursor = edge.get('cursor')
+                node = edge.get('node')
+                if not node:
+                    continue
                 yield r.remap_dict(node, TwitchChatDownloader._VIDEO_REMAPPING)
 
             if not videos['pageInfo']['hasNextPage']:
