@@ -9,6 +9,7 @@ from .common import (
 from ..errors import (
     ChatDownloaderError,
     NoChatReplay,
+    ChatDisabled,
     NoContinuation,
     ParsingError,
     VideoUnavailable,
@@ -115,9 +116,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'timeout': 5
             }
         },
-
-
-
         {
             'name': 'Get chat messages from live chat replay',
             'params': {
@@ -132,13 +130,39 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
+            'name': 'Get chat messages from live chat replay',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
+                'max_messages': 10
+            },
+
+            'expected_result': {
+                'message_types': ['text_message'],
+                'action_types': ['add_chat_item'],
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Get top chat messages from live chat replay',  # Premiere
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
+                'start_time': 0,
+                'end_time': 20,
+                'chat_type': 'top'
+            },
+            'expected_result': {
+                'message_types': ['text_message'],
+                'action_types': ['add_chat_item'],
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
             'name': 'Get superchat and ticker messages from live chat replay',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=UlemRwXYWHg',
                 'end_time': 20,
                 'message_groups': ['superchat', 'tickers']
             },
-
             'expected_result': {
                 'message_types': ['paid_message', 'ticker_paid_message_item', 'membership_item', 'ticker_sponsor_item', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
@@ -152,7 +176,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'end_time': 50,
                 'message_types': ['all']
             },
-
             'expected_result': {
                 'message_types': ['viewer_engagement_message', 'paid_message', 'ticker_paid_message_item', 'text_message', 'paid_sticker', 'ticker_paid_sticker_item'],
                 'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
@@ -160,14 +183,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'Get messages from top chat replay',
+            'name': 'Get messages from a premiere',  # Premiere
             'params': {
                 'url': 'https://www.youtube.com/watch?v=zVCs9Cug_qM',
                 'start_time': 0,
                 'end_time': 20,
-                'chat_type': 'top'
             },
-
             'expected_result': {
                 'message_types': ['text_message'],
                 'action_types': ['add_chat_item'],
@@ -181,9 +202,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'start_time': 0,
                 'end_time': 40,
                 'message_groups': ['donations']
-
             },
-
             'expected_result': {
                 'message_types': ['donation_announcement'],
                 'action_types': ['add_chat_item'],
@@ -198,7 +217,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'start_time': 10,
                 'end_time': 100,
             },
-
             'expected_result': {
                 'message_types': ['text_message'],
                 'action_types': ['add_chat_item'],
@@ -206,12 +224,49 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
 
-
         # TESTING FOR ERRORS
         {
             'name': 'Video does not exist',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=xxxxxxxxxxx',
+            },
+            'expected_result': {
+                'error': VideoUnavailable,
+            }
+        },
+        {
+            'name': 'This video is no longer available because the YouTube account associated with this video has been terminated.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=V36LpHqtcDY',
+            },
+            'expected_result': {
+                'error': VideoUnavailable,
+            }
+        },
+        {
+            'name': 'This video is not available.',  # YouTube Premium
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=i1Ko8UG-Tdo',
+            },
+            'expected_result': {
+                'error': VideoUnplayable,
+            }
+        },
+        {
+            'name': 'This video is not available.',  # Rental video preview
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=yYr8q0y5Jfg',
+            },
+            'expected_result': {
+                'error': VideoUnplayable,
+            }
+        },
+        {
+            # The following content has been identified by the YouTube community
+            # as inappropriate or offensive to some audiences.
+            'name': "This video has been removed for violating YouTube's policy on hate speech. Learn more about combating hate speech in your country.",  # Rental video preview
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=6SJNVb0GnPI',
             },
             'expected_result': {
                 'error': VideoUnavailable,
@@ -232,7 +287,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'url': 'https://www.youtube.com/watch?v=XWq5kBlakcQ',
             },
             'expected_result': {
-                'error': NoChatReplay,
+                'error': ChatDisabled,
             }
         },
         {
@@ -244,6 +299,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'error': NoChatReplay,
             }
         },
+
         {
             'name': 'Video is private',
             'params': {
@@ -260,6 +316,25 @@ class YouTubeChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'error': VideoUnplayable,
+            }
+        },
+        {
+            'name': 'This live stream recording is not available.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=qEJwOuvDf7I',
+            },
+            'expected_result': {
+                'error': VideoUnplayable,
+            }
+        },
+        {
+            # Age restricted
+            'name': 'Sign in to confirm your age. This video may be inappropriate for some users.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=WaOKSUlf4TM',
+            },
+            'expected_result': {
+                'error': LoginRequired,
             }
         },
 
@@ -404,7 +479,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     (?P<id>[a-zA-Z0-9_-]+)'''
     }
 
-    @staticmethod
+    @ staticmethod
     def _get_source_image_url(url):
         index = url.find('=')
         if index >= 0:
@@ -625,7 +700,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'text': multi_get(item, 'buttonRenderer', 'text', 'simpleText') or ''
         }
 
-    @staticmethod
+    @ staticmethod
     def _get_simple_text(item):
         return item.get('simpleText')
 
@@ -653,7 +728,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     # https://en.wikipedia.org/wiki/ISO_4217
     # e.g. 'CHF', 'COP', 'HUF', 'PHP', 'PLN', 'RUB', 'SEK', 'PEN', 'ARS', 'CLP', 'NOK', 'BAM', 'SGD'
 
-    @staticmethod
+    @ staticmethod
     def _parse_currency(item):
         mixed_text = item.get('simpleText') or str(item)
 
@@ -955,7 +1030,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             yield from self.get_playlist_items(playlist_url)
 
-    @staticmethod
+    @ staticmethod
     def _get_rendered_content(yt_info, tab_index=0):
         return yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][tab_index]['tabRenderer']['content'][
             'sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents'][0]
@@ -969,7 +1044,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # 'videoId', 'thumbnail', 'title', 'viewCountText', 'navigationEndpoint', 'ownerBadges', 'trackingParams', 'shortViewCountText', 'menu', 'thumbnailOverlays'
     }
 
-    @staticmethod
+    @ staticmethod
     def _parse_video(video_renderer):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
@@ -1211,7 +1286,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 error_message = self._parse_runs(error_runs, False)[
                     'message'] if error_runs else 'Video does not have a chat replay.'
 
-                raise NoChatReplay(error_message)
+                # Live chat replay was turned off for this video. -> NoChatReplay
+                if 'disabled' in error_message:
+                    raise ChatDisabled(error_message)
+                else:
+                    raise NoChatReplay(error_message)
 
         video_details = player_response_info.get('videoDetails') or {}
         details['title'] = video_details.get('title')
