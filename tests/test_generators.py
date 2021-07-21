@@ -15,18 +15,17 @@ from chat_downloader.debugging import (
 )
 
 args = {
-    'timeout': 60,
-    'max_tests_per_site': 100,
+    'timeout': 10,
+    'max_tests_per_site': 50,
     'sites': ['all'],
 
     # For Twitch:
-    'livestream_limit': 10,
+    'livestream_limit': 5,
     'vod_limit': 5,
     'clip_limit': 5
 }
 
-if __name__ == '__main__':
-    # Do not parse args if using pytest
+if __name__ == '__main__':  # Do not parse args if using pytest
 
     # Parse args and use this when creating the test cases
     parser = argparse.ArgumentParser(
@@ -35,18 +34,19 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--timeout', default=args['timeout'], type=float, help='The maximum time that any single test may run for.')
+        '--timeout', default=60, type=float, help='The maximum time that any single test may run for.')
     parser.add_argument(
-        '--sites', '-k', default=args['sites'], type=splitter, help='The sites to generates tests for.')
+        '--sites', '-k', default=['all'], type=splitter, help='The sites to generates tests for.')
     parser.add_argument(
-        '--max_tests_per_site', default=args['max_tests_per_site'], type=int, help='The maximum number of tests that any site can generate.')
+        '--max_tests_per_site', default=100, type=int, help='The maximum number of tests that any site can generate.')
 
+    # For Twitch:
     parser.add_argument(
-        '--livestream_limit', default=args['livestream_limit'], type=int, help='The maximum number of livestreams to generate.')
+        '--livestream_limit', default=10, type=int, help='The maximum number of livestreams to generate.')
     parser.add_argument(
-        '--vod_limit', default=args['vod_limit'], type=int, help='The maximum number of vods to generate.')
+        '--vod_limit', default=5, type=int, help='The maximum number of vods to generate.')
     parser.add_argument(
-        '--clip_limit', default=args['clip_limit'], type=int, help='The maximum number of clips to generate.')
+        '--clip_limit', default=5, type=int, help='The maximum number of clips to generate.')
 
     args.update(parser.parse_args().__dict__)
 
