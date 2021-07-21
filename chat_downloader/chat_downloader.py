@@ -348,7 +348,7 @@ def run(propagate_interrupt=False, **kwargs):
                 pass
         else:
             def callback(item):
-                safe_print(chat.format(item), flush=True)
+                chat.print_formatted(item)
 
         for message in chat:
             callback(message)
