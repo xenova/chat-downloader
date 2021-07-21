@@ -10,7 +10,9 @@ from ..errors import (
     RetriesExceeded,
     CookieError,
     UnexpectedError,
-    URLNotProvided
+    URLNotProvided,
+    SiteNotSupported,
+    InvalidURL
 )
 
 from ..utils.core import (
@@ -266,14 +268,13 @@ class Chat():
                 self._output_writer.close()
             raise e
 
-    def print_formatted(self, item):
+    def print_formatted(self, item, flush=True):
         """Safely print the formatted message
 
         :param item: The chat item to be printed
         :type item: dict
         """
-        formatted = self.format(item)
-        safe_print(formatted)
+        safe_print(self.format(item), flush=flush)
 
     def format(self, item):
         """Format chat messages
@@ -303,6 +304,14 @@ class BaseChatDownloader:
     # For general tests (non-site specific)
     _TESTS = [
         {
+            'name': 'Inactivity timeout',
+            'params': {
+                'url': 'https://twitch.tv/xenova',
+                'inactivity_timeout': 5,
+                'timeout': 20,  # As a fallback
+            }
+        },
+        {
             'name': 'Get a certain number of messages from a livestream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
@@ -312,6 +321,48 @@ class BaseChatDownloader:
 
             'expected_result': {
                 'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        },
+
+
+        {
+            'name': 'Scheme not supplied',
+            'params': {
+                'url': 'www.youtube.com/watch?v=5qap5aO4i9A',
+                'max_messages': 10,
+                'timeout': 60,  # As a fallback
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        },
+
+        # Tests for errors
+        {
+            'name': 'No URL provided.',
+            'params': {
+                'url': '',
+            },
+            'expected_result': {
+                'error': URLNotProvided
+            }
+        },
+        {
+            'name': 'Site not supported',
+            'params': {
+                'url': 'https://www.example.com',
+            },
+            'expected_result': {
+                'error': SiteNotSupported
+            }
+        },
+        {
+            'name': 'Invalid URL',
+            'params': {
+                'url': '#',
+            },
+            'expected_result': {
+                'error': InvalidURL
             }
         }
     ]
