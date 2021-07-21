@@ -125,8 +125,7 @@ def regex_search(text, pattern, group=1, default=None):
 
 
 def get_title_of_webpage(html):
-    match = re.search('<title(?:[^>]*)>(.*?)</title>', html)
-    return match.group(1) if match else None
+    return regex_search(html, '<title(?:[^>]*)>(.*?)</title>')
 
 
 def int_or_none(v, default=None):
