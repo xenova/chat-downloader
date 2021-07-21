@@ -119,23 +119,10 @@ def rgba_to_hex(colours):
     return '#{:02x}{:02x}{:02x}{:02x}'.format(*colours)
 
 
-# from youtube-dl
-def try_get(src, getter, expected_type=None):
-    # used when a method is needed
-    # or list/number index retrieval
-    for get in wrap_as_list(getter):
-        try:
-            v = get(src)
-        except (AttributeError, KeyError, TypeError, IndexError):
-            pass
-        else:
-            if expected_type is None or isinstance(v, expected_type):
-                return v
-
-
 def regex_search(text, pattern, group=1, default=None):
     match = re.search(pattern, text)
     return match.group(group) if match else default
+
 
 def get_title_of_webpage(html):
     match = re.search('<title(?:[^>]*)>(.*?)</title>', html)

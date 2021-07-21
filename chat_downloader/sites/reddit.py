@@ -334,13 +334,6 @@ class RedditChatDownloader(BaseChatDownloader):
             except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
-    def _try_post_info(self, url, max_attempts, retry_timeout=None, **kwargs):
-        for attempt_number in attempts(max_attempts):
-            try:
-                return self._session_post(url, **kwargs).json()
-            except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, e, retry_timeout)
-
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
     _FALLBACK_API_TEMPLATE = 'https://gateway.reddit.com/desktopapi/v1/postcomments/t3_{}?limit=1'
 
