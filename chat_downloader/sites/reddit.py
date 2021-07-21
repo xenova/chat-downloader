@@ -12,7 +12,6 @@ from ..utils.core import (
     try_parse_json,
     try_get_first_value,
     get_title_of_webpage,
-    try_get,
     chunks,
     ensure_seconds,
     seconds_to_time,
@@ -137,7 +136,7 @@ class RedditChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'Chat replay with start and end times',
+            'name': 'Chat replay with start and end times #1',
             'params': {
                 'url': 'https://www.reddit.com/rpan/r/pan/lmvsbl',
                 'start_time': 123,
@@ -147,7 +146,17 @@ class RedditChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
-
+        {
+            'name': 'Chat replay with start and end times #2',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/pan/lmvsbl',
+                'start_time': 600,
+                'end_time': 900,
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
         # Anomalies
         {
             'name': 'Connection issues',

@@ -126,7 +126,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'expected_result': {
                 'message_types': ['text_message'],
                 'action_types': ['add_chat_item'],
-                'messages_condition': lambda messages: len(messages) > 0,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
         {
@@ -139,7 +139,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'expected_result': {
                 'message_types': ['text_message'],
                 'action_types': ['add_chat_item'],
-                'messages_condition': lambda messages: len(messages) > 0,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
         {
