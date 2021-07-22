@@ -13,7 +13,8 @@ from chat_downloader.sites import (
 )
 from chat_downloader.debugging import (
     set_testing_mode,
-    TestingModes as Modes
+    TestingModes as Modes,
+    log
 )
 
 
@@ -47,7 +48,10 @@ def generator(site, test):
 
             except Exception as e:
                 error = expected_result.get('error')
-                self.assertTrue(error is not None and isinstance(e, error))
+                correct_exception = error is not None and isinstance(e, error)
+                if not correct_exception:
+                    log('error', e)
+                self.assertTrue(correct_exception)
 
             messages_condition = expected_result.get('messages_condition')
 
