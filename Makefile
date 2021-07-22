@@ -62,12 +62,16 @@ coverage: ## check code coverage quickly with the default Python
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
+	python docs/scripts/update_coverage.py
+
+coverage-report:
+	@coverage report --precision=2
 
 docs: ## generate Sphinx HTML documentation and README
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/index.html
-	cd docs && python scripts/generate_readme.py > ../README.rst
+	python docs/scripts/generate_readme.py > README.rst
 
 servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
