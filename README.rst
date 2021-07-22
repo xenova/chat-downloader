@@ -23,7 +23,7 @@ Chat Downloader
   :target: https://github.com/xenova/chat-downloader/blob/master/LICENSE
   :alt: License
 
-.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/xenova/chat-downloader/master/docs/_dynamic/coverage.json
+.. image:: https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fxenova%2Fchat-downloader%2Fmaster%2Fdocs%2F_dynamic%2Fcoverage.json
   :target: https://pypi.org/project/chat-downloader
   :alt: Coverage
 
