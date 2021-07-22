@@ -17,9 +17,7 @@ with open('README.rst') as readme_file:
 
 requirements = [
     'requests',
-    'datetime',
     'isodate',
-    'regex',
     'argparse',
     'docstring-parser',
     'colorlog',
@@ -33,7 +31,7 @@ setup(
     version=metadata['__version__'],
     python_requires='>=3.6',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
@@ -58,8 +56,13 @@ setup(
             'twine',
             'wheel',
             'tox',
+
+            # Testing and coverage
             'pytest',
+            'pytest-cov',
             'pytest-xdist',
+
+            # Documentation
             'sphinx',
             'sphinx-rtd-theme',
             'sphinxcontrib-programoutput'
