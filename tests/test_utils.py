@@ -28,6 +28,3 @@ class TestUtils(unittest.TestCase):
             '<title>test title</title>'), 'test title')
         self.assertEqual(get_title_of_webpage(
             'a <title>title</title> b'), 'title')
-
-    def test_timed_input(self):
-        self.assertEqual(timed_input(5, 'Enter:'), None)
