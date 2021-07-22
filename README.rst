@@ -10,18 +10,24 @@ Chat Downloader
 .. image:: https://img.shields.io/pypi/pyversions/chat-downloader
    :target: https://pypi.org/project/chat-downloader
    :alt: Python
+
 .. image:: https://img.shields.io/pypi/v/chat-downloader.svg
    :target: https://pypi.org/project/chat-downloader
    :alt: PyPI version
-.. image:: https://pepy.tech/badge/chat-downloader
+
+.. image:: https://pepy.tech/badge/chat-downloader/month
    :target: https://pypi.org/project/chat-downloader
    :alt: Downloads
+
 .. image:: https://img.shields.io/github/license/xenova/chat-downloader
   :target: https://github.com/xenova/chat-downloader/blob/master/LICENSE
   :alt: License
 
+.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/xenova/chat-downloader/master/docs/_dynamic/coverage.json
+  :target: https://pypi.org/project/chat-downloader
+  :alt: Coverage
+
 ..
-    [![PyPI Downloads](https://img.shields.io/pypi/dm/chat-downloader)](https://pypi.org/project/chat-downloader)
     [![GitHub issues](https://img.shields.io/github/issues/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
     [![GitHub forks](https://img.shields.io/github/forks/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
     [![GitHub stars](https://img.shields.io/github/stars/xenova/chat-downloader)](https://badge.fury.io/py/chat-downloader)
