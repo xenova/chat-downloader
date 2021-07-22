@@ -98,7 +98,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
                 'error': LoginRequired
             }
         },
@@ -110,7 +110,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
                 'error': LoginRequired
             }
         },
@@ -122,7 +122,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
                 'error': LoginRequired
             }
         },
@@ -134,7 +134,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
                 'error': LoginRequired
             }
         },
