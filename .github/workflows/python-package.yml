@@ -35,11 +35,7 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Run unit tests
-      run: |
-        make test
-
-    - name: Run coverage tests
+    - name: Run tests and determine coverage
       run: |
         make coverage
         coverage xml
@@ -51,4 +47,4 @@ jobs:
         files: ./coverage.xml
         directory: ./coverage/reports/
         fail_ci_if_error: true
-        verbose: true # optional (default = false)      
+        verbose: true # optional (default = false)
