@@ -47,8 +47,12 @@ def generator(site, test):
                 messages_list = list(chat)
 
             except Exception as e:
-                error = expected_result.get('error')
-                self.assertTrue(error is not None and isinstance(e, error))
+                errors = expected_result.get('error')
+                if not isinstance(errors, (list, tuple)):
+                    errors = [errors]
+
+                correct_error = any(error is not None and isinstance(e, error) for error in errors)
+                self.assertTrue(correct_error)
 
             messages_condition = expected_result.get('messages_condition')
 

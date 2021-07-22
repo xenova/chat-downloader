@@ -17,7 +17,8 @@ from ..utils.core import (
 
 from ..errors import (
     SiteError,
-    VideoUnavailable
+    VideoUnavailable,
+    LoginRequired
 )
 
 from ..debugging import (log, debug_log)
@@ -98,6 +99,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'error': LoginRequired
             }
         },
 
@@ -109,6 +111,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'error': LoginRequired
             }
         },
 
@@ -120,6 +123,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'error': LoginRequired
             }
         },
 
@@ -131,6 +135,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'error': LoginRequired
             }
         },
 
@@ -141,7 +146,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'url': 'https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/',
             },
             'expected_result': {
-                'error': VideoUnavailable,
+                'error': (VideoUnavailable, LoginRequired),
             }
         },
     ]
@@ -218,6 +223,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         instances = multi_get(json_data, 'jsmods', 'instances')
         if not instances:
+            if '/login/?next=' in str(multi_get(json_data, 'jsmods', 'require')):
+                raise LoginRequired('Login required')
+
             log('debug', 'Data: {}'.format(json_data))
             raise VideoUnavailable('Video unavailable (may be private)')
 
