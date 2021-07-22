@@ -11,6 +11,7 @@ from chat_downloader.sites import get_all_sites
 from chat_downloader.utils.core import splitter
 from chat_downloader.debugging import (
     set_testing_mode,
+    set_log_level,
     TestingModes as Modes
 )
 
@@ -116,6 +117,7 @@ for site in get_all_sites():
     except NotImplementedError:
         pass  # No generator, skip
 
+set_log_level('debug')
 set_testing_mode(Modes.EXIT_ON_DEBUG)
 if __name__ == '__main__':
     print('Running test cases:')
