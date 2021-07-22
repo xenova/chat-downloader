@@ -605,11 +605,6 @@ class BaseChatDownloader:
         if isinstance(error, Exception):
             retry_text += ' {} ({})'.format(error, error.__class__.__name__)
 
-        log(
-            'warning',
-            text + [retry_text]
-        )
-
         if isinstance(error, JSONDecodeError):
             log(
                 'debug',
@@ -618,6 +613,11 @@ class BaseChatDownloader:
             page_title = get_title_of_webpage(error.doc)
             if page_title:
                 log('debug', 'Title: {}'.format(page_title))
+
+        log(
+            'warning',
+            text + [retry_text]
+        )
 
         if must_sleep:
             timed_input(time_to_sleep)
