@@ -2,10 +2,13 @@ import subprocess
 import re
 
 
+def run_cmd(cmd):
+    return subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()[0].decode()
+
+
 def cmd_output(cmd, padding=' '*4):
-    output = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
-    text = output[0].decode()
+    text = run_cmd(cmd)
     return '.. code:: console\n\n' + ''.join(map(lambda x: padding + x, text.splitlines(True)))
 
 

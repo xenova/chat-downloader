@@ -17,7 +17,8 @@ from ..utils.core import (
 
 from ..errors import (
     SiteError,
-    VideoUnavailable
+    VideoUnavailable,
+    LoginRequired
 )
 
 from ..debugging import (log, debug_log)
@@ -90,8 +91,64 @@ class FacebookChatDownloader(BaseChatDownloader):
     }
 
     _TESTS = [
-        # Unavailable (private?)
-        # https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/
+        {
+            'name': 'Get chat messages from past broadcast',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/3629284013844544/',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'error': LoginRequired
+            }
+        },
+
+        {
+            'name': 'Get chat messages from clip',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/1170480696709027/',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'error': LoginRequired
+            }
+        },
+
+        {
+            'name': 'Get chat messages from short video',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/333201981735004/',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'error': LoginRequired
+            }
+        },
+
+        {
+            'name': 'Get chat messages from long video',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/918814568681983/',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'error': LoginRequired
+            }
+        },
+
+        # Check for errors
+        {
+            'name': 'Video unavailable or private',
+            'params': {
+                'url': 'https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/',
+            },
+            'expected_result': {
+                'error': (VideoUnavailable, LoginRequired),
+            }
+        },
     ]
 
     _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
@@ -138,7 +195,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             self._VIDEO_PAGE_TAHOE_TEMPLATE.format(video_id),
             max_attempts,
             retry_timeout,
-            True,
+            fb_json=True,
             headers=self._FB_HEADERS, data=self.data
         )
 
@@ -166,6 +223,9 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         instances = multi_get(json_data, 'jsmods', 'instances')
         if not instances:
+            if '/login/?next=' in str(multi_get(json_data, 'jsmods', 'require')):
+                raise LoginRequired('Login required')
+
             log('debug', 'Data: {}'.format(json_data))
             raise VideoUnavailable('Video unavailable (may be private)')
 
@@ -502,9 +562,9 @@ class FacebookChatDownloader(BaseChatDownloader):
             info['in_reply_to'] = FacebookChatDownloader._parse_live_stream_node(
                 in_reply_to)
 
-        time_in_seconds = info.get('time_in_seconds')
-        if time_in_seconds is not None:
-            info['time_text'] = seconds_to_time(time_in_seconds)
+        # time_in_seconds = info.get('time_in_seconds')
+        # if time_in_seconds is not None:
+        #     info['time_text'] = seconds_to_time(time_in_seconds)
 
         message = info.get('message')
         if message:
@@ -569,7 +629,18 @@ class FacebookChatDownloader(BaseChatDownloader):
                 log('debug', 'No top level comments: {}'.format(json_data))
                 continue
 
-            edges = reversed(top_level_comments.get('edges'))  # reverse order
+            # Parse items:
+            parsed_items = []
+            for edge in top_level_comments.get('edges') or []:
+                node = edge.get('node')
+                if not node:
+                    log('debug', 'No node found in edge: {}'.format(edge))
+                    continue
+                parsed_items.append(
+                    FacebookChatDownloader._parse_live_stream_node(node))
+
+            # Sort items
+            parsed_items.sort(key=lambda x: x['timestamp'])
 
             # TODO - get pagination working
             # page_info = top_level_comments.get('page_info')
@@ -577,29 +648,20 @@ class FacebookChatDownloader(BaseChatDownloader):
             # has_next_page = page_info.get('has_next_page')
 
             num_to_add = 0
-            for edge in edges:
-                node = edge.get('node')
-                if not node:
-                    log('debug', 'No node found in edge: {}'.format(edge))
-                    continue
-
-                comment_id = node.get('id')
+            for item in parsed_items:
+                comment_id = item.get('message_id')
 
                 # remove items that have already been parsed
                 if comment_id in last_ids:
                     continue
 
                 last_ids.append(comment_id)
-
                 last_ids = last_ids[-buffer_size:]  # force x items
 
-                parsed_node = FacebookChatDownloader._parse_live_stream_node(
-                    node)
                 # TODO determine whether to add or not (message types/groups)
 
                 num_to_add += 1
-
-                yield parsed_node
+                yield item
 
             # got 25 items, and this isn't the first one
             if num_to_add >= buffer_size and not first_try:
@@ -647,18 +709,11 @@ class FacebookChatDownloader(BaseChatDownloader):
                 self._VOD_COMMENTS_API,
                 max_attempts,
                 retry_timeout,
-                True,
+                fb_json=True,
                 headers=self._FB_HEADERS, params=request_params, data=self.data
             )
 
-            next_start_time = next_end_time
-
-            if next_start_time >= end_time:
-                return
-
-            payloads = multi_get(json_data, 'payload', 'ufipayloads')
-            if not payloads:
-                continue
+            payloads = multi_get(json_data, 'payload', 'ufipayloads') or []
 
             for payload in payloads:
                 time_offset = payload.get('timeoffset')
@@ -674,7 +729,8 @@ class FacebookChatDownloader(BaseChatDownloader):
                 # pinned_comments = ufipayload.get('pinnedcomments')
                 profile = try_get_first_value(ufipayload['profiles'])
 
-                text = comment['body']['text']  # safe_convert_text()
+                # TODO proper parsing
+                text = comment['body']['text']
 
                 temp = {
                     'author': {
@@ -686,6 +742,10 @@ class FacebookChatDownloader(BaseChatDownloader):
                 }
 
                 yield temp
+
+            if next_end_time >= end_time:
+                return
+            next_start_time = next_end_time
 
     def _get_chat_by_video_id(self, match, params):
         return self.get_chat_by_video_id(match.group('id'), params)

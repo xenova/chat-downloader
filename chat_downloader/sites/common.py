@@ -9,7 +9,10 @@ from ..errors import (
     InvalidParameter,
     RetriesExceeded,
     CookieError,
-    UnexpectedError
+    UnexpectedError,
+    URLNotProvided,
+    SiteNotSupported,
+    InvalidURL
 )
 
 from ..utils.core import (
@@ -223,6 +226,9 @@ class Chat():
         # TODO
         # author/user/uploader/creator
 
+        self._output_writer = None
+        self._output_callback = None
+
     def __iter__(self):
         """Allows the object to be iterable
 
@@ -231,25 +237,44 @@ class Chat():
         """
         return self
 
+    def attach_writer(self, writer):
+        # writer is a ContinuousWriter
+        self._output_writer = writer
+        if self._output_writer.is_default():
+            self._output_callback = lambda item: self._output_writer.write(
+                self.format(item), flush=True)
+        else:
+            self._output_callback = lambda item: self._output_writer.write(
+                item, flush=True)
+
     def __next__(self):
         """Get the next chat message from the generator
 
         :return: The next chat item
         :rtype: dict
         """
-        item = next(self.chat)
-        if self.callback:
-            self.callback(item)
-        return item
+        try:
+            item = next(self.chat)
+            if self.callback:  # user-defined callback
+                self.callback(item)
 
-    def print_formatted(self, item):
+            if self._output_callback:  # output callback
+                self._output_callback(item)
+
+            return item
+        except StopIteration as e:
+            # Safely close output file when done
+            if self._output_writer is not None:
+                self._output_writer.close()
+            raise e
+
+    def print_formatted(self, item, flush=True):
         """Safely print the formatted message
 
         :param item: The chat item to be printed
         :type item: dict
         """
-        formatted = self.format(item)
-        safe_print(formatted)
+        safe_print(self.format(item), flush=flush)
 
     def format(self, item):
         """Format chat messages
@@ -279,6 +304,14 @@ class BaseChatDownloader:
     # For general tests (non-site specific)
     _TESTS = [
         {
+            'name': 'Inactivity timeout',
+            'params': {
+                'url': 'https://twitch.tv/xenova',
+                'inactivity_timeout': 5,
+                'timeout': 20,  # As a fallback
+            }
+        },
+        {
             'name': 'Get a certain number of messages from a livestream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
@@ -288,6 +321,48 @@ class BaseChatDownloader:
 
             'expected_result': {
                 'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        },
+
+
+        {
+            'name': 'Scheme not supplied',
+            'params': {
+                'url': 'www.youtube.com/watch?v=5qap5aO4i9A',
+                'max_messages': 10,
+                'timeout': 60,  # As a fallback
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) <= 10,
+            }
+        },
+
+        # Tests for errors
+        {
+            'name': 'No URL provided.',
+            'params': {
+                'url': '',
+            },
+            'expected_result': {
+                'error': URLNotProvided
+            }
+        },
+        {
+            'name': 'Site not supported',
+            'params': {
+                'url': 'https://www.example.com',
+            },
+            'expected_result': {
+                'error': SiteNotSupported
+            }
+        },
+        {
+            'name': 'Invalid URL',
+            'params': {
+                'url': '#',
+            },
+            'expected_result': {
+                'error': InvalidURL
             }
         }
     ]
@@ -530,11 +605,6 @@ class BaseChatDownloader:
         if isinstance(error, Exception):
             retry_text += ' {} ({})'.format(error, error.__class__.__name__)
 
-        log(
-            'warning',
-            text + [retry_text]
-        )
-
         if isinstance(error, JSONDecodeError):
             log(
                 'debug',
@@ -543,6 +613,11 @@ class BaseChatDownloader:
             page_title = get_title_of_webpage(error.doc)
             if page_title:
                 log('debug', 'Title: {}'.format(page_title))
+
+        log(
+            'warning',
+            text + [retry_text]
+        )
 
         if must_sleep:
             timed_input(time_to_sleep)

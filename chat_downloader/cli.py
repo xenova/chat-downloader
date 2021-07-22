@@ -27,7 +27,7 @@ from .debugging import (
 )
 
 
-def main():
+def main(cli_args=None):
 
     parser = argparse.ArgumentParser(
         description=__summary__,
@@ -169,10 +169,10 @@ def main():
     parser._positionals.title = 'Mandatory Arguments'
     parser._optionals.title = 'General Arguments'
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=cli_args)
 
     # Modify debugging args:
-    if args.testing: # (only for CLI)
+    if args.testing:  # (only for CLI)
         args.logging = 'debug'
         args.pause_on_debug = True
 

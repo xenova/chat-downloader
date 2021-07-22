@@ -258,15 +258,8 @@ class ChatDownloader():
                     x, format_name=params['format'])
 
                 if params['output']:
-                    output_file = ContinuousWriter(
-                        params['output'], indent=params['indent'], sort_keys=params['sort_keys'], overwrite=params['overwrite'])
-
-                    if output_file.is_default():
-                        chat.callback = lambda item: output_file.write(
-                            chat.format(item), flush=True)
-                    else:
-                        chat.callback = lambda item: output_file.write(
-                            item, flush=True)
+                    chat.attach_writer(ContinuousWriter(
+                        params['output'], indent=params['indent'], sort_keys=params['sort_keys'], overwrite=params['overwrite']))
 
                 chat.site = site_object
 
@@ -355,7 +348,7 @@ def run(propagate_interrupt=False, **kwargs):
                 pass
         else:
             def callback(item):
-                safe_print(chat.format(item), flush=True)
+                chat.print_formatted(item)
 
         for message in chat:
             callback(message)

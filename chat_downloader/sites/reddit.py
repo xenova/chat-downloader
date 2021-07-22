@@ -12,7 +12,6 @@ from ..utils.core import (
     try_parse_json,
     try_get_first_value,
     get_title_of_webpage,
-    try_get,
     chunks,
     ensure_seconds,
     seconds_to_time,
@@ -126,9 +125,18 @@ class RedditChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
-
         {
-            'name': 'Chat replay with start and end times',
+            'name': 'Get chat messages from past broadcast #5',
+            'params': {
+                'url': 'https://www.reddit.com/lmvsbl',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Chat replay with start and end times #1',
             'params': {
                 'url': 'https://www.reddit.com/rpan/r/pan/lmvsbl',
                 'start_time': 123,
@@ -138,7 +146,17 @@ class RedditChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
-
+        {
+            'name': 'Chat replay with start and end times #2',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/pan/lmvsbl',
+                'start_time': 600,
+                'end_time': 900,
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
         # Anomalies
         {
             'name': 'Connection issues',
@@ -154,14 +172,29 @@ class RedditChatDownloader(BaseChatDownloader):
                 'timeout': 5
             }
         },
+
+        # Subreddits:
+        {
+            'name': 'Get chat of top livestream/post for subreddit #1',
+            'params': {
+                'url': 'https://www.reddit.com/rpan/r/pan',
+                'timeout': 5
+            }
+        },
+        {
+            'name': 'Get chat of top livestream/post for subreddit #2',
+            'params': {
+                'url': 'https://www.reddit.com/r/RedditSessions',
+                'timeout': 5
+            }
+        }
     ]
 
     # Regex provided by youtube-dl
 
     _VALID_URLS = {
+        '_get_chat_by_subreddit_id': r'(?:https?://(?:[^/]+\.))reddit\.com/(?:(?:rpan/r|r)/)+(?P<id>[^/?#&\s]+)/?$',
         '_get_chat_by_post_id': r'(?:https?://(?:[^/]+\.))reddit\.com/(?:(?:rpan/r/[^/]+|rpan|r/[^/]+/comments|rpan|comments)/)*(?P<id>[^/?#&\s]+)',
-        # TODO add support for "top livestream of subreddit"
-        # https://www.reddit.com/rpan/r/AnimalsOnReddit
     }
 
     _REMAPPING = {
@@ -285,6 +318,10 @@ class RedditChatDownloader(BaseChatDownloader):
 
         return info
 
+    def _get_chat_by_subreddit_id(self, match, params):
+        match_id = match.group('id')
+        return self.get_chat_by_subreddit_id(match_id, params)
+
     def _get_chat_by_post_id(self, match, params):
         match_id = match.group('id')
         return self.get_chat_by_post_id(match_id, params)
@@ -297,23 +334,17 @@ class RedditChatDownloader(BaseChatDownloader):
             except (JSONDecodeError, RequestException) as e:
                 self.retry(attempt_number, max_attempts, e, retry_timeout)
 
-    def _try_post_info(self, url, max_attempts, retry_timeout=None, **kwargs):
-        for attempt_number in attempts(max_attempts):
-            try:
-                return self._session_post(url, **kwargs).json()
-            except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, e, retry_timeout)
-
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
     _FALLBACK_API_TEMPLATE = 'https://gateway.reddit.com/desktopapi/v1/postcomments/t3_{}?limit=1'
 
-    def get_chat_by_post_id(self, post_id, params, attempt_number=0):
+    def get_chat_by_post_id(self, post_id, params, attempt_number=0, initial_info=None):
 
         max_attempts = params.get('max_attempts')
         retry_timeout = params.get('retry_timeout')
 
-        initial_info = self._try_get_info(
-            self._API_TEMPLATE.format(post_id), max_attempts, retry_timeout, headers=self.authed_headers)
+        if initial_info is None:  # Optimisation
+            initial_info = self._try_get_info(self._API_TEMPLATE.format(
+                post_id), max_attempts, retry_timeout, headers=self.authed_headers)
 
         status = initial_info.get('status')
         status_message = initial_info.get('status_message')
@@ -372,8 +403,8 @@ class RedditChatDownloader(BaseChatDownloader):
         elif status == 'video not found':
             raise VideoNotFound(status_message)
 
-        else:  # Unknown status
-            raise UnexpectedError('Status: {} | {}'.format(status, data))
+        else:  # Unknown
+            raise UnexpectedError('Info: {}'.format(initial_info))
 
     def _get_chat_messages_by_socket(self, socket_url, params):
 
@@ -527,7 +558,47 @@ class RedditChatDownloader(BaseChatDownloader):
 
             log('debug', 'Total number of messages: {}'.format(count))
 
+    _SUBREDDIT_BROADCAST_API_URL = 'https://strapi.reddit.com/r/{}/broadcasts?page_size=1'
+
+    def get_chat_by_subreddit_id(self, subreddit_id, params, attempt_number=0):
+        # Get chat of top broadcast
+        max_attempts = params.get('max_attempts')
+        retry_timeout = params.get('retry_timeout')
+
+        initial_info = self._try_get_info(self._SUBREDDIT_BROADCAST_API_URL.format(
+            subreddit_id), max_attempts, retry_timeout, headers=self.authed_headers)
+
+        status = initial_info.get('status')
+        data = initial_info.get('data')
+
+        if status == 'success':
+            post_id = initial_info.get('next_cursor')
+
+            data = initial_info.pop('data', [])
+            if not data:
+                raise RedditError('This subreddit has no broadcasts.')
+
+            initial_info['data'] = data[0]
+
+            return self.get_chat_by_post_id(post_id, params, initial_info=initial_info)
+
+        elif status == 'failure':
+            if 'wait' in data.lower():
+                message = 'Response from Reddit: "{}"'.format(data)
+                self.retry(attempt_number, max_attempts,
+                           retry_timeout=retry_timeout, text=message)
+                return self.get_chat_by_subreddit_id(post_id, params, attempt_number + 1)
+
+            raise RedditError(data)
+
+        else:  # Unknown
+            raise UnexpectedError('Info: {}'.format(initial_info))
+
+    def _get_chat_messages_by_subreddit_id(self, subreddit_id, params):
+        pass
+
     _BROADCAST_API_URL = 'https://strapi.reddit.com/broadcasts'  # ?page_size=x
+
     _RPAN_API_URL = 'https://www.reddit.com/r/{}/new.json'
 
     # RPAN subreddits
