@@ -61,7 +61,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         if not datr:
             raise FacebookError(
                 'Unable to set datr cookie: {}'.format(initial_data))
+
         self.set_cookie_value('.facebook.com', 'datr', datr)
+        self.set_cookie_value('.facebook.com', 'wd', '1920x1080')
 
         lsd = regex_search(initial_data, self._INITIAL_LSD_REGEX)
         if not lsd:
@@ -84,7 +86,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         }
 
         self.update_session_headers({
-            'x-fb-lsd': lsd
+            'x-fb-lsd': lsd,
+            'upgrade-insecure-requests': '1',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'accept-encoding': 'gzip, deflate, br',
+            'cache-control': 'max-age=0'
         })
 
     _NAME = 'facebook.com'
