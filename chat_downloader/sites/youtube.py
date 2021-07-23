@@ -42,6 +42,7 @@ from ..utils.core import (
 
 from ..debugging import (log, debug_log)
 
+import json
 import time
 import random
 import re
@@ -1009,8 +1010,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _LIVE_PLAYLIST_URL = _YT_HOME + '/channel/UC4R8DWoMoI7CAwX8_LjQHig'
 
     def _get_testing_items(self):
+        params = {
+            'max_attempts': 10
+        }
 
-        html, yt_info = self._get_initial_info(self._LIVE_PLAYLIST_URL)
+        html, yt_info = self._get_initial_info(self._LIVE_PLAYLIST_URL, params)
 
         sections = yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][
             0]['tabRenderer']['content']['sectionListRenderer']['contents']
@@ -1054,7 +1058,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'past': (503, 'Past live streams')
     }
 
-    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='live'):
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='live', params=None):
         """[summary]
         If more than one of `channel_id`, `user_id` and `custom_username`
         are specifed, the first one specified will be returned.
@@ -1092,7 +1096,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         user_url = 'https://www.youtube.com/{}/{}'.format(_type, _id)
 
         html, yt_info = self._get_initial_info(
-            '{}/videos?view=2&live_view={}'.format(user_url, vid_type[0]))
+            '{}/videos?view=2&live_view={}'.format(user_url, vid_type[0]), params)
 
         section_list_renderer = multi_get(
             yt_info, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
@@ -1123,9 +1127,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
             else:
                 print(item)
 
-    def get_playlist_items(self, playlist_url):
+    def get_playlist_items(self, playlist_url, params=None):
 
-        html, yt_info = self._get_initial_info(playlist_url)
+        html, yt_info = self._get_initial_info(playlist_url, params)
 
         items = self._get_rendered_content(
             yt_info)['playlistVideoListRenderer']['contents']
@@ -1177,17 +1181,56 @@ class YouTubeChatDownloader(BaseChatDownloader):
             f'{time_now} {sapisid_cookie} {self._YT_HOME}'.encode('utf-8')).hexdigest()
         return f'SAPISIDHASH {time_now}_{sapisidhash}'
 
-    def _get_initial_info(self, url):
-        html = self._session_get(url).text
-        yt = regex_search(html, self._YT_INITIAL_DATA_RE)
-        yt_initial_data = try_parse_json(yt) if yt else None
-        return html, yt_initial_data
+    def _get_continuation_info(self, continuation_url, program_params, **post_kwargs):
+        max_attempts = program_params.get('max_attempts')
 
-    def _get_initial_video_info(self, video_id):
+        for attempt_number in attempts(max_attempts):
+            try:
+                response = self._session_post(continuation_url, **post_kwargs)
+                json_response = response.json()
+
+                # Check for errors:
+                error = json_response.get('error')
+                if error:
+                    error_code = error.get('code')
+                    error_message = error.get('message')
+
+                    if error_code // 100 == 5:  # Server error, retry
+                        self.retry(attempt_number,
+                                   text=error_message, **program_params)
+                        continue
+
+                return json_response
+
+            except JSONDecodeError as e:
+                self.retry(attempt_number, error=e, **program_params,
+                           text='Unable to parse JSON: `{}`'.format(response.text))
+
+            except RequestException as e:
+                self.retry(attempt_number, error=e, **program_params)
+
+    def _get_initial_info(self, url, params=None):
+        if params is None:
+            params = {}
+
+        max_attempts = params.get('max_attempts', 1)
+        for attempt_number in attempts(max_attempts):
+            try:
+                html = self._session_get(url).text
+                yt = regex_search(html, self._YT_INITIAL_DATA_RE)
+                yt_initial_data = json.loads(yt)
+                return html, yt_initial_data
+
+            except (JSONDecodeError, RequestException) as e:
+                self.retry(attempt_number, error=e, **params)
+
+        return None, None
+
+    def _get_initial_video_info(self, video_id, params=None):
         """ Get initial YouTube video information. """
         original_url = self._YT_VIDEO_TEMPLATE.format(video_id)
 
-        html, yt_initial_data = self._get_initial_info(original_url)
+        html, yt_initial_data = self._get_initial_info(original_url, params)
 
         if not yt_initial_data:  # Fatal error
             raise ParsingError(
@@ -1425,62 +1468,43 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 })
 
             info = None
-            for attempt_number in attempts(max_attempts):
 
-                try:
-                    if first_time:
-                        # must run to get first few messages, otherwise might miss some
-                        html, yt_info = self._get_initial_info(init_page)
+            if first_time:
+                # must run to get first few messages, otherwise might miss some
+                html, yt_info = self._get_initial_info(init_page, params)
 
-                    else:
-                        if not is_live and offset_milliseconds is not None:
-                            continuation_params['currentPlayerState'] = {
-                                'playerOffsetMs': offset_milliseconds}
+            else:
+                if not is_live and offset_milliseconds is not None:
+                    continuation_params['currentPlayerState'] = {
+                        'playerOffsetMs': offset_milliseconds}
 
-                        if click_tracking_params:
-                            continuation_params['context']['clickTracking'] = {
-                                'clickTrackingParams': click_tracking_params}
+                if click_tracking_params:
+                    continuation_params['context']['clickTracking'] = {
+                        'clickTrackingParams': click_tracking_params}
 
-                        yt_info = self._session_post(
-                            continuation_url, json=continuation_params).json()
+                yt_info = self._get_continuation_info(
+                    continuation_url, params, json=continuation_params)
 
-                    debug_info = {
-                        'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
-                        'continuation': multi_get(continuation_params, 'continuation')
-                    }
-                    log('debug', 'Continuation parameters: {}'.format(debug_info))
-                    log('debug', 'Session headers: {}'.format(
-                        ', '.join(self.session.headers.keys())))  # Only display keys
+            debug_info = {
+                'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
+                'continuation': multi_get(continuation_params, 'continuation')
+            }
+            log('debug', 'Continuation parameters: {}'.format(debug_info))
+            log('debug', 'Session headers: {}'.format(
+                ', '.join(self.session.headers.keys())))  # Only display keys
 
-                    info = multi_get(
-                        yt_info, 'continuationContents', 'liveChatContinuation')
+            info = multi_get(
+                yt_info, 'continuationContents', 'liveChatContinuation')
 
-                    logged_in_info = multi_get(
-                        yt_info, 'responseContext', 'serviceTrackingParams', 1, 'params', 0)
-                    log('debug', 'Logged-in info: {}'.format(logged_in_info))
+            logged_in_info = multi_get(
+                yt_info, 'responseContext', 'serviceTrackingParams', 1, 'params', 0)
+            log('debug', 'Logged-in info: {}'.format(logged_in_info))
 
-                    if not info:
-                        log('debug', 'No continuation information found: {}'.format(
-                            yt_info))
+            if not info:
+                log('debug', 'No continuation information found: {}'.format(
+                    yt_info))
 
-                        # Check for errors:
-                        error = yt_info.get('error')
-                        if error:
-                            error_code = error.get('code')
-                            error_message = error.get('message')
-
-                            if error_code // 100 == 5:  # Server error, retry
-                                self.retry(attempt_number,
-                                           text=error_message, **params)
-                                continue
-
-                        return
-
-                    break  # successful retrieve
-
-                except (JSONDecodeError, RequestException) as e:
-                    self.retry(attempt_number, error=e, **params)
-                    continue
+                return
 
             actions = info.get('actions') or []
 
@@ -1747,9 +1771,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             if first_time:
                 first_time = False
 
-    # def get_chat_by_user(self, channel_id=None, user_id=None, custom_username=None):
-    #     def get_user_videos(self, video_type='live'):
-
     def _get_chat_by_user(self, match, params):
         match_id = match.group('id')
         user_type = match.group('type')  # channel|c|user
@@ -1806,7 +1827,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         while True:
             for video_type in ('live', 'upcoming'):
                 # prioritise live videos
-                for video in self.get_user_videos(**user_video_args, video_type=video_type):
+                for video in self.get_user_videos(**user_video_args, video_type=video_type, params=params):
                     video_id = video['video_id']
                     video_title = video['title']
 
@@ -1851,7 +1872,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         :return: Chat object for the corresponding YouTube video
         :rtype: Chat
         """
-        initial_info = self._get_initial_video_info(video_id)
+        initial_info = self._get_initial_video_info(video_id, params)
 
         title = initial_info.get('title')
         duration = initial_info.get('duration')
