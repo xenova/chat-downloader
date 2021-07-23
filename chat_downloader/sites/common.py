@@ -561,13 +561,13 @@ class BaseChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, error=None, retry_timeout=None, text=None, interruptible_retry=True, **kwargs):
+    def retry(attempt_number, max_attempts=1, error=None, retry_timeout=None, text=None, interruptible_retry=True, **kwargs):
         """Retry to occur after an error occurs
 
         :param attempt_number: The current attempt number
         :type attempt_number: int
         :param max_attempts: The maximum number of attempts allowed
-        :type max_attempts: int
+        :type max_attempts: int, optional
         :param error: The error which was raised, defaults to None
         :type error: Exception, optional
         :param retry_timeout: The number of seconds to sleep after failing,
@@ -577,7 +577,6 @@ class BaseChatDownloader:
         :type text: object, optional
         :raises RetriesExceeded: if the maximum number of retries has been exceeded
         """
-        max_attempts = kwargs.get('max_attempts') or 0
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
                 'Maximum number of retries has been reached ({}).'.format(max_attempts))
