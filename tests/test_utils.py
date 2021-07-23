@@ -29,9 +29,6 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(get_title_of_webpage(
             'a <title>title</title> b'), 'title')
 
-
-if os.name == 'nt':  # windows
     def test_timed_input(self):
-        self.assertEqual(timed_input(5, 'Enter:'), None)
-
-    setattr(TestUtils, test_timed_input.__name__, test_timed_input)
+        if os.name == 'nt':  # only test on windows
+            self.assertEqual(timed_input(5, 'Enter:'), None)
