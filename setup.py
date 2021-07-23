@@ -59,8 +59,7 @@ setup(
 
             # Testing and coverage
             'pytest',
-            'pytest-cov',
-            'pytest-xdist',
+            'coverage',
 
             # Documentation
             'sphinx',
