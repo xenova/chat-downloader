@@ -376,9 +376,10 @@ class RedditChatDownloader(BaseChatDownloader):
 
             if is_live and socket_url:  # live stream
 
-                if not socket_url.startswith('wss://'):
-                    raise RedditError(
-                        'Invalid websocket URL: {}'.format(socket_url))
+                if not socket_url.startswith('wss://') or 'wss.redditmedia.com' not in socket_url:
+                    self.retry(attempt_number, text='Invalid websocket URL: {}'.format(socket_url), **params)
+                    return self.get_chat_by_post_id(post_id, params, attempt_number + 1)
+
 
                 chat_item.chat = self._get_chat_messages_by_socket(
                     socket_url, params)
