@@ -1175,7 +1175,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     info = self._session_get_json(url)
                     break
                 except (JSONDecodeError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, error=e, **params)
+                    self.retry(attempt_number, error=e, **params)
 
             error_message = multi_get(info, 'error', 'message')
 
@@ -1247,7 +1247,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 video = self._download_gql(query)[0]['data']['video']
                 break
             except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, error=e, **params)
+                self.retry(attempt_number, error=e, **params)
 
         if not video:
             raise VideoUnavailable(
@@ -1284,7 +1284,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 clip = self._download_base_gql(query)['data']['clip']
                 break
             except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, error=e, **params)
+                self.retry(attempt_number, error=e, **params)
 
         vod_id = multi_get(clip, 'video', 'id')
         # print(clip)
@@ -1535,7 +1535,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     irc.join_channel(stream_id)
                     return irc
                 except (socket.gaierror, ConnectionRefusedError) as e:
-                    self.retry(attempt_number, max_attempts, error=e, **params)
+                    self.retry(attempt_number, error=e, **params)
 
         twitch_chat_irc = create_connection()
 
@@ -1673,7 +1673,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 stream_info = self._download_gql(query)[0]['data']['user']
                 break
             except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, error=e, **params)
+                self.retry(attempt_number, error=e, **params)
 
         if not stream_info:
             raise UserNotFound('Unable to find user: "{}"'.format(stream_id))

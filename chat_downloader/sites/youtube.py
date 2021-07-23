@@ -1470,8 +1470,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             error_message = error.get('message')
 
                             if error_code // 100 == 5:  # Server error, retry
-                                self.retry(
-                                    attempt_number, max_attempts, **params, text=error_message)
+                                self.retry(attempt_number,
+                                           text=error_message, **params)
                                 continue
 
                         return
@@ -1479,7 +1479,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     break  # successful retrieve
 
                 except (JSONDecodeError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, error=e, **params)
+                    self.retry(attempt_number, error=e, **params)
                     continue
 
             actions = info.get('actions') or []
