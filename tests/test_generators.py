@@ -122,6 +122,7 @@ set_log_level('debug')
 set_testing_mode(Modes.EXIT_ON_DEBUG)
 if __name__ == '__main__':
     print('Running test cases:')
+    sys.argv = sys.argv[:1]
     unittest.main()
 
     # YouTubeChatDownloader TwitchChatDownloader FacebookChatDownloader RedditChatDownloader
