@@ -54,7 +54,7 @@ class RedditChatDownloader(BaseChatDownloader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        max_attempts = 10
+        max_attempts = 3
 
         for attempt_number in attempts(max_attempts):
             initial_data = self._session_get(self._REDDIT_HOMEPAGE).text
@@ -326,13 +326,12 @@ class RedditChatDownloader(BaseChatDownloader):
         match_id = match.group('id')
         return self.get_chat_by_post_id(match_id, params)
 
-    def _try_get_info(self, url, max_attempts, retry_timeout=None, **kwargs):
-
+    def _try_get_info(self, url, max_attempts, program_params, **kwargs):
         for attempt_number in attempts(max_attempts):
             try:
                 return self._session_get_json(url, **kwargs)
             except (JSONDecodeError, RequestException) as e:
-                self.retry(attempt_number, max_attempts, e, retry_timeout)
+                self.retry(attempt_number, max_attempts, error=e, **program_params)
 
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
     _FALLBACK_API_TEMPLATE = 'https://gateway.reddit.com/desktopapi/v1/postcomments/t3_{}?limit=1'
@@ -340,11 +339,10 @@ class RedditChatDownloader(BaseChatDownloader):
     def get_chat_by_post_id(self, post_id, params, attempt_number=0, initial_info=None):
 
         max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         if initial_info is None:  # Optimisation
             initial_info = self._try_get_info(self._API_TEMPLATE.format(
-                post_id), max_attempts, retry_timeout, headers=self.authed_headers)
+                post_id), max_attempts, params, headers=self.authed_headers)
 
         status = initial_info.get('status')
         status_message = initial_info.get('status_message')
@@ -394,8 +392,7 @@ class RedditChatDownloader(BaseChatDownloader):
         elif status == 'failure':
             if 'wait' in data.lower():
                 message = 'Response from Reddit: "{}"'.format(data)
-                self.retry(attempt_number, max_attempts,
-                           retry_timeout=retry_timeout, text=message)
+                self.retry(attempt_number, max_attempts, text=message, **params)
                 return self.get_chat_by_post_id(post_id, params, attempt_number + 1)
 
             raise RedditError(data)
@@ -410,7 +407,6 @@ class RedditChatDownloader(BaseChatDownloader):
 
         message_receive_timeout = params.get('message_receive_timeout')
         max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         def create_connection():
             for attempt_number in attempts(max_attempts):
@@ -422,7 +418,7 @@ class RedditChatDownloader(BaseChatDownloader):
                     ws.settimeout(message_receive_timeout)
                     return ws
                 except (ConnectionError, websocket.WebSocketException) as e:
-                    self.retry(attempt_number, max_attempts, e, retry_timeout)
+                    self.retry(attempt_number, max_attempts, error=e, **params)
 
         ws = create_connection()
 
@@ -466,11 +462,10 @@ class RedditChatDownloader(BaseChatDownloader):
     def _get_chat_messages_by_post_id(self, post_id, params, stream_start_time=None):
 
         max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         # 1. Get all comment ids
         url = self._COMMENTS_API_TEMPLATE.format(post_id)
-        initial_info = self._try_get_info(url, max_attempts, retry_timeout)
+        initial_info = self._try_get_info(url, max_attempts, params)
 
         children = multi_get(initial_info, -1, 'data', 'children')
 
@@ -500,7 +495,7 @@ class RedditChatDownloader(BaseChatDownloader):
         def _parse_chunk(index):
             if not all_stored[index]:  # get if not stored
                 url = info_api + ',t1_'.join(chunk_info[index])
-                info = self._try_get_info(url, max_attempts, retry_timeout)
+                info = self._try_get_info(url, max_attempts, params)
                 children = multi_get(info, 'data', 'children') or []
                 all_stored[index] = [self._parse_item(
                     child.get('data'), stream_start_time) for child in children]
@@ -563,10 +558,9 @@ class RedditChatDownloader(BaseChatDownloader):
     def get_chat_by_subreddit_id(self, subreddit_id, params, attempt_number=0):
         # Get chat of top broadcast
         max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         initial_info = self._try_get_info(self._SUBREDDIT_BROADCAST_API_URL.format(
-            subreddit_id), max_attempts, retry_timeout, headers=self.authed_headers)
+            subreddit_id), max_attempts, params, headers=self.authed_headers)
 
         status = initial_info.get('status')
         data = initial_info.get('data')
@@ -585,8 +579,7 @@ class RedditChatDownloader(BaseChatDownloader):
         elif status == 'failure':
             if 'wait' in data.lower():
                 message = 'Response from Reddit: "{}"'.format(data)
-                self.retry(attempt_number, max_attempts,
-                           retry_timeout=retry_timeout, text=message)
+                self.retry(attempt_number, max_attempts, text=message, **params)
                 return self.get_chat_by_subreddit_id(post_id, params, attempt_number + 1)
 
             raise RedditError(data)

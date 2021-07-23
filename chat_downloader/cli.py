@@ -97,6 +97,7 @@ def main(cli_args=None):
         'Retry Arguments')  # what to do when an error occurs
     add_chat_param(retry_group, '--max_attempts', type=int)
     add_chat_param(retry_group, '--retry_timeout', type=float)
+    add_chat_param(retry_group, '--interruptible_retry', is_boolean_flag=True)
 
     termination_group = parser.add_argument_group('Termination Arguments')
     add_chat_param(termination_group, '--max_messages', type=int)

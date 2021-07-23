@@ -1384,7 +1384,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # force_no_timeout = params.get('force_no_timeout')
 
         max_attempts = params.get('max_attempts')
-        retry_timeout = params.get('retry_timeout')
 
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
@@ -1472,7 +1471,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                             if error_code // 100 == 5:  # Server error, retry
                                 self.retry(
-                                    attempt_number, max_attempts, retry_timeout=retry_timeout, text=error_message)
+                                    attempt_number, max_attempts, **params, text=error_message)
                                 continue
 
                         return
@@ -1480,7 +1479,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     break  # successful retrieve
 
                 except (JSONDecodeError, RequestException) as e:
-                    self.retry(attempt_number, max_attempts, e, retry_timeout)
+                    self.retry(attempt_number, max_attempts, error=e, **params)
                     continue
 
             actions = info.get('actions') or []

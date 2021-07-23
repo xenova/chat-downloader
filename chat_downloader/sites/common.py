@@ -21,7 +21,10 @@ from ..utils.core import (
     safe_print
 )
 
-from ..utils.timed_utils import timed_input
+from ..utils.timed_utils import (
+    timed_input,
+    interruptible_sleep
+)
 from ..debugging import log
 
 
@@ -558,7 +561,7 @@ class BaseChatDownloader:
         return new_dict
 
     @staticmethod
-    def retry(attempt_number, max_attempts, error=None, retry_timeout=None, text=None):
+    def retry(attempt_number, max_attempts, error=None, retry_timeout=None, text=None, interruptible_retry=True, **kwargs):
         """Retry to occur after an error occurs
 
         :param attempt_number: The current attempt number
@@ -596,7 +599,11 @@ class BaseChatDownloader:
 
         must_sleep = time_to_sleep >= 0
         if must_sleep:
-            sleep_text = '(sleep for {}s or press Enter)'.format(time_to_sleep)
+            if interruptible_retry:
+                sleep_text = '(sleep for {}s or press Enter)'.format(
+                    time_to_sleep)
+            else:
+                sleep_text = '(sleep for {}s)'.format(time_to_sleep)
         else:
             sleep_text = ''
 
@@ -620,7 +627,10 @@ class BaseChatDownloader:
         )
 
         if must_sleep:
-            timed_input(time_to_sleep)
+            if interruptible_retry:
+                timed_input(time_to_sleep)
+            else:
+                interruptible_sleep(time_to_sleep)
         else:
             pause()
 
