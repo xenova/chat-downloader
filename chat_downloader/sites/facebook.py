@@ -182,7 +182,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                            text='Unable to parse JSON: `{}`'.format(response.text))
 
             except RequestException as e:
-                self.retry(attempt_number, error=e, **params)
+                self.retry(attempt_number, error=e, **program_params)
 
     _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
