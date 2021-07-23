@@ -23,6 +23,7 @@ from ..errors import (
 
 from ..debugging import (log, debug_log)
 
+import time
 import html
 import json
 import re
@@ -39,11 +40,6 @@ class FacebookError(SiteError):
 
 class FacebookChatDownloader(BaseChatDownloader):
     _FB_HOMEPAGE = 'https://www.facebook.com'
-    _FB_HEADERS = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': _FB_HOMEPAGE,
-        'Accept-Language': 'en-US,en;',
-    }
 
     _INITIAL_DATR_REGEX = r'_js_datr\",\"([^\"]+)'
     _INITIAL_LSD_REGEX = r'<input.*?name=\"lsd\".*?value=\"([^\"]+)[^>]*>'
@@ -52,11 +48,14 @@ class FacebookChatDownloader(BaseChatDownloader):
         super().__init__(**kwargs)
 
         # update headers for all subsequent FB requests
-        self.update_session_headers(self._FB_HEADERS)
+        self.update_session_headers({
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': self._FB_HOMEPAGE,  # Required'
+        })
 
         initial_data = self._session_get(
             self._FB_HOMEPAGE,
-            headers=self._FB_HEADERS, allow_redirects=False).text
+            allow_redirects=False).text
 
         datr = regex_search(initial_data, self._INITIAL_DATR_REGEX)
         if not datr:
@@ -71,9 +70,22 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         self.data = {
             # TODO need things like jazoest? (and other stuff from hidden elements/html)
-            '__a': 1,  # TODO needed?
             'lsd': lsd,
+            '__a': '1',
+            '__user': '0',
+            '__csr': '',
+            '__req': '1',
+            'dpr': '1',
+            '__ccg': 'MODERATE',
+
+            '__comet_req': '0',
+            '__spin_b': 'trunk',
+            '__spin_t': round(time.time())
         }
+
+        self.update_session_headers({
+            'x-fb-lsd': lsd
+        })
 
     _NAME = 'facebook.com'
     # Regex provided by youtube-dl
@@ -99,7 +111,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
             }
         },
 
@@ -111,7 +122,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
             }
         },
 
@@ -123,7 +133,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
             }
         },
 
@@ -135,7 +144,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             },
             'expected_result': {
                 'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
             }
         },
 
@@ -146,13 +154,12 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'url': 'https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/',
             },
             'expected_result': {
-                'error': (VideoUnavailable, LoginRequired),
+                'error': VideoUnavailable,
             }
         },
     ]
 
-    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
-        '/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
+    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + '/video/tahoe/async/{}/'
 
     @staticmethod
     def _parse_fb_json(info):
@@ -186,16 +193,25 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
-    def _get_initial_info(self, video_id, params):
+    def _get_initial_info(self, video_id, program_params):
         info = {}
-        max_attempts = params.get('max_attempts')
+        max_attempts = program_params.get('max_attempts')
+
+        params = {
+            'originalmediaid': video_id,
+            'playerorigin': 'permalink',
+            'playersuborigin': 'tahoe',
+            'ispermalink': 'true',
+            'numcopyrightmatchedvideoplayedconsecutively': '0',
+            'payloadtype': 'primary',
+        }
 
         # TODO remove duplication - many similar methods
         json_data = self._attempt_fb_retrieve(
             self._VIDEO_PAGE_TAHOE_TEMPLATE.format(video_id),
-            params,
+            program_params,
             fb_json=True,
-            headers=self._FB_HEADERS, data=self.data
+            data=self.data, params=params
         )
 
         markup = multi_get(json_data, 'payload', 'video', 'markup', '__html')
@@ -218,7 +234,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                     break
 
                 except RequestException as e:
-                    self.retry(attempt_number, error=e, **params)
+                    self.retry(attempt_number, error=e, **program_params)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
         if not instances:
@@ -602,7 +618,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             json_data = self._attempt_fb_retrieve(
                 self._GRAPH_API,
                 params,
-                headers=self._FB_HEADERS, data=data
+                data=data
             )
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback')
@@ -701,7 +717,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 self._VOD_COMMENTS_API,
                 params,
                 fb_json=True,
-                headers=self._FB_HEADERS, params=request_params, data=self.data
+                params=request_params, data=self.data
             )
 
             payloads = multi_get(json_data, 'payload', 'ufipayloads') or []
@@ -807,7 +823,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                     'https://www.facebook.com/ajax/route-definition/',
                     program_params,
                     is_json=False,
-                    headers=self._FB_HEADERS, data=data
+                    data=data
                 )
                 json_data = multi_get(self._parse_fb_json(
                     req.splitlines()[-2]) or {}, 'result', 'result')
@@ -821,7 +837,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 json_data = self._attempt_fb_retrieve(
                     self._GRAPH_API,
                     program_params,
-                    headers=self._FB_HEADERS, data=data
+                    data=data
                 )
 
             top_live = multi_get(json_data, 'data', 'gaming_video', 'top_live')
