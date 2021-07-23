@@ -66,7 +66,8 @@ def generator(site, url):
         params = {
             'url': url,
             'timeout': args['timeout'],
-            'quiet': True
+            'max_attempts': 5,
+            'interruptible_retry': False
         }
 
         print('\r ➤ ', url)

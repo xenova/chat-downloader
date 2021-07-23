@@ -29,6 +29,10 @@ def generator(site, test):
         site_object = ChatDownloader()
         try:
             params = test['params']
+            params.update({
+                'max_attempts': 5,
+                'interruptible_retry': False,
+            })
 
             expected_result = test.get('expected_result') or {}
 
