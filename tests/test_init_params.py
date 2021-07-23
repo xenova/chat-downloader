@@ -33,9 +33,9 @@ class TestInitParams(unittest.TestCase):
 
     def test_proxy(self):
         # TODO
-        # Find secure way to do unit testing with proxies
-        # Add param for random proxy selector?
-        # TODO do not allow proxies with cookies for security reasons
+        # - Find secure way to do unit testing with proxies
+        # - Add param for random proxy selector?
+        # - Do not allow proxies with cookies for security reasons
 
         # https://github.com/clarketm/proxy-list
         # http://pubproxy.com/
@@ -45,13 +45,8 @@ class TestInitParams(unittest.TestCase):
         # All working as of this commit
 
         # These tests should pass
-        proxies_to_test = ('', None)
-
-        for proxy in proxies_to_test:
+        for proxy in ('', None):
             self._get_one_message(proxy=proxy)
-
-        # These tests should fail
-        self._get_one_message(proxy='fake_proxy', expected_error=ProxyError)
 
     def test_headers(self):
 
