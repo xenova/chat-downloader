@@ -227,18 +227,20 @@ class FacebookChatDownloader(BaseChatDownloader):
             info['username'] = tags[1]
 
         else:  # Fallback
-            video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
-            for attempt_number in attempts(max_attempts):
-                try:
-                    video_html = self._session_get(video_page_url).text
-                    match = regex_search(
-                        video_html, self._VIDEO_TITLE_REGEX)
-                    if match:
-                        info['title'] = html.unescape(match)
-                    break
+            log('debug', 'Skipping fallback')
+            info['title'] = None
+            # video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
+            # for attempt_number in attempts(max_attempts):
+            #     try:
+            #         video_html = self._session_get(video_page_url).text
+            #         match = regex_search(
+            #             video_html, self._VIDEO_TITLE_REGEX)
+            #         if match:
+            #             info['title'] = html.unescape(match)
+            #         break
 
-                except RequestException as e:
-                    self.retry(attempt_number, error=e, **program_params)
+            #     except RequestException as e:
+            #         self.retry(attempt_number, error=e, **program_params)
 
         instances = multi_get(json_data, 'jsmods', 'instances')
         if not instances:
