@@ -7,9 +7,9 @@ from run_cmd import replace_cmd_output
 #  - Generating command line output
 #  - Fixing links
 
-readme_path = 'docs/README.rst'
+readme_path = 'README.rst'
 if not os.path.exists(readme_path):
-    print('Error. This must be run from the main directory')
+    print('Error. This must be run from the docs directory')
     exit()
 
 substitution = replace_cmd_output(readme_path)
@@ -18,7 +18,7 @@ substitution = replace_cmd_output(readme_path)
 
 relative_link_regex = r'<a class="reference internal" href="(.*)"><span class="std std-ref">(.*)</span></a>'
 # Get generated links
-readme_html = open('docs/_build/README.html').read()
+readme_html = open('_build/README.html').read()
 
 relative_link_dict = {name: link for link,
                       name in re.findall(relative_link_regex, readme_html)}
