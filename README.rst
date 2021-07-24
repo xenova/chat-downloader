@@ -75,7 +75,7 @@ Command line
                            [--end_time END_TIME]
                            [--message_types MESSAGE_TYPES | --message_groups MESSAGE_GROUPS]
                            [--max_attempts MAX_ATTEMPTS]
-                           [--retry_timeout RETRY_TIMEOUT]
+                           [--retry_timeout RETRY_TIMEOUT] [--interruptible_retry]
                            [--max_messages MAX_MESSAGES]
                            [--inactivity_timeout INACTIVITY_TIMEOUT]
                            [--timeout TIMEOUT] [--format FORMAT]

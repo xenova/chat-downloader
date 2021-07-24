@@ -69,7 +69,7 @@ Usage
 Command line
 ------------
 
-.. program-output:: cd .. && python -m chat_downloader -h | awk '{print} /url/ {exit}'
+.. program-output:: python -m chat_downloader -h | awk '{print} /url/ {exit}'
     :shell:
 
 For example, to save messages from a livestream to a JSON file, you can use:
