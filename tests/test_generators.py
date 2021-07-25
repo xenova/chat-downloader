@@ -20,10 +20,10 @@ args = {
     'max_tests_per_site': 50,
     'sites': ['all'],
 
-    # For Twitch:
-    'livestream_limit': 5,
-    'vod_limit': 5,
-    'clip_limit': 5
+    # For Twitch and Facebook:
+    'livestream_limit': 10,
+    'vod_limit': 20,
+    'clip_limit': 20
 }
 
 if __name__ == '__main__':  # Do not parse args if using pytest
@@ -43,11 +43,11 @@ if __name__ == '__main__':  # Do not parse args if using pytest
 
     # For Twitch:
     parser.add_argument(
-        '--livestream_limit', default=10, type=int, help='The maximum number of livestreams to generate.')
+        '--livestream_limit', default=30, type=int, help='The maximum number of livestreams to generate.')
     parser.add_argument(
-        '--vod_limit', default=5, type=int, help='The maximum number of vods to generate.')
+        '--vod_limit', default=35, type=int, help='The maximum number of vods to generate.')
     parser.add_argument(
-        '--clip_limit', default=5, type=int, help='The maximum number of clips to generate.')
+        '--clip_limit', default=35, type=int, help='The maximum number of clips to generate.')
 
     args.update(parser.parse_args().__dict__)
 
@@ -100,7 +100,7 @@ for site in get_all_sites():
         print('Generating', args['max_tests_per_site'],
               'tests for', site.__name__)
         urls = itertools.islice(downloader.create_session(
-            site).generate_urls(), args['max_tests_per_site'])
+            site).generate_urls(**args), args['max_tests_per_site'])
         list_of_urls = list(urls)
         num_tests = len(list_of_urls)
         padding = len(str(num_tests))

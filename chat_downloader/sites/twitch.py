@@ -34,7 +34,7 @@ import json
 import time
 import socket
 import base64
-
+import math
 from requests.exceptions import RequestException
 from json.decoder import JSONDecodeError
 
@@ -1113,8 +1113,13 @@ class TwitchChatDownloader(BaseChatDownloader):
     _TWITCH_HOME = 'https://www.twitch.tv'
     _TWITCH_VIDEOS = 'https://www.twitch.tv/videos'
 
-    def generate_urls(self, livestream_limit=10, vod_limit=5, clip_limit=5, **kwargs):
+    def generate_urls(self, livestream_limit, vod_limit, clip_limit, **kwargs):
         # max_tests = livestream_limit + livestream_limit*(vod_limit+clip_limit)
+
+        num_vods = math.ceil(
+            vod_limit/livestream_limit) if livestream_limit > 0 else vod_limit
+        num_clips = math.ceil(
+            clip_limit/livestream_limit) if livestream_limit > 0 else clip_limit
 
         livestreams = self.get_top_livestreams(livestream_limit)
         for livestream in livestreams:
@@ -1123,12 +1128,12 @@ class TwitchChatDownloader(BaseChatDownloader):
             # e.g. https://www.twitch.tv/shroud
             yield '{}/{}'.format(self._TWITCH_HOME, name)
 
-            vods = self.get_user_videos(name, vod_limit)
+            vods = self.get_user_videos(name, num_vods)
             for vod in vods:
                 # e.g. https://www.twitch.tv/videos/12345678
                 yield '{}/{}'.format(self._TWITCH_VIDEOS, vod['id'])
 
-            clips = self.get_user_clips(name, clip_limit)
+            clips = self.get_user_clips(name, num_clips)
             for clip in clips:
                 # e.g. https://clips.twitch.tv/FastThankfulLobsterEagleEye-SFi4SJWaTkAYu-B3
                 yield clip['url']

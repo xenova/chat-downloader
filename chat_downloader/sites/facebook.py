@@ -73,16 +73,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         self.data = {
             # TODO need things like jazoest? (and other stuff from hidden elements/html)
             'lsd': lsd,
-            '__a': '1',
-            '__user': '0',
-            '__csr': '',
-            '__req': '1',
-            'dpr': '1',
-            '__ccg': 'MODERATE',
-
-            '__comet_req': '0',
-            '__spin_b': 'trunk',
-            '__spin_t': round(time.time())
+            '__a': '1'
         }
 
         self.update_session_headers({
@@ -795,60 +786,79 @@ class FacebookChatDownloader(BaseChatDownloader):
     _STREAM_PAGE = 'https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG'
 
     def generate_urls(self, **kwargs):
+        yield from self._generate_live(kwargs.get('livestream_limit'), **kwargs)
+        yield from self._generate_videos(kwargs.get('vod_limit'), **kwargs)
+        yield from self._generate_clips(kwargs.get('clip_limit'), **kwargs)
+
+    def _generate_live(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG
+        return self._generate_urls('live', limit, **kwargs)
+
+    def _generate_videos(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/videos
+        return self._generate_urls('videos', limit, **kwargs)
+
+    def _generate_clips(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/clips/
+        return self._generate_urls('clips', limit, **kwargs)
+
+    def _generate_urls(self, video_type, limit, **kwargs):
         max_attempts = 10
         program_params = {
             'max_attempts': max_attempts
         }
 
-        limit = 50  # amount_to_get
         step = 8
-
-        variables = {
-            "count": step,
-            "params": {
-                "following": None,
-                "game_id": None,
-                "language": "ALL_LANG",
-                "remove_following": True,
-                "sort_order": None
+        if video_type in ('live', 'videos'):
+            variables = {
+                'count': step,
+                'params': {
+                    'following': None,  # False
+                    'game_id': None,
+                    'language': 'ALL_LANG',
+                    'remove_following': True,
+                    'sort_order': 'VIEWERS'  # None 'SUGGESTED'
+                }
             }
+
+            key = 'top_live' if video_type == 'live' else 'top_was_live'
+
+        else:  # video_type == 'clips':
+            variables = {
+                'count': step,
+                'following': False,
+                'game_id': None,
+                'streamer_id': None,
+                'sort_order': 'VIEWERS'  # None 'SUGGESTED'
+            }
+            key = 'top_weekly_clips'
+
+        doc_ids = {
+            'live': 3843810065738698,
+            'videos': 4591277870888795,
+            'clips': 3586924904747093
         }
-        first_time = True
+        doc_id = doc_ids.get(video_type)
+
+        data = {
+            **self.data,
+            'doc_id': doc_id
+        }
+
         count = 0
-
         while True:
-            if first_time:
+            data['variables'] = json.dumps(variables)
 
-                data = {
-                    'route_url': '/gaming/live/?following=false&language=ALL_LANG&s=VIEWERS',
-                    'routing_namespace': 'fb_comet',
-                    '__comet_req': '1'
-                }
-                data.update(self.data)
-                req = self._attempt_fb_retrieve(
-                    'https://www.facebook.com/ajax/route-definition/',
-                    program_params,
-                    is_json=False,
-                    data=data
-                )
-                json_data = multi_get(self._parse_fb_json(
-                    req.splitlines()[-2]) or {}, 'result', 'result')
+            json_data = self._attempt_fb_retrieve(
+                self._GRAPH_API,
+                program_params,
+                data=data
+            )
 
-            else:
-                data = {
-                    'variables': json.dumps(variables),
-                    'doc_id': '3843810065738698'
-                }
-                data.update(self.data)
-                json_data = self._attempt_fb_retrieve(
-                    self._GRAPH_API,
-                    program_params,
-                    data=data
-                )
-
-            top_live = multi_get(json_data, 'data', 'gaming_video', 'top_live')
+            top_live = multi_get(json_data, 'data', 'gaming_video', key)
 
             if not top_live:
+                log('debug', 'No data found: {}'.format(json_data))
                 return
 
             edges = top_live.get('edges') or []
@@ -869,5 +879,3 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             if not has_next_page:
                 break
-
-            first_time = False
