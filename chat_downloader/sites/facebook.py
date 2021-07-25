@@ -23,12 +23,8 @@ from ..errors import (
 
 from ..debugging import (log, debug_log)
 
-import time
-import html
 import json
 import re
-import xml.etree.ElementTree as ET
-import isodate
 from json.decoder import JSONDecodeError
 from requests.exceptions import RequestException
 
@@ -105,7 +101,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
 
@@ -116,7 +112,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
 
@@ -127,7 +123,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
 
@@ -138,7 +134,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 10
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
             }
         },
 
@@ -154,8 +150,6 @@ class FacebookChatDownloader(BaseChatDownloader):
         },
     ]
 
-    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + '/video/tahoe/async/{}/'
-
     @staticmethod
     def _parse_fb_json(info):
         text_to_parse = remove_prefixes(info, 'for (;;);')
@@ -163,7 +157,6 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _VOD_COMMENTS_API = _FB_HOMEPAGE + '/videos/vodcomments/'
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
-    _VIDEO_URL_FORMAT = _FB_HOMEPAGE + '/video.php?v={}'
 
     def _attempt_fb_retrieve(self, url, program_params, fb_json=False, is_json=True, **post_kwargs):
         max_attempts = program_params.get('max_attempts')
@@ -190,77 +183,37 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     def _get_initial_info(self, video_id, program_params):
         info = {}
-        max_attempts = program_params.get('max_attempts')
 
-        params = {
-            'originalmediaid': video_id,
-            'playerorigin': 'permalink',
-            'playersuborigin': 'tahoe',
-            'ispermalink': 'true',
-            'numcopyrightmatchedvideoplayedconsecutively': '0',
-            'payloadtype': 'primary',
+        # Get metadata
+        data = {
+            '__user': '0',
+            '__a': '1',
+            '__comet_req': '1',
+            'variables': json.dumps({
+                'upNextVideoID': video_id,
+            }),
+            'doc_id': '4730353697015342'
         }
 
-        # TODO remove duplication - many similar methods
         json_data = self._attempt_fb_retrieve(
-            self._VIDEO_PAGE_TAHOE_TEMPLATE.format(video_id),
+            self._GRAPH_API,
             program_params,
-            fb_json=True,
-            data=self.data, params=params
+            data=data
         )
 
-        markup = multi_get(json_data, 'payload', 'video', 'markup', '__html')
-        tags = [x.text for x in ET.fromstring(markup).findall(
-            './/span[@class="_50f7"]')] if markup else []
-
-        if len(tags) >= 2:
-            info['title'] = tags[0]
-            info['username'] = tags[1]
-
-        else:  # Fallback
-            log('debug', 'Skipping fallback')
-            info['title'] = None
-            # video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
-            # for attempt_number in attempts(max_attempts):
-            #     try:
-            #         video_html = self._session_get(video_page_url).text
-            #         match = regex_search(
-            #             video_html, self._VIDEO_TITLE_REGEX)
-            #         if match:
-            #             info['title'] = html.unescape(match)
-            #         break
-
-            #     except RequestException as e:
-            #         self.retry(attempt_number, error=e, **program_params)
-
-        instances = multi_get(json_data, 'jsmods', 'instances')
-        if not instances:
-            if '/login/?next=' in str(multi_get(json_data, 'jsmods', 'require')):
-                raise LoginRequired('Login required')
-
-            log('debug', 'Data: {}'.format(json_data))
-            raise VideoUnavailable('Video unavailable (may be private)')
-
-        video_data = {}
-        for item in instances:
-            if multi_get(item, 1, 0) == 'VideoConfig':
-                video_item = item[2][0]
-                if video_item.get('video_id'):
-                    video_data = video_item['videoData'][0]
-                    break
-
+        video_data = multi_get(json_data, 'data', 'upNextVideoData')
         if not video_data:
-            log('debug', 'Instances: {}'.format(instances))
-            raise FacebookError('Unable to get video data')
+            log('debug', json_data)
+            raise VideoUnavailable('Video unavailable')
 
-        dash_manifest = video_data.get('dash_manifest')
+        info['is_live'] = video_data.get('broadcast_status') == 'LIVE'
+        # video_data.get('is_live_streaming', False)
 
-        if dash_manifest:  # when not live, this returns
-            dash_manifest_xml = ET.fromstring(dash_manifest)
-            info['duration'] = isodate.parse_duration(
-                dash_manifest_xml.attrib['mediaPresentationDuration']).total_seconds()
+        info['title'] = video_data.get('title_with_fallback')
+        info['username'] = multi_get(video_data, 'owner', 'name')
+        info['start_time'] = video_data.get('publish_time')
+        info['duration'] = video_data.get('playable_duration')
 
-        info['is_live'] = video_data.get('is_live_stream', False)
         return info
 
     @staticmethod
