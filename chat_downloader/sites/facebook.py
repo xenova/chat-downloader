@@ -87,7 +87,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 https?://
                     (?:[\w-]+\.)?(?:facebook\.com)/
                     (?:[^#]*?\#!/)?
-                    (?:[^/]+/videos/(?:[^/]+/)?)
+                    (?:[^/]+/videos/(?:[^/]+/)?|video\.php\?v=)
             )
             (?P<id>[0-9]+)
             '''
@@ -95,7 +95,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _TESTS = [
         {
-            'name': 'Get chat messages from past broadcast',
+            'name': 'Get chat messages from past gaming broadcast',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/3629284013844544/',
                 'max_messages': 10
@@ -106,7 +106,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         },
 
         {
-            'name': 'Get chat messages from clip',
+            'name': 'Get chat messages from gaming clip',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/1170480696709027/',
                 'max_messages': 10
@@ -117,7 +117,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         },
 
         {
-            'name': 'Get chat messages from short video',
+            'name': 'Get chat messages from short gaming video',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/333201981735004/',
                 'max_messages': 10
@@ -128,9 +128,31 @@ class FacebookChatDownloader(BaseChatDownloader):
         },
 
         {
-            'name': 'Get chat messages from long video',
+            'name': 'Get chat messages from long gaming video',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/918814568681983/',
+                'start_time': 60,
+                'end_time': 150
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+
+        {
+            'name': 'Get chat messages from video page',
+            'params': {
+                'url': 'https://www.facebook.com/video.php?v=570133851026337',
+                'max_messages': 10
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+            }
+        },
+        {
+            'name': 'Get chat messages from short video',
+            'params': {
+                'url': 'https://www.facebook.com/338233632988842/videos/958020308373031',
                 'max_messages': 10
             },
             'expected_result': {
