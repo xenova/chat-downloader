@@ -8,10 +8,6 @@ import io
 import json
 
 
-def splitter(s):
-    return [item.strip() for item in re.split(r'[\s,;]+', s)]
-
-
 def timestamp_to_microseconds(timestamp):
     """Convert RFC3339 timestamp to microseconds. This is needed since
         ``datetime.datetime.strptime()`` does not support nanosecond precision.
