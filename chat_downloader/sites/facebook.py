@@ -65,6 +65,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             raise FacebookError(
                 'Unable to set lsd cookie: {}'.format(initial_data))
 
+        self.lsd = lsd
         self.update_session_headers({
             'x-fb-lsd': lsd,
             'upgrade-insecure-requests': '1',
@@ -182,7 +183,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         data = {
             '__user': '0',
             '__a': '1',
-            '__comet_req': '1'
+            '__comet_req': '1',
+            'lsd': self.lsd
         }
         data.update(post_kwargs.pop('data', {}))
         post_kwargs['data'] = data
