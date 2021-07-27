@@ -716,9 +716,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'includeNestedComments': True,
                 'initialViewOption': ordering,
                 'topLevelViewOption': ordering,
-                'viewOption': ordering,
-                'initialViewOption': False,
-                'scale': 1
+                'viewOption': ordering
             }
 
             before = None
