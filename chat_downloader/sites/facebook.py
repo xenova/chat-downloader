@@ -717,6 +717,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
                 display_comments = info.get('display_comments')
                 edges = display_comments.get('edges') or []
+
+                parsed_items = []
                 for edge in reversed(edges):
                     node = edge.get('node')
                     if not node:
@@ -731,8 +733,10 @@ class FacebookChatDownloader(BaseChatDownloader):
                         continue
                     if time_in_seconds > end_time:
                         return
+                    parsed_items.append(parsed)
 
-                    yield parsed
+                parsed_items.sort(key=lambda x: x['timestamp'])
+                yield from parsed_items
 
                 page_info = display_comments.get('page_info') or {}
                 if not page_info.get('has_previous_page'):
