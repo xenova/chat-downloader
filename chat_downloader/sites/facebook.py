@@ -181,10 +181,15 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     def _graphql_request(self, program_params, **post_kwargs):
         data = {
+            'av': '0',
             '__user': '0',
             '__a': '1',
             '__comet_req': '1',
-            'lsd': self.lsd
+            'lsd': self.lsd,
+            'server_timestamps': 'true',
+            '__csr': '',
+            'dpr': '1',
+            '__ccg': 'MODERATE',
         }
         data.update(post_kwargs.pop('data', {}))
         post_kwargs['data'] = data
@@ -689,16 +694,16 @@ class FacebookChatDownloader(BaseChatDownloader):
         end_time = min(ensure_seconds(params.get(
             'end_time'), float('inf')), max_duration)
 
-        data = {
-            'server_timestamps': 'true',
-        }
         # no start time, get until end_time
         if broadcast_status == 'VOD_READY' and params.get('start_time') is None:
             # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
             # ordered by timestamp
             log('debug', 'Running method 1')
 
-            data['doc_id'] = '4310877875602018'
+            data = {
+                'fb_api_req_friendly_name': 'CometUFICommentsProviderPaginationQuery',
+                'doc_id': '4310877875602018'
+            }
 
             ordering = 'LIVE_STREAMING'  # 'TOPLEVEL' 'RANKED_THREADED' 'CHRONOLOGICAL'
 
@@ -707,11 +712,13 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'feedbackID': feedback_id,
                 'feedbackSource': 41,
                 'last': 50,  # max step is 50
-                'includeHighlightedComments': True,  # False
+                'includeHighlightedComments': True,
                 'includeNestedComments': True,
-                'initialViewOption': ordering,  # ordering
+                'initialViewOption': ordering,
                 'topLevelViewOption': ordering,
-                'viewOption': ordering
+                'viewOption': ordering,
+                'initialViewOption': False,
+                'scale': 1
             }
 
             before = None
@@ -763,8 +770,10 @@ class FacebookChatDownloader(BaseChatDownloader):
             # ordered by time_in_seconds
             log('debug', 'Running method 2')
 
-            data['fb_api_req_friendly_name'] = 'CometLiveVODCommentListRefetchableQuery'
-            data['doc_id'] = '3941623715965411'
+            data = {
+                'fb_api_req_friendly_name': 'CometLiveVODCommentListRefetchableQuery',
+                'doc_id': '3941623715965411'
+            }
 
             # By default, Facebook gets messages by the minute
             time_increment = 600  # 10 mins
