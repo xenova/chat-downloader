@@ -6,10 +6,11 @@ import locale
 import collections.abc
 import io
 import json
+import base64
 
 
-def splitter(s):
-    return [item.strip() for item in re.split(r'[\s,;]+', s)]
+def base64_encode(text):
+    return base64.b64encode(text.encode()).decode()
 
 
 def timestamp_to_microseconds(timestamp):

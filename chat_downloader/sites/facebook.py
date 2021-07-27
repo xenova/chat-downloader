@@ -7,13 +7,14 @@ from .common import (
 from ..utils.core import (
     remove_prefixes,
     multi_get,
-    try_get_first_value,
     seconds_to_time,
     camel_case_split,
     ensure_seconds,
     attempts,
     regex_search,
+    base64_encode,
 )
+from ..utils.timed_utils import interruptible_sleep
 
 from ..errors import (
     SiteError,
@@ -23,11 +24,8 @@ from ..errors import (
 
 from ..debugging import (log, debug_log)
 
-import html
 import json
 import re
-import xml.etree.ElementTree as ET
-import isodate
 from json.decoder import JSONDecodeError
 from requests.exceptions import RequestException
 
@@ -37,13 +35,13 @@ class FacebookError(SiteError):
     pass
 
 
+class RateLimitError(FacebookError):
+    """Raised when the user has been rate-limited."""
+    pass
+
+
 class FacebookChatDownloader(BaseChatDownloader):
     _FB_HOMEPAGE = 'https://www.facebook.com'
-    _FB_HEADERS = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': _FB_HOMEPAGE,
-        'Accept-Language': 'en-US,en;',
-    }
 
     _INITIAL_DATR_REGEX = r'_js_datr\",\"([^\"]+)'
     _INITIAL_LSD_REGEX = r'<input.*?name=\"lsd\".*?value=\"([^\"]+)[^>]*>'
@@ -52,28 +50,32 @@ class FacebookChatDownloader(BaseChatDownloader):
         super().__init__(**kwargs)
 
         # update headers for all subsequent FB requests
-        self.update_session_headers(self._FB_HEADERS)
+        self.update_session_headers({
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': self._FB_HOMEPAGE,  # Required'
+        })
 
-        initial_data = self._session_get(
-            self._FB_HOMEPAGE,
-            headers=self._FB_HEADERS, allow_redirects=False).text
+        initial_data = self._session_get(self._FB_HOMEPAGE).text
 
         datr = regex_search(initial_data, self._INITIAL_DATR_REGEX)
         if not datr:
             raise FacebookError(
                 'Unable to set datr cookie: {}'.format(initial_data))
+
         self.set_cookie_value('.facebook.com', 'datr', datr)
+        self.set_cookie_value('.facebook.com', 'wd', '1920x1080')
 
         lsd = regex_search(initial_data, self._INITIAL_LSD_REGEX)
         if not lsd:
             raise FacebookError(
                 'Unable to set lsd cookie: {}'.format(initial_data))
 
-        self.data = {
-            # TODO need things like jazoest? (and other stuff from hidden elements/html)
-            '__a': 1,  # TODO needed?
-            'lsd': lsd,
-        }
+        self.lsd = lsd
+        self.update_session_headers({
+            'x-fb-lsd': lsd,
+            'upgrade-insecure-requests': '1',
+            'cache-control': 'max-age=0'
+        })
 
     _NAME = 'facebook.com'
     # Regex provided by youtube-dl
@@ -84,7 +86,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 https?://
                     (?:[\w-]+\.)?(?:facebook\.com)/
                     (?:[^#]*?\#!/)?
-                    (?:[^/]+/videos/(?:[^/]+/)?)
+                    (?:[^/]+/videos/(?:[^/]+/)?|video\.php\?v=)
             )
             (?P<id>[0-9]+)
             '''
@@ -92,50 +94,79 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _TESTS = [
         {
-            'name': 'Get chat messages from past broadcast',
+            'name': 'Get chat messages from past gaming broadcast',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/3629284013844544/',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
 
         {
-            'name': 'Get chat messages from clip',
+            'name': 'Get chat messages from gaming clip',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/1170480696709027/',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
 
+        {
+            'name': 'Get chat messages from short gaming video',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/333201981735004/',
+                'max_messages': 100
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
+            }
+        },
+
+        {
+            'name': 'Get chat messages from long gaming video',
+            'params': {
+                'url': 'https://www.facebook.com/disguisedtoast/videos/918814568681983/',
+                'start_time': 60,
+                'end_time': 150
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+
+        {
+            'name': 'Get chat messages from video page',
+            'params': {
+                'url': 'https://www.facebook.com/video.php?v=570133851026337',
+                'max_messages': 100
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
+            }
+        },
         {
             'name': 'Get chat messages from short video',
             'params': {
-                'url': 'https://www.facebook.com/disguisedtoast/videos/333201981735004/',
-                'max_messages': 10
+                'url': 'https://www.facebook.com/338233632988842/videos/958020308373031',
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
-
         {
-            'name': 'Get chat messages from long video',
+            'name': 'Get chat messages from past broadcast',
             'params': {
-                'url': 'https://www.facebook.com/disguisedtoast/videos/918814568681983/',
-                'max_messages': 10
+                'url': 'https://www.facebook.com/kolaolootulive/videos/553617129001138/',
+                'start_time': 567,
+                'end_time': 1234
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 <= len(messages) <= 10,
-                'error': LoginRequired
+                'messages_condition': lambda messages: len(messages) > 0,
             }
         },
 
@@ -146,36 +177,35 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'url': 'https://www.facebook.com/SRAVS.Gaming/videos/512714596679251/',
             },
             'expected_result': {
-                'error': (VideoUnavailable, LoginRequired),
+                'error': VideoUnavailable,
             }
         },
     ]
 
-    _VIDEO_PAGE_TAHOE_TEMPLATE = _FB_HOMEPAGE + \
-        '/video/tahoe/async/{}/?chain=true&isvideo=true&payloadtype=primary'
-
-    @staticmethod
-    def _parse_fb_json(info):
-        text_to_parse = remove_prefixes(info, 'for (;;);')
-        return json.loads(text_to_parse)
-
-    _VOD_COMMENTS_API = _FB_HOMEPAGE + '/videos/vodcomments/'
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
-    _VIDEO_URL_FORMAT = _FB_HOMEPAGE + '/video.php?v={}'
 
-    def _attempt_fb_retrieve(self, url, program_params, fb_json=False, is_json=True, **post_kwargs):
+    def _graphql_request(self, program_params, **post_kwargs):
+        data = {
+            'av': '0',
+            '__user': '0',
+            '__a': '1',
+            '__comet_req': '1',
+            'lsd': self.lsd,
+            'server_timestamps': 'true',
+            '__csr': '',
+            'dpr': '1',
+            '__ccg': 'MODERATE',
+        }
+        data.update(post_kwargs.pop('data', {}))
+        post_kwargs['data'] = data
+
         max_attempts = program_params.get('max_attempts')
         for attempt_number in attempts(max_attempts):
             try:
-                response = self._session_post(url, **post_kwargs)
-
-                if is_json:
-                    if fb_json:
-                        return self._parse_fb_json(response.text)
-                    else:
-                        return response.json()
-                else:
-                    return response.text
+                response = self._session_post(self._GRAPH_API, **post_kwargs)
+                response_json = response.json()
+                self._check_for_errors(response_json)
+                return response_json
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
@@ -186,69 +216,31 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
-    def _get_initial_info(self, video_id, params):
-        info = {}
-        max_attempts = params.get('max_attempts')
+    def _get_initial_info(self, video_id, program_params):
 
-        # TODO remove duplication - many similar methods
-        json_data = self._attempt_fb_retrieve(
-            self._VIDEO_PAGE_TAHOE_TEMPLATE.format(video_id),
-            params,
-            fb_json=True,
-            headers=self._FB_HEADERS, data=self.data
-        )
+        # Get metadata
+        data = {
+            'variables': json.dumps({
+                'upNextVideoID': video_id,
+            }),
+            'doc_id': '4730353697015342'
+        }
 
-        markup = multi_get(json_data, 'payload', 'video', 'markup', '__html')
-        tags = [x.text for x in ET.fromstring(markup).findall(
-            './/span[@class="_50f7"]')] if markup else []
+        json_data = self._graphql_request(program_params, data=data)
 
-        if len(tags) >= 2:
-            info['title'] = tags[0]
-            info['username'] = tags[1]
-
-        else:  # Fallback
-            video_page_url = self._VIDEO_URL_FORMAT.format(video_id)
-            for attempt_number in attempts(max_attempts):
-                try:
-                    video_html = self._session_get(video_page_url).text
-                    match = regex_search(
-                        video_html, self._VIDEO_TITLE_REGEX)
-                    if match:
-                        info['title'] = html.unescape(match)
-                    break
-
-                except RequestException as e:
-                    self.retry(attempt_number, error=e, **params)
-
-        instances = multi_get(json_data, 'jsmods', 'instances')
-        if not instances:
-            if '/login/?next=' in str(multi_get(json_data, 'jsmods', 'require')):
-                raise LoginRequired('Login required')
-
-            log('debug', 'Data: {}'.format(json_data))
-            raise VideoUnavailable('Video unavailable (may be private)')
-
-        video_data = {}
-        for item in instances:
-            if multi_get(item, 1, 0) == 'VideoConfig':
-                video_item = item[2][0]
-                if video_item.get('video_id'):
-                    video_data = video_item['videoData'][0]
-                    break
-
+        video_data = multi_get(json_data, 'data', 'upNextVideoData')
         if not video_data:
-            log('debug', 'Instances: {}'.format(instances))
-            raise FacebookError('Unable to get video data')
+            log('debug', json_data)
+            raise VideoUnavailable('Video unavailable')
 
-        dash_manifest = video_data.get('dash_manifest')
-
-        if dash_manifest:  # when not live, this returns
-            dash_manifest_xml = ET.fromstring(dash_manifest)
-            info['duration'] = isodate.parse_duration(
-                dash_manifest_xml.attrib['mediaPresentationDuration']).total_seconds()
-
-        info['is_live'] = video_data.get('is_live_stream', False)
-        return info
+        return {
+            'is_live': video_data.get('is_live_streaming'),
+            'broadcast_status': video_data.get('broadcast_status'),
+            'title': video_data.get('title_with_fallback'),
+            'username': multi_get(video_data, 'owner', 'name'),
+            'start_time': video_data.get('publish_time') * 1000000,
+            'duration': video_data.get('playable_duration')
+        }
 
     @staticmethod
     def _parse_feedback(feedback):
@@ -289,6 +281,10 @@ class FacebookChatDownloader(BaseChatDownloader):
     @staticmethod
     def _get_uri(item):
         return item.get('uri')
+
+    @staticmethod
+    def _get_url(item):
+        return item.get('url')
 
     @staticmethod
     def _parse_attachment_info(original_item):
@@ -367,37 +363,18 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         }
 
-    _ATTACHMENT_REMAPPING = {
-        'url': 'url',  # facebook redirect url,
-        'source': r('source', _get_text),
-        'title_with_entities': r('title', _get_text),
-
-        'target': r('target', _parse_attachment_info),
-        'media': r('media', _parse_attachment_info),
-        'style_infos': r('style_infos', _parse_attachment_info),
-
-        'attachment_text': r('text', _get_text),
-
-        '__typename': 'type'
-    }
-
-    _IGNORE_ATTACHMENT_KEYS = [
-        'tracking',
-        'action_links'
-    ]
-
-    _KNOWN_ATTACHMENT_KEYS = set(
-        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
-
     @staticmethod
-    def _parse_attachment_styles(item):
-        parsed = {}
-        attachment = multi_get(item, 'style_type_renderer', 'attachment')
+    def _parse_attachment_renderer(item):
+        attachment = multi_get(item, 'style_type_renderer',
+                               'attachment') or item.get('attachment')
         if not attachment:
             debug_log('No attachment: {}'.format(item))
-            return parsed
+            return {}
 
-        # set texts:
+        return FacebookChatDownloader._parse_attachment(attachment)
+
+    @staticmethod
+    def _parse_attachment(attachment):
         parsed = r.remap_dict(
             attachment, FacebookChatDownloader._ATTACHMENT_REMAPPING)
 
@@ -409,11 +386,42 @@ class FacebookChatDownloader(BaseChatDownloader):
         if missing_keys:
             debug_log(
                 'Missing attachment keys: {}'.format(missing_keys),
-                item,
+                attachment,
                 parsed
             )
 
         return parsed
+
+    _ATTACHMENT_REMAPPING = {
+        'url': 'url',  # facebook redirect url,
+        'source': r('source', _get_text),
+        'title_with_entities': r('title', _get_text),
+
+        'target': r('target', _parse_attachment_info),
+        'media': r('media', _parse_attachment_info),
+        'style_infos': r('style_infos', _parse_attachment_info),
+
+        'attachment_text': r('text', _get_text),
+
+        '__typename': 'type',
+
+        'story_url': 'story_url',
+        'story_attachment_link_renderer': r('story_attachment', _parse_attachment_renderer),
+
+        'web_link': r('web_link', _get_url)
+        # 'sticker_image': r('sticker_image', _get_uri),
+
+
+    }
+
+    _IGNORE_ATTACHMENT_KEYS = [
+        'tracking',
+        'action_links',
+        'third_party_media_info'
+    ]
+
+    _KNOWN_ATTACHMENT_KEYS = set(
+        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
 
     _TARGET_MEDIA_REMAPPING = {
         'id': 'id',
@@ -461,6 +469,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         'Sticker',
         'VideoTipJarPayment',
         'Page',
+        'Video',
 
         'Group',
         'ProfilePicAttachmentMedia',
@@ -503,7 +512,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         'edit_history': r('number_of_edits', lambda x: x.get('count')),
 
 
-        'timestamp_in_video': 'time_in_seconds',
+        'timestamp_in_video': 'timestamp_in_video',
         'written_while_video_was_live': 'written_while_video_was_live',
 
 
@@ -517,7 +526,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         'identity_badges_web': r('author_badges', lambda x: list(map(FacebookChatDownloader._parse_author_badges, x))),
 
-        'attachments': r('attachments', lambda x: list(map(FacebookChatDownloader._parse_attachment_styles, x)))
+        'attachments': r('attachments', lambda x: list(map(FacebookChatDownloader._parse_attachment_renderer, x)))
 
     }
 
@@ -534,7 +543,7 @@ class FacebookChatDownloader(BaseChatDownloader):
     }
 
     @ staticmethod
-    def _parse_live_stream_node(node):
+    def _parse_node(node, parse_time=False, start_time=None):
         info = r.remap_dict(node, FacebookChatDownloader._REMAPPING)
 
         author_info = info.pop('author', {})
@@ -558,12 +567,19 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         in_reply_to = info.pop('comment_parent', None)
         if isinstance(in_reply_to, dict) and in_reply_to:
-            info['in_reply_to'] = FacebookChatDownloader._parse_live_stream_node(
-                in_reply_to)
+            info['in_reply_to'] = FacebookChatDownloader._parse_node(
+                in_reply_to, parse_time, start_time)
 
-        # time_in_seconds = info.get('time_in_seconds')
-        # if time_in_seconds is not None:
-        #     info['time_text'] = seconds_to_time(time_in_seconds)
+        if parse_time:
+            timestamp_in_video = info.get('timestamp_in_video')
+            if timestamp_in_video is not None:
+                if start_time is None:
+                    info['time_in_seconds'] = timestamp_in_video
+                else:
+                    info['time_in_seconds'] = (
+                        info['timestamp'] - start_time)/1e6
+
+                info['time_text'] = seconds_to_time(info['time_in_seconds'])
 
         message = info.get('message')
         if message:
@@ -592,18 +608,13 @@ class FacebookChatDownloader(BaseChatDownloader):
             # 'cursor' : cursor
             # &first=12&after=<end_cursor>
         }
-        data.update(self.data)
 
         first_try = True
 
         last_ids = []
         while True:
 
-            json_data = self._attempt_fb_retrieve(
-                self._GRAPH_API,
-                params,
-                headers=self._FB_HEADERS, data=data
-            )
+            json_data = self._graphql_request(params, data=data)
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback')
             if not feedback:
@@ -631,8 +642,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 if not node:
                     log('debug', 'No node found in edge: {}'.format(edge))
                     continue
-                parsed_items.append(
-                    FacebookChatDownloader._parse_live_stream_node(node))
+                parsed_items.append(FacebookChatDownloader._parse_node(node))
 
             # Sort items
             parsed_items.sort(key=lambda x: x['timestamp'])
@@ -658,6 +668,12 @@ class FacebookChatDownloader(BaseChatDownloader):
                 num_to_add += 1
                 yield item
 
+            if num_to_add == 0:
+                time_to_sleep = 1
+                log('debug',
+                    f'No actions, sleeping for {time_to_sleep} seconds')
+                interruptible_sleep(time_to_sleep)
+
             # got 25 items, and this isn't the first one
             if num_to_add >= buffer_size and not first_try:
                 log(
@@ -668,75 +684,150 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
-    def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, params):
+    def _check_for_errors(self, json_data):
+        # Check for errors
+        for error in json_data.get('errors') or []:
+            if error.get('code') == 1675004:
+                raise RateLimitError(
+                    'Rate limit exceeded: {}'.format(error))
 
-        # useful tool (convert curl to python request)
-        # https://curl.trillworks.com/
-        # timeout_duration = 10  # TODO make this modifiable
+    def _get_chat_from_vod(self, feedback_id, stream_start_time, end_time, params):
+        # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
+        # ordered by timestamp
 
-        request_params = {
-            'eft_id': video_id,
-            'target_ufi_instance_id': 'u_2_1',
-            # 'should_backfill': 'false' # used when seeking? - # TODO true on first try?
+        data = {
+            'fb_api_req_friendly_name': 'CometUFICommentsProviderPaginationQuery',
+            'doc_id': '4310877875602018'
         }
 
-        time_increment = 60  # Facebook gets messages by the minute
-        # TODO make this modifiable
+        ordering = 'LIVE_STREAMING'  # 'TOPLEVEL' 'RANKED_THREADED' 'CHRONOLOGICAL'
 
-        start_time = ensure_seconds(
-            params.get('start_time'), 0)
-        end_time = ensure_seconds(
-            params.get('end_time'), float('inf'))
+        variables = {
+            'feedLocation': 'TAHOE',
+            'feedbackID': feedback_id,
+            'feedbackSource': 41,
+            'last': 50,  # max step is 50
+            'includeHighlightedComments': True,
+            'includeNestedComments': True,
+            'initialViewOption': ordering,
+            'topLevelViewOption': ordering,
+            'viewOption': ordering
+        }
+
+        before = None
+        while True:
+            variables['before'] = before
+            variables['isPaginating'] = before is not None
+
+            data['variables'] = json.dumps(variables)
+
+            json_data = self._graphql_request(params, data=data)
+
+            info = multi_get(json_data, 'data', 'feedback')
+            if not info:
+                log('debug', 'No feedback: {}'.format(json_data))
+                break
+
+            display_comments = info.get('display_comments')
+            edges = display_comments.get('edges') or []
+
+            parsed_items = []
+            for edge in reversed(edges):
+                node = edge.get('node')
+                if not node:
+                    log('debug', 'No node found in edge: {}'.format(edge))
+                    continue
+
+                parsed = FacebookChatDownloader._parse_node(
+                    node, True, stream_start_time)
+
+                time_in_seconds = parsed.get('time_in_seconds')
+                if time_in_seconds is None:
+                    continue
+                if time_in_seconds > end_time:
+                    return
+                parsed_items.append(parsed)
+
+            parsed_items.sort(key=lambda x: x['timestamp'])
+            yield from parsed_items
+
+            page_info = display_comments.get('page_info') or {}
+            if not page_info.get('has_previous_page'):
+                break
+
+            before = page_info.get('start_cursor')
+
+    def _get_chat_from_video(self, feedback_id, start_time, end_time, params):
+        # method 2 - works for all videos, but sometimes misses comments
+        # max messages is 30 per minute
+        # ordered by time_in_seconds
+        log('debug', 'Running method 2')
+
+        data = {
+            'fb_api_req_friendly_name': 'CometLiveVODCommentListRefetchableQuery',
+            'doc_id': '3941623715965411'
+        }
+
+        # By default, Facebook gets messages by the minute
+        time_increment = 600  # 10 mins
 
         next_start_time = max(start_time, 0)
-        end_time = min(end_time, max_duration)
+
+        variables = {
+            'id': feedback_id
+        }
 
         while True:
             next_end_time = min(next_start_time + time_increment, end_time)
 
-            request_params['start_time'] = next_start_time
-            request_params['end_time'] = next_end_time
+            variables['afterTime'] = next_start_time
+            variables['beforeTime'] = next_end_time
 
-            json_data = self._attempt_fb_retrieve(
-                self._VOD_COMMENTS_API,
-                params,
-                fb_json=True,
-                headers=self._FB_HEADERS, params=request_params, data=self.data
-            )
+            data['variables'] = json.dumps(variables)
 
-            payloads = multi_get(json_data, 'payload', 'ufipayloads') or []
+            json_data = self._graphql_request(params, data=data)
 
-            for payload in payloads:
-                time_offset = payload.get('timeoffset')
+            edges = multi_get(json_data, 'data', 'node',
+                              'video_timestamped_comments', 'edges') or []
 
-                ufipayload = payload.get('ufipayload')
-                if not ufipayload:
+            for edge in edges:
+                node = edge.get('node')
+                if not node:
+                    log('debug', 'No node found in edge: {}'.format(edge))
                     continue
-
-                comment = multi_get(ufipayload, 'comments', 0)
-                if not comment:
-                    continue
-
-                # pinned_comments = ufipayload.get('pinnedcomments')
-                profile = try_get_first_value(ufipayload['profiles'])
-
-                # TODO proper parsing
-                text = comment['body']['text']
-
-                temp = {
-                    'author': {
-                        'name': profile.get('name')
-                    },
-                    'time_in_seconds': time_offset,
-                    'time_text': seconds_to_time(time_offset),
-                    'message': text
-                }
-
-                yield temp
+                yield FacebookChatDownloader._parse_node(node, True)
 
             if next_end_time >= end_time:
                 return
             next_start_time = next_end_time
+
+    def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, initial_info, params):
+        feedback_id = base64_encode(f'feedback:{video_id}')
+        broadcast_status = initial_info.get('broadcast_status')
+        stream_start_time = initial_info.get('start_time')
+
+        start_time = ensure_seconds(params.get('start_time'), 0)
+        end_time = min(ensure_seconds(params.get(
+            'end_time'), float('inf')), max_duration)
+
+        success = False
+
+        if broadcast_status == 'VOD_READY' and params.get('start_time') is None:
+            # no start time, get until end_time
+            log('debug', 'Running method 1')
+            try:
+                for i in self._get_chat_from_vod(feedback_id, stream_start_time, end_time, params):
+                    time_in_seconds = i.get('time_in_seconds')
+                    if time_in_seconds is not None:
+                        start_time = max(start_time, time_in_seconds)
+                    yield i
+                success = True
+
+            except RateLimitError as e:
+                pass
+
+        if not success:  # Fallback
+            yield from self._get_chat_from_video(feedback_id, start_time, end_time, params)
 
     def _get_chat_by_video_id(self, match, params):
         return self.get_chat_by_video_id(match.group('id'), params)
@@ -759,8 +850,9 @@ class FacebookChatDownloader(BaseChatDownloader):
                 video_id, params)
         else:
             max_duration = initial_info.get('duration', float('inf'))
+
             generator = self._get_chat_replay_messages_by_video_id(
-                video_id, max_duration, params)
+                video_id, max_duration, initial_info, params)
 
         return Chat(
             generator,
@@ -773,60 +865,74 @@ class FacebookChatDownloader(BaseChatDownloader):
     _STREAM_PAGE = 'https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG'
 
     def generate_urls(self, **kwargs):
+        yield from self._generate_live(kwargs.get('livestream_limit'), **kwargs)
+        yield from self._generate_videos(kwargs.get('vod_limit'), **kwargs)
+        yield from self._generate_clips(kwargs.get('clip_limit'), **kwargs)
+
+    def _generate_live(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG
+        return self._generate_urls('live', limit, **kwargs)
+
+    def _generate_videos(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/videos
+        return self._generate_urls('videos', limit, **kwargs)
+
+    def _generate_clips(self, limit, **kwargs):
+        # https://www.facebook.com/gaming/clips/
+        return self._generate_urls('clips', limit, **kwargs)
+
+    def _generate_urls(self, video_type, limit, **kwargs):
         max_attempts = 10
         program_params = {
             'max_attempts': max_attempts
         }
 
-        limit = 50  # amount_to_get
         step = 8
-
-        variables = {
-            "count": step,
-            "params": {
-                "following": None,
-                "game_id": None,
-                "language": "ALL_LANG",
-                "remove_following": True,
-                "sort_order": None
+        if video_type in ('live', 'videos'):
+            variables = {
+                'count': step,
+                'params': {
+                    'following': None,  # False
+                    'game_id': None,
+                    'language': 'ALL_LANG',
+                    'remove_following': True,
+                    'sort_order': 'VIEWERS'  # None 'SUGGESTED'
+                }
             }
+
+            key = 'top_live' if video_type == 'live' else 'top_was_live'
+
+        else:  # video_type == 'clips':
+            variables = {
+                'count': step,
+                'following': False,
+                'game_id': None,
+                'streamer_id': None,
+                'sort_order': 'VIEWERS'  # None 'SUGGESTED'
+            }
+            key = 'top_weekly_clips'
+
+        doc_ids = {
+            'live': 3843810065738698,
+            'videos': 4591277870888795,
+            'clips': 3586924904747093
         }
-        first_time = True
+        doc_id = doc_ids.get(video_type)
+
+        data = {
+            'doc_id': doc_id
+        }
+
         count = 0
-
         while True:
-            if first_time:
+            data['variables'] = json.dumps(variables)
 
-                data = {
-                    'route_url': '/gaming/live/?following=false&language=ALL_LANG&s=VIEWERS',
-                    'routing_namespace': 'fb_comet',
-                    '__comet_req': '1'
-                }
-                data.update(self.data)
-                req = self._attempt_fb_retrieve(
-                    'https://www.facebook.com/ajax/route-definition/',
-                    program_params,
-                    is_json=False,
-                    headers=self._FB_HEADERS, data=data
-                )
-                json_data = multi_get(self._parse_fb_json(
-                    req.splitlines()[-2]) or {}, 'result', 'result')
+            json_data = self._graphql_request(program_params, data=data)
 
-            else:
-                data = {
-                    'variables': json.dumps(variables),
-                    'doc_id': '3843810065738698'
-                }
-                data.update(self.data)
-                json_data = self._attempt_fb_retrieve(
-                    self._GRAPH_API,
-                    program_params,
-                    headers=self._FB_HEADERS, data=data
-                )
-
-            top_live = multi_get(json_data, 'data', 'gaming_video', 'top_live')
+            top_live = multi_get(json_data, 'data', 'gaming_video', key)
 
             if not top_live:
+                log('debug', 'No data found: {}'.format(json_data))
                 return
 
             edges = top_live.get('edges') or []
@@ -842,10 +948,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             page_info = top_live.get('page_info')
 
-            variables['cursor'] = page_info.get('end_cursor')
             has_next_page = page_info.get('has_next_page')
 
             if not has_next_page:
                 break
-
-            first_time = False
+            variables['cursor'] = page_info.get('end_cursor')

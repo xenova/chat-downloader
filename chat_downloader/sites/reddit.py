@@ -552,6 +552,7 @@ class RedditChatDownloader(BaseChatDownloader):
 
             log('debug', 'Total number of messages: {}'.format(count))
 
+    _BROADCAST_API_URL = 'https://strapi.reddit.com/broadcasts'
     _SUBREDDIT_BROADCAST_API_URL = 'https://strapi.reddit.com/r/{}/broadcasts?page_size=1'
 
     def get_chat_by_subreddit_id(self, subreddit_id, params, attempt_number=0):
@@ -574,7 +575,7 @@ class RedditChatDownloader(BaseChatDownloader):
             return self.get_chat_by_post_id(post_id, params, initial_info=initial_info)
 
         elif status == 'failure':
-            if 'wait' in data.lower():
+            if isinstance(data, str) and 'wait' in data.lower():
                 message = 'Response from Reddit: "{}"'.format(data)
                 self.retry(attempt_number, text=message, **params)
                 return self.get_chat_by_subreddit_id(post_id, params, attempt_number + 1)
@@ -584,10 +585,6 @@ class RedditChatDownloader(BaseChatDownloader):
         else:  # Unknown
             raise UnexpectedError('Info: {}'.format(initial_info))
 
-    def _get_chat_messages_by_subreddit_id(self, subreddit_id, params):
-        pass
-
-    _BROADCAST_API_URL = 'https://strapi.reddit.com/broadcasts'  # ?page_size=x
 
     _RPAN_API_URL = 'https://www.reddit.com/r/{}/new.json'
 

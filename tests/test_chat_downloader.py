@@ -56,7 +56,8 @@ def generator(site, test):
                     errors = [errors]
 
                 correct_error = any(error is not None and isinstance(e, error) for error in errors)
-                self.assertTrue(correct_error)
+                if not correct_error:
+                    raise e
 
             messages_condition = expected_result.get('messages_condition')
 

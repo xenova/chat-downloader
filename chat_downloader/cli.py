@@ -17,14 +17,30 @@ from .metadata import (
 
 from .utils.core import (
     get_default_args,
-    int_or_none,
-    splitter
+    int_or_none
 )
 
 from .debugging import (
     disable_logger,
     set_log_level
 )
+
+
+def splitter(s):
+    return [item.strip() for item in re.split(r'[\s,;]+', s)]
+
+
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in ('true', 'yes',  't', 'y', '1', 'enable'):
+        return True
+    elif value in ('false', 'no', 'f', 'n', '0', 'disable'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError(
+            f'Boolean value expected: {value} is not a boolean')
 
 
 def main(cli_args=None):
@@ -55,23 +71,9 @@ def main(cli_args=None):
     get_init_info = get_info(ChatDownloader.__init__)
 
     def add_param(param_type, group, *keys, **kwargs):
-
-        is_boolean_flag = kwargs.pop('is_boolean_flag', None)
-
-        if is_boolean_flag:
-            # If True by default, set action to store_false
-            # If False by default, set action to store_true
-
-            default = kwargs.pop('default', None)
-            kwargs['action'] = 'store_{}'.format(
-                str(not bool(default)).lower())
-
         info = get_chat_info if param_type == 'chat' else get_init_info
         key = keys[0].lstrip('-')
-        group.add_argument(*keys,
-                           **info[key],  # add defaults and help
-                           **kwargs
-                           )
+        group.add_argument(*keys, **info[key], **kwargs)
 
     def add_chat_param(group, *keys, **kwargs):
         add_param('chat', group, *keys, **kwargs)
@@ -97,7 +99,8 @@ def main(cli_args=None):
         'Retry Arguments')  # what to do when an error occurs
     add_chat_param(retry_group, '--max_attempts', type=int)
     add_chat_param(retry_group, '--retry_timeout', type=float)
-    add_chat_param(retry_group, '--interruptible_retry', is_boolean_flag=True)
+    add_chat_param(retry_group, '--interruptible_retry',
+                   type=str2bool, nargs='?', const=True)
 
     termination_group = parser.add_argument_group('Termination Arguments')
     add_chat_param(termination_group, '--max_messages', type=int)
@@ -136,8 +139,10 @@ def main(cli_args=None):
 
     output_group = parser.add_argument_group('Output Arguments')
     add_chat_param(output_group, '--output', '-o')
-    add_chat_param(output_group, '--overwrite', is_boolean_flag=True)
-    add_chat_param(output_group, '--sort_keys', is_boolean_flag=True)
+    add_chat_param(output_group, '--overwrite',
+                   type=str2bool, nargs='?', const=True)
+    add_chat_param(output_group, '--sort_keys',
+                   type=str2bool, nargs='?', const=True)
     add_chat_param(output_group, '--indent', type=lambda x: int_or_none(x, x))
 
     # Debugging only available from the CLI
