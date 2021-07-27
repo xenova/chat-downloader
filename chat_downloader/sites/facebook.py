@@ -714,6 +714,9 @@ class FacebookChatDownloader(BaseChatDownloader):
                 json_data = self._graphql_request(params, data=data)
 
                 info = multi_get(json_data, 'data', 'feedback')
+                if not info:
+                    log('debug', 'No feedback: {}'.format(json_data))
+                    break
 
                 display_comments = info.get('display_comments')
                 edges = display_comments.get('edges') or []
