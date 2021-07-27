@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 from chat_downloader import (run, ChatDownloader)
 from chat_downloader.sites import get_all_sites
-from chat_downloader.utils.core import splitter
+from chat_downloader.cli import splitter
 from chat_downloader.debugging import (
     set_testing_mode,
     set_log_level,
