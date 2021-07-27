@@ -193,7 +193,15 @@ class FacebookChatDownloader(BaseChatDownloader):
         for attempt_number in attempts(max_attempts):
             try:
                 response = self._session_post(self._GRAPH_API, **post_kwargs)
-                return response.json()
+                response_json = response.json()
+
+                for error in response_json.get('errors') or []:
+                    if error.get('code') == 1675004:
+                        error_text = 'Rate limit exceeded: {}'.format(error)
+                        self.retry(attempt_number, text=error_text,
+                                   **program_params)
+
+                return response_json
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
