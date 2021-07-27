@@ -35,6 +35,11 @@ class FacebookError(SiteError):
     pass
 
 
+class RateLimitError(FacebookError):
+    """Raised when the user has been rate-limited."""
+    pass
+
+
 class FacebookChatDownloader(BaseChatDownloader):
     _FB_HOMEPAGE = 'https://www.facebook.com'
 
@@ -198,15 +203,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         for attempt_number in attempts(max_attempts):
             try:
                 response = self._session_post(self._GRAPH_API, **post_kwargs)
-                response_json = response.json()
-
-                for error in response_json.get('errors') or []:
-                    if error.get('code') == 1675004:
-                        error_text = 'Rate limit exceeded: {}'.format(error)
-                        self.retry(attempt_number, text=error_text,
-                                   **program_params)
-
-                return response_json
+                return response.json()
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
@@ -685,6 +682,122 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
+    def _get_chat_from_vod(self, feedback_id, stream_start_time, end_time, params):
+        # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
+        # ordered by timestamp
+
+        data = {
+            'fb_api_req_friendly_name': 'CometUFICommentsProviderPaginationQuery',
+            'doc_id': '4310877875602018'
+        }
+
+        ordering = 'LIVE_STREAMING'  # 'TOPLEVEL' 'RANKED_THREADED' 'CHRONOLOGICAL'
+
+        variables = {
+            'feedLocation': 'TAHOE',
+            'feedbackID': feedback_id,
+            'feedbackSource': 41,
+            'last': 50,  # max step is 50
+            'includeHighlightedComments': True,
+            'includeNestedComments': True,
+            'initialViewOption': ordering,
+            'topLevelViewOption': ordering,
+            'viewOption': ordering
+        }
+
+        before = None
+        while True:
+            variables['before'] = before
+            variables['isPaginating'] = before is not None
+
+            data['variables'] = json.dumps(variables)
+
+            json_data = self._graphql_request(params, data=data)
+
+            info = multi_get(json_data, 'data', 'feedback')
+            if not info:
+                log('debug', 'No feedback: {}'.format(json_data))
+                break
+
+            display_comments = info.get('display_comments')
+            edges = display_comments.get('edges') or []
+
+            parsed_items = []
+            for edge in reversed(edges):
+                node = edge.get('node')
+                if not node:
+                    log('debug', 'No node found in edge: {}'.format(edge))
+                    continue
+
+                parsed = FacebookChatDownloader._parse_node(
+                    node, True, stream_start_time)
+
+                time_in_seconds = parsed.get('time_in_seconds')
+                if time_in_seconds is None:
+                    continue
+                if time_in_seconds > end_time:
+                    return
+                parsed_items.append(parsed)
+
+            parsed_items.sort(key=lambda x: x['timestamp'])
+            yield from parsed_items
+
+            page_info = display_comments.get('page_info') or {}
+            if not page_info.get('has_previous_page'):
+                break
+
+            before = page_info.get('start_cursor')
+
+    def _get_chat_from_video(self, feedback_id, start_time, end_time, params):
+        # method 2 - works for all videos, but sometimes misses comments
+        # max messages is 30 per minute
+        # ordered by time_in_seconds
+        log('debug', 'Running method 2')
+
+        data = {
+            'fb_api_req_friendly_name': 'CometLiveVODCommentListRefetchableQuery',
+            'doc_id': '3941623715965411'
+        }
+
+        # By default, Facebook gets messages by the minute
+        time_increment = 600  # 10 mins
+
+        next_start_time = max(start_time, 0)
+
+        variables = {
+            'id': feedback_id
+        }
+
+        while True:
+            next_end_time = min(next_start_time + time_increment, end_time)
+
+            variables['afterTime'] = next_start_time
+            variables['beforeTime'] = next_end_time
+
+            data['variables'] = json.dumps(variables)
+
+            json_data = self._graphql_request(params, data=data)
+
+            # Check for errors
+            for error in json_data.get('errors') or []:
+                if error.get('code') == 1675004:
+                    raise RateLimitError(
+                        'Rate limit exceeded: {}'.format(error))
+
+            edges = multi_get(json_data, 'data', 'node',
+                              'video_timestamped_comments', 'edges') or []
+
+            for edge in edges:
+                node = edge.get('node')
+                if not node:
+                    log('debug', 'No node found in edge: {}'.format(edge))
+                    continue
+                yield FacebookChatDownloader._parse_node(node, True)
+
+            if next_end_time >= end_time:
+                return
+            next_start_time = next_end_time
+
     def _get_chat_replay_messages_by_video_id(self, video_id, max_duration, initial_info, params):
         feedback_id = base64_encode(f'feedback:{video_id}')
         broadcast_status = initial_info.get('broadcast_status')
@@ -694,117 +807,24 @@ class FacebookChatDownloader(BaseChatDownloader):
         end_time = min(ensure_seconds(params.get(
             'end_time'), float('inf')), max_duration)
 
-        # no start time, get until end_time
+        success = False
+
         if broadcast_status == 'VOD_READY' and params.get('start_time') is None:
-            # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
-            # ordered by timestamp
+            # no start time, get until end_time
             log('debug', 'Running method 1')
+            try:
+                for i in self._get_chat_from_vod(feedback_id, stream_start_time, end_time, params):
+                    time_in_seconds = i.get('time_in_seconds')
+                    if time_in_seconds is not None:
+                        start_time = max(start_time, time_in_seconds)
+                    yield i
+                success = True
 
-            data = {
-                'fb_api_req_friendly_name': 'CometUFICommentsProviderPaginationQuery',
-                'doc_id': '4310877875602018'
-            }
+            except RateLimitError as e:
+                pass
 
-            ordering = 'LIVE_STREAMING'  # 'TOPLEVEL' 'RANKED_THREADED' 'CHRONOLOGICAL'
-
-            variables = {
-                'feedLocation': 'TAHOE',
-                'feedbackID': feedback_id,
-                'feedbackSource': 41,
-                'last': 50,  # max step is 50
-                'includeHighlightedComments': True,
-                'includeNestedComments': True,
-                'initialViewOption': ordering,
-                'topLevelViewOption': ordering,
-                'viewOption': ordering
-            }
-
-            before = None
-            while True:
-                variables['before'] = before
-                variables['isPaginating'] = before is not None
-
-                data['variables'] = json.dumps(variables)
-
-                json_data = self._graphql_request(params, data=data)
-
-                info = multi_get(json_data, 'data', 'feedback')
-                if not info:
-                    log('debug', 'No feedback: {}'.format(json_data))
-                    break
-
-                display_comments = info.get('display_comments')
-                edges = display_comments.get('edges') or []
-
-                parsed_items = []
-                for edge in reversed(edges):
-                    node = edge.get('node')
-                    if not node:
-                        log('debug', 'No node found in edge: {}'.format(edge))
-                        continue
-
-                    parsed = FacebookChatDownloader._parse_node(
-                        node, True, stream_start_time)
-
-                    time_in_seconds = parsed.get('time_in_seconds')
-                    if time_in_seconds is None:
-                        continue
-                    if time_in_seconds > end_time:
-                        return
-                    parsed_items.append(parsed)
-
-                parsed_items.sort(key=lambda x: x['timestamp'])
-                yield from parsed_items
-
-                page_info = display_comments.get('page_info') or {}
-                if not page_info.get('has_previous_page'):
-                    break
-
-                before = page_info.get('start_cursor')
-
-        else:
-            # method 2 - works for all videos, but sometimes misses comments
-            # max messages is 30 per minute
-            # ordered by time_in_seconds
-            log('debug', 'Running method 2')
-
-            data = {
-                'fb_api_req_friendly_name': 'CometLiveVODCommentListRefetchableQuery',
-                'doc_id': '3941623715965411'
-            }
-
-            # By default, Facebook gets messages by the minute
-            time_increment = 600  # 10 mins
-
-            next_start_time = max(start_time, 0)
-
-            variables = {
-                'id': feedback_id
-            }
-
-            while True:
-                next_end_time = min(next_start_time + time_increment, end_time)
-
-                variables['afterTime'] = next_start_time
-                variables['beforeTime'] = next_end_time
-
-                data['variables'] = json.dumps(variables)
-
-                json_data = self._graphql_request(params, data=data)
-
-                edges = multi_get(json_data, 'data', 'node',
-                                  'video_timestamped_comments', 'edges') or []
-
-                for edge in edges:
-                    node = edge.get('node')
-                    if not node:
-                        log('debug', 'No node found in edge: {}'.format(edge))
-                        continue
-                    yield FacebookChatDownloader._parse_node(node, True)
-
-                if next_end_time >= end_time:
-                    return
-                next_start_time = next_end_time
+        if not success:  # Fallback
+            yield from self._get_chat_from_video(feedback_id, start_time, end_time, params)
 
     def _get_chat_by_video_id(self, match, params):
         return self.get_chat_by_video_id(match.group('id'), params)
