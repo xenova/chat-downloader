@@ -7,7 +7,6 @@ from .common import (
 from ..utils.core import (
     remove_prefixes,
     multi_get,
-    try_get_first_value,
     seconds_to_time,
     camel_case_split,
     ensure_seconds,
@@ -92,10 +91,10 @@ class FacebookChatDownloader(BaseChatDownloader):
             'name': 'Get chat messages from past gaming broadcast',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/3629284013844544/',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
 
@@ -103,10 +102,10 @@ class FacebookChatDownloader(BaseChatDownloader):
             'name': 'Get chat messages from gaming clip',
             'params': {
                 'url': 'https://www.facebook.com/disguisedtoast/videos/1170480696709027/',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
 
@@ -117,7 +116,7 @@ class FacebookChatDownloader(BaseChatDownloader):
                 'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
 
@@ -137,20 +136,20 @@ class FacebookChatDownloader(BaseChatDownloader):
             'name': 'Get chat messages from video page',
             'params': {
                 'url': 'https://www.facebook.com/video.php?v=570133851026337',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
         {
             'name': 'Get chat messages from short video',
             'params': {
                 'url': 'https://www.facebook.com/338233632988842/videos/958020308373031',
-                'max_messages': 10
+                'max_messages': 100
             },
             'expected_result': {
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
+                'messages_condition': lambda messages: 0 < len(messages) <= 100,
             }
         },
         {
@@ -270,6 +269,10 @@ class FacebookChatDownloader(BaseChatDownloader):
         return item.get('uri')
 
     @staticmethod
+    def _get_url(item):
+        return item.get('url')
+
+    @staticmethod
     def _parse_attachment_info(original_item):
 
         if isinstance(original_item, (list, tuple)) and len(original_item) > 0:
@@ -346,37 +349,18 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         }
 
-    _ATTACHMENT_REMAPPING = {
-        'url': 'url',  # facebook redirect url,
-        'source': r('source', _get_text),
-        'title_with_entities': r('title', _get_text),
-
-        'target': r('target', _parse_attachment_info),
-        'media': r('media', _parse_attachment_info),
-        'style_infos': r('style_infos', _parse_attachment_info),
-
-        'attachment_text': r('text', _get_text),
-
-        '__typename': 'type'
-    }
-
-    _IGNORE_ATTACHMENT_KEYS = [
-        'tracking',
-        'action_links'
-    ]
-
-    _KNOWN_ATTACHMENT_KEYS = set(
-        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
-
     @staticmethod
-    def _parse_attachment_styles(item):
-        parsed = {}
-        attachment = multi_get(item, 'style_type_renderer', 'attachment')
+    def _parse_attachment_renderer(item):
+        attachment = multi_get(item, 'style_type_renderer',
+                               'attachment') or item.get('attachment')
         if not attachment:
             debug_log('No attachment: {}'.format(item))
-            return parsed
+            return {}
 
-        # set texts:
+        return FacebookChatDownloader._parse_attachment(attachment)
+
+    @staticmethod
+    def _parse_attachment(attachment):
         parsed = r.remap_dict(
             attachment, FacebookChatDownloader._ATTACHMENT_REMAPPING)
 
@@ -388,11 +372,42 @@ class FacebookChatDownloader(BaseChatDownloader):
         if missing_keys:
             debug_log(
                 'Missing attachment keys: {}'.format(missing_keys),
-                item,
+                attachment,
                 parsed
             )
 
         return parsed
+
+    _ATTACHMENT_REMAPPING = {
+        'url': 'url',  # facebook redirect url,
+        'source': r('source', _get_text),
+        'title_with_entities': r('title', _get_text),
+
+        'target': r('target', _parse_attachment_info),
+        'media': r('media', _parse_attachment_info),
+        'style_infos': r('style_infos', _parse_attachment_info),
+
+        'attachment_text': r('text', _get_text),
+
+        '__typename': 'type',
+
+        'story_url': 'story_url',
+        'story_attachment_link_renderer': r('story_attachment', _parse_attachment_renderer),
+
+        'web_link': r('web_link', _get_url)
+        # 'sticker_image': r('sticker_image', _get_uri),
+
+
+    }
+
+    _IGNORE_ATTACHMENT_KEYS = [
+        'tracking',
+        'action_links',
+        'third_party_media_info'
+    ]
+
+    _KNOWN_ATTACHMENT_KEYS = set(
+        list(_ATTACHMENT_REMAPPING.keys()) + _IGNORE_ATTACHMENT_KEYS)
 
     _TARGET_MEDIA_REMAPPING = {
         'id': 'id',
@@ -440,6 +455,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         'Sticker',
         'VideoTipJarPayment',
         'Page',
+        'Video',
 
         'Group',
         'ProfilePicAttachmentMedia',
@@ -496,7 +512,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         'identity_badges_web': r('author_badges', lambda x: list(map(FacebookChatDownloader._parse_author_badges, x))),
 
-        'attachments': r('attachments', lambda x: list(map(FacebookChatDownloader._parse_attachment_styles, x)))
+        'attachments': r('attachments', lambda x: list(map(FacebookChatDownloader._parse_attachment_renderer, x)))
 
     }
 
