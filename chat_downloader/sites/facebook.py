@@ -203,7 +203,9 @@ class FacebookChatDownloader(BaseChatDownloader):
         for attempt_number in attempts(max_attempts):
             try:
                 response = self._session_post(self._GRAPH_API, **post_kwargs)
-                return response.json()
+                response_json = response.json()
+                self._check_for_errors(response_json)
+                return response_json
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
@@ -682,6 +684,13 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
+    def _check_for_errors(self, json_data):
+        # Check for errors
+        for error in json_data.get('errors') or []:
+            if error.get('code') == 1675004:
+                raise RateLimitError(
+                    'Rate limit exceeded: {}'.format(error))
+
     def _get_chat_from_vod(self, feedback_id, stream_start_time, end_time, params):
         # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
         # ordered by timestamp
@@ -777,12 +786,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             data['variables'] = json.dumps(variables)
 
             json_data = self._graphql_request(params, data=data)
-
-            # Check for errors
-            for error in json_data.get('errors') or []:
-                if error.get('code') == 1675004:
-                    raise RateLimitError(
-                        'Rate limit exceeded: {}'.format(error))
 
             edges = multi_get(json_data, 'data', 'node',
                               'video_timestamped_comments', 'edges') or []
