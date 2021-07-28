@@ -109,7 +109,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         {
             'name': 'Livestream',
             'params': {
-                'url': 'https://www.twitch.tv/xqcow',
+                'url': 'https://www.twitch.tv/xenova',
                 'timeout': 5
             }
         },
