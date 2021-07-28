@@ -40,3 +40,10 @@ class TestWriters(unittest.TestCase):
                     test_url, max_messages=10, output=path, overwrite=False))
 
                 self.assertGreater(os.stat(path).st_size, size_1)
+
+                # Test file name formatting
+                formatting_path = os.path.join(tmp, f'{{id}}.{extension}')
+                chat = list(downloader.get_chat(
+                    test_url, max_messages=10, output=formatting_path))
+
+                self.assertTrue(os.path.exists(formatting_path))
