@@ -395,3 +395,10 @@ def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
+
+def safe_path(text, replace_char='_'):
+    """Ensure generated file name/path is safe
+    https://stackoverflow.com/a/31976060
+    """
+    return re.sub(r'[\/:*?"<>|]', replace_char, text)

@@ -18,7 +18,8 @@ from ..errors import (
 from ..utils.core import (
     get_title_of_webpage,
     pause,
-    safe_print
+    safe_print,
+    safe_path
 )
 
 from ..utils.timed_utils import (
@@ -247,11 +248,13 @@ class Chat():
 
         # Special formatting of output name:
         # Allowed keys are specified here
+        # Remove invalid characters from output file name
         self._output_writer.file_name = self._output_writer.file_name.format(
-            title=self.title,
-            id=self.id
+            title=safe_path(self.title),
+            id=safe_path(self.id)
         )
 
+        log('debug', f'Writing to file: {self._output_writer.file_name}')
         # Only actually initialise here
         self._output_writer._real_init()
 
