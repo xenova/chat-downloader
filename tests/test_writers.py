@@ -32,18 +32,19 @@ class TestWriters(unittest.TestCase):
                     test_url, max_messages=10, output=path))
 
                 # ensure output is non-empty
-                size_1 = os.stat(path).st_size
-                self.assertFalse(size_1 == 0)
+                size = os.stat(path).st_size
+                self.assertFalse(size == 0)
 
                 # Test appending
                 chat = list(downloader.get_chat(
                     test_url, max_messages=10, output=path, overwrite=False))
 
-                self.assertGreater(os.stat(path).st_size, size_1)
+                self.assertGreater(os.stat(path).st_size, size)
 
                 # Test file name formatting
-                formatting_path = os.path.join(tmp, f'{{id}}.{extension}')
-                chat = list(downloader.get_chat(
-                    test_url, max_messages=10, output=formatting_path))
+                formatting_path = os.path.join(tmp, f'{{id}}_{{title}}.{extension}')
+                chat = downloader.get_chat(
+                    test_url, max_messages=10, output=formatting_path)
+                list(chat) # Iterate over items
 
-                self.assertTrue(os.path.exists(formatting_path))
+                self.assertTrue(os.path.exists(chat._output_writer.file_name))
