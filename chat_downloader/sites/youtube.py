@@ -238,7 +238,16 @@ class YouTubeChatDownloader(BaseChatDownloader):
         {
             'name': 'This video is no longer available because the YouTube account associated with this video has been terminated.',
             'params': {
-                'url': 'https://www.youtube.com/watch?v=V36LpHqtcDY',
+                'url': 'https://www.youtube.com/watch?v=iM9sA2o4Krc',
+            },
+            'expected_result': {
+                'error': VideoUnavailable,
+            }
+        },
+        {
+            'name': 'Video unavailable. This video is no longer available due to a copyright claim by International Olympic Committee.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=cjk2UKkzY0g',
             },
             'expected_result': {
                 'error': VideoUnavailable,
@@ -1003,7 +1012,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         for item in items:
             yield self._YT_VIDEO_TEMPLATE.format(item['video_id'])
-        # print('b')
 
         # downloader.get_playlist_items
 
@@ -1124,8 +1132,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             vid = item.get('gridVideoRenderer')
             if vid:
                 yield self._parse_video(vid)
-            else:
-                print(item)
 
     def get_playlist_items(self, playlist_url, params=None):
 
@@ -1199,7 +1205,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         self.retry(attempt_number,
                                    text=error_message, **program_params)
                         continue
-
+                    # 404 means deleted while live
+#                     {'error': {'code': 404,
+# 'message': 'Requested entity was not found.', 'errors': [{'message': 'Requested entity was not found.', 'domain': 'global', 'reason':
+# 'notFound'}], 'status': 'NOT_FOUND'}}
                 return json_response
 
             except JSONDecodeError as e:
