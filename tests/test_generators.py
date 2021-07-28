@@ -109,8 +109,7 @@ for site in get_all_sites():
             name = str(i + 1).zfill(padding)
 
             test_method = generator(site, url)
-            test_method.__name__ = 'test_{}_{}_{}'.format(
-                site.__name__, name, url)
+            test_method.__name__ = f'test_{site.__name__}_{name}_{url}'
             setattr(TestURLGenerators, test_method.__name__, test_method)
 
             del test_method

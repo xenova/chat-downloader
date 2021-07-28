@@ -24,7 +24,7 @@ def timestamp_to_microseconds(timestamp):
     """
 
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1]))) * 1e6)
+    return round((datetime.datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
 
 
 def time_to_seconds(time):
@@ -232,10 +232,10 @@ def flatten_json(original_json):
     def flatten(item, prefix=''):
         if isinstance(item, dict):
             for key in item:
-                flatten(item[key], '{}{}.'.format(prefix, key))
+                flatten(item[key], f'{prefix}{key}.')
         elif isinstance(item, list):
             for index in range(len(item)):
-                flatten(item[index], '{}{}.'.format(prefix, index))
+                flatten(item[index], f'{prefix}{index}.')
         else:
             final[prefix[:-1]] = item
     flatten(original_json)

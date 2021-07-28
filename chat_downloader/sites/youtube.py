@@ -1085,19 +1085,19 @@ class YouTubeChatDownloader(BaseChatDownloader):
         vid_type = self._VIDEO_TYPE_REMAPPING.get(video_type.lower())
 
         if not vid_type:
-            raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(
-                set(self._VIDEO_TYPE_REMAPPING.keys())))
+            raise ValueError(
+                f'Invalid argument passed for video_type. Must be one of {set(self._VIDEO_TYPE_REMAPPING.keys())}')
 
-        user_url = 'https://www.youtube.com/{}/{}'.format(_type, _id)
+        user_url = f'https://www.youtube.com/{_type}/{_id}'
 
         html, yt_info = self._get_initial_info(
-            '{}/videos?view=2&live_view={}'.format(user_url, vid_type[0]), params)
+            f'{user_url}/videos?view=2&live_view={vid_type[0]}', params)
 
         section_list_renderer = multi_get(
             yt_info, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
 
         if not section_list_renderer:
-            raise UserNotFound('Unable to find user: "{}"'.format(user_url))
+            raise UserNotFound(f'Unable to find user: "{user_url}"')
 
         # Check that the returned grid is what was asked for
         # YouTube tries to correct your mistake by selecting the uploads tab
@@ -1109,8 +1109,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         selected = list(filter(lambda x: x['selected'], sub_menu_items))
         if not selected or selected[0]['title'] != vid_type[1]:
-            log('debug', '"{}" tab is not visible for this channel (i.e. there are no such videos).'.format(
-                vid_type[1]))
+            log('debug',
+                f'"{vid_type[1]}" tab is not visible for this channel (i.e. there are no such videos).')
             return
 
         items = section_list_renderer['contents'][0]['itemSectionRenderer']['contents'][0]['gridRenderer']['items']
@@ -1153,7 +1153,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             consent_id = random.randint(100, 999)
 
         self.set_cookie_value('.youtube.com', 'CONSENT',
-                              'YES+cb.20210328-17-p0.en+FX+{}'.format(consent_id))
+                              f'YES+cb.20210328-17-p0.en+FX+{consent_id}')
 
     def _generate_sapisidhash_header(self):
         sapis_id = self.get_cookie_value('SAPISID')
@@ -1200,7 +1200,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
-                           text='Unable to parse JSON: `{}`'.format(response.text))
+                           text=f'Unable to parse JSON: `{response.text}`')
 
             except RequestException as e:
                 self.retry(attempt_number, error=e, **program_params)
@@ -1230,7 +1230,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         if not yt_initial_data:  # Fatal error
             raise ParsingError(
-                'Unable to parse initial video data. {}'.format(html))
+                f'Unable to parse initial video data. {html}')
 
         details = {}
 
@@ -1243,8 +1243,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             player_response) if player_response else None
 
         if not player_response_info:
-            log(
-                'warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
+            log('warning',
+                f'Unable to parse player response, proceeding with caution: {html}')
             player_response_info = {}
 
         streaming_data = player_response_info.get('streamingData') or {}
@@ -1294,8 +1294,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 for error_reason in error_reasons:
                     if error_reasons[error_reason]:
                         if isinstance(error_reasons[error_reason], str):
-                            error_message += ' {}.'.format(
-                                error_reasons[error_reason].rstrip('.'))
+                            error_message += f" {error_reasons[error_reason].rstrip('.')}."
                         else:
                             error_message += str(error_reasons[error_reason])
 
@@ -1308,18 +1307,16 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    log('debug', 'Unknown status: {}. {}'.format(
-                        status, playability_status))
-                    error_message = '{}: {}'.format(status, error_message)
+                    log('debug',
+                        f'Unknown status: {status}. {playability_status}')
+                    error_message = f'{status}: {error_message}'
                     raise VideoUnavailable(error_message)
             elif not contents:
-                log('debug', 'Initial YouTube data: {}'.format(
-                    yt_initial_data))
+                log('debug', f'Initial YouTube data: {yt_initial_data}')
                 raise VideoUnavailable(
                     'Unable to find initial video contents.')
             else:
                 # Video exists, but you cannot view chat for some reason
-
                 error_runs = multi_get(conversation_bar, 'conversationBarRenderer',
                                        'availabilityMessage', 'messageRenderer', 'text')
                 error_message = self._parse_runs(error_runs, False)[
@@ -1397,12 +1394,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         continuation_items = list(initial_continuation_info.items())
         if len(continuation_items) < 2:
             raise NoContinuation(
-                'Initial continuation information could not be found: {}'.format(initial_continuation_info))
+                f'Initial continuation information could not be found: {initial_continuation_info}')
 
         continuation_index = 0 if chat_type == 'Top' else 1
         continuation = continuation_items[continuation_index][1]
-        log('debug', 'Getting {} chat ({}).'.format(
-            chat_type, continuation_items[continuation_index][0]))
+        log('debug',
+            f'Getting {chat_type} chat ({continuation_items[continuation_index][0]}).')
 
         api_type = 'live_chat'
         if not is_live:
@@ -1431,7 +1428,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             self._MESSAGE_GROUPS.keys()
         if 'all' not in messages_groups_to_add and invalid_groups:
             raise InvalidParameter(
-                'Invalid groups specified: {}'.format(invalid_groups))
+                f'Invalid groups specified: {invalid_groups}')
 
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
@@ -1485,21 +1482,20 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
                 'continuation': multi_get(continuation_params, 'continuation')
             }
-            log('debug', 'Continuation parameters: {}'.format(debug_info))
-            log('debug', 'Session headers: {}'.format(
-                ', '.join(self.session.headers.keys())))  # Only display keys
+            log('debug', f'Continuation parameters: {debug_info}')
+            # Only display keys
+            log('debug',
+                f"Session headers: {', '.join(self.session.headers.keys())}")
 
             info = multi_get(
                 yt_info, 'continuationContents', 'liveChatContinuation')
 
             logged_in_info = multi_get(
                 yt_info, 'responseContext', 'serviceTrackingParams', 1, 'params', 0)
-            log('debug', 'Logged-in info: {}'.format(logged_in_info))
+            log('debug', f'Logged-in info: {logged_in_info}')
 
             if not info:
-                log('debug', 'No continuation information found: {}'.format(
-                    yt_info))
-
+                log('debug', f'No continuation information found: {yt_info}')
                 return
 
             actions = info.get('actions') or []
@@ -1587,10 +1583,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         else:
                             debug_log(
                                 'No bannerRenderer item',
-                                'Action type: {}'.format(
-                                    original_action_type),
-                                'Action: {}'.format(action),
-                                'Parsed data: {}'.format(data)
+                                f'Action type: {original_action_type}',
+                                f'Action: {action}',
+                                f'Parsed data: {data}'
                             )
 
                     elif original_action_type in self._KNOWN_REMOVE_BANNER_TYPES:
@@ -1604,8 +1599,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     else:
                         # not processing these
                         debug_log(
-                            'Unknown action: {}'.format(
-                                original_action_type),
+                            f'Unknown action: {original_action_type}',
                             action,
                             data
                         )
@@ -1616,19 +1610,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     if not data:
                         debug_log(
-                            'Parse of action returned empty results: {}'.format(
-                                original_action_type),
+                            f'Parse of action returned empty results: {original_action_type}',
                             action
                         )
 
                     if missing_keys:
                         debug_log(
-                            'Missing keys found: {}'.format(missing_keys),
-                            'Message type: {}'.format(original_message_type),
-                            'Action type: {}'.format(
-                                original_action_type),
-                            'Action: {}'.format(action),
-                            'Parsed data: {}'.format(data)
+                            f'Missing keys found: {missing_keys}',
+                            f'Message type: {original_message_type}',
+                            f'Action type: {original_action_type}',
+                            f'Action: {action}',
+                            f'Parsed data: {data}'
                         )
 
                     if original_message_type:
@@ -1644,20 +1636,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             # skip placeholder items
                         elif original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
                             debug_log(
-                                'Unknown message type "{}" for action "{}"'.format(
-                                    original_message_type, original_action_type),
-                                'New message type: {}'.format(
-                                    data['message_type']),
-                                'Action: {}'.format(action),
-                                'Parsed data: {}'.format(data)
+                                f'Unknown message type "{original_message_type}" for action "{original_action_type}"',
+                                f"New message type: {data['message_type']}",
+                                f'Action: {action}',
+                                f'Parsed data: {data}'
                             )
 
                     else:  # no type # can ignore message
                         debug_log(
                             'No message type',
-                            'Action type: {}'.format(original_action_type),
-                            'Action: {}'.format(action),
-                            'Parsed data: {}'.format(data)
+                            f'Action type: {original_action_type}',
+                            f'Action: {action}',
+                            f'Parsed data: {data}'
                         )
                         continue
 
@@ -1694,8 +1684,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     message_count += 1
                     yield data
 
-                log('debug', 'Total number of messages: {}'.format(
-                    message_count))
+                log('debug', f'Total number of messages: {message_count}')
 
             elif not is_live:
                 # no more actions to process in a chat replay
@@ -1713,8 +1702,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 continuation_key = try_get_first_key(cont)
                 continuation_info = cont[continuation_key]
 
-                log('debug', 'Continuation info: {}'.format(
-                    continuation_info))
+                log('debug', f'Continuation info: {continuation_info}')
 
                 if continuation_key in self._KNOWN_CHAT_CONTINUATIONS:
 
@@ -1732,7 +1720,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     # ignore these continuations
                 else:
                     debug_log(
-                        'Unknown continuation: {}'.format(continuation_key),
+                        f'Unknown continuation: {continuation_key}',
                         cont
                     )
 
@@ -1758,7 +1746,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     sleep_duration = max(min(sleep_duration, 8000), 0)
 
-                    log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
+                    log('debug', f'Sleeping for {sleep_duration}ms.')
                     interruptible_sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
@@ -1827,14 +1815,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     video_title = video['title']
 
                     if video_id in list_of_vids_to_ignore:
-                        log('debug', 'Skipping video with ID: "{}"'.format(video_id))
+                        log('debug', f'Skipping video with ID: "{video_id}"')
                         continue
 
                     try:
                         chat = self.get_chat_by_video_id(video_id, params)
 
-                        log('info', 'Found a{} livestream: "{}" ({}).'.format(
-                            'n upcoming' if video_type == 'upcoming' else '', video_title, video_id))
+                        log('info',
+                            f"Found a{'n upcoming' if video_type == 'upcoming' else ''} livestream: \"{video_title}\" ({video_id}).")
 
                         # update chat item by copying over
                         chat_dict = chat.__dict__.copy()
@@ -1849,12 +1837,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     except ChatDownloaderError as e:
                         # For some reason, doesn't work
-                        log('warning', 'Unable to get chat for "{}" ({}) due to an error: "{}"'.format(
-                            video['title'], video_id, e))
-                        # TODO exit on error?
+                        log('warning',
+                            f"Unable to get chat for \"{video['title']}\" ({video_id}) due to an error: \"{e}\"")
 
-            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying in {} seconds.'.format(
-                sleep_amount))
+            log('info',
+                f'There are no active or upcoming livestreams with a live chat. Retrying in {sleep_amount} seconds.')
             interruptible_sleep(sleep_amount)
 
             # continue forever, until reaching a video with valid chat

@@ -97,10 +97,9 @@ def generator(site, test):
 for site in get_all_sites(True):
     test_cases = getattr(site, '_TESTS', [])
 
-    for test_number, test in enumerate(test_cases):
+    for test_number, test in enumerate(test_cases, start=1):
         test_method = generator(site, test)
-        test_method.__name__ = 'test_{}_{}'.format(
-            site.__name__, test_number + 1)
+        test_method.__name__ = f'test_{site.__name__}_{test_number}'
 
         setattr(TestChatDownloader, test_method.__name__, test_method)
 

@@ -73,9 +73,9 @@ class ChatDownloader():
         self.init_params = locals()
         self.init_params.pop('self')
 
-        log('debug', 'Python version: {}'.format(sys.version))
-        log('debug', 'Program version: {}'.format(__version__))
-        log('debug', 'Initialisation parameters: {}'.format(self.init_params))
+        log('debug', f'Python version: {sys.version}')
+        log('debug', f'Program version: {__version__}')
+        log('debug', f'Initialisation parameters: {self.init_params}')
 
         # Track sessions using a dictionary (allows for reusing)
         self.sessions = {}
@@ -213,22 +213,21 @@ class ChatDownloader():
                 for k, v in original_params.items():
                     params[k] = site_object.get_site_value(v)
 
-                log('info', 'Site: {}'.format(site_object._NAME))
-                log('debug', 'Program parameters: {}'.format(params))
+                log('info', f'Site: {site_object._NAME}')
+                log('debug', f'Program parameters: {params}')
 
                 get_chat = getattr(site_object, function_name, None)
                 if not get_chat:
                     raise NotImplementedError(
-                        '{} has not been implemented in {}.'.format(function_name, site.__name__))
+                        f'{function_name} has not been implemented in {site.__name__}.')
 
                 chat = get_chat(match, params)
-                log('debug', 'Match found: "{}". Running "{}" function in "{}".'.format(
-                    match, function_name, site.__name__))
+                log('debug',
+                    f'Match found: "{match}". Running "{function_name}" function in "{site.__name__}".')
 
                 if chat is None:
                     raise ChatGeneratorError(
-                        'No valid generator found in {} for url "{}"'.format(
-                            site.__name__, url))
+                        f'No valid generator found in {site.__name__} for url "{url}"')
 
                 if isinstance(params['max_messages'], int):
                     chat.chat = itertools.islice(
@@ -246,14 +245,14 @@ class ChatDownloader():
                         start = time.time()
 
                         def log_on_timeout():
-                            log('debug', 'Timeout occurred after {} seconds.'.format(
-                                time.time() - start))
+                            log('debug',
+                                f'Timeout occurred after {time.time() - start} seconds.')
                         setattr(chat.chat, 'on_timeout', log_on_timeout)
 
                     if isinstance(params['inactivity_timeout'], (float, int)):
                         def log_on_inactivity_timeout():
-                            log('debug', 'Inactivity timeout occurred after {} seconds.'.format(
-                                params['inactivity_timeout']))
+                            log('debug',
+                                f"Inactivity timeout occurred after {params['inactivity_timeout']} seconds.")
                         setattr(chat.chat, 'on_inactivity_timeout',
                                 log_on_inactivity_timeout)
 
@@ -272,8 +271,8 @@ class ChatDownloader():
 
                 chat.site = site_object
 
-                log('debug', 'Chat information: {}'.format(chat.__dict__))
-                log('info', 'Retrieving chat for "{}".'.format(chat.title))
+                log('debug', f'Chat information: {chat.__dict__}')
+                log('info', f'Retrieving chat for "{chat.title}".')
 
                 return chat
 
@@ -281,26 +280,25 @@ class ChatDownloader():
         log('debug', str(parsed))
 
         if parsed.netloc:
-            raise SiteNotSupported(
-                'Site not supported: {}'.format(parsed.netloc))
+            raise SiteNotSupported(f'Site not supported: {parsed.netloc}')
         elif not parsed.scheme:  # No scheme, try to correct
             original_params['url'] = 'https://' + url
             chat = self.get_chat(**original_params)
             if chat:
                 return chat
         else:
-            raise InvalidURL('Invalid URL: "{}"'.format(url))
+            raise InvalidURL(f'Invalid URL: "{url}"')
 
     def create_session(self, chat_downloader_class, overwrite=False):
         if not issubclass(chat_downloader_class, BaseChatDownloader):
-            raise TypeError('Unable to create session, class must extend BaseChatDownloader. Class given: {}'.format(
-                chat_downloader_class))
+            raise TypeError(
+                f'Unable to create session, class must extend BaseChatDownloader. Class given: {chat_downloader_class}')
         elif chat_downloader_class == BaseChatDownloader:
             raise TypeError(
                 'Unable to create session, class may not be BaseChatDownloader.')
 
         session_name = chat_downloader_class.__name__
-        log('debug', 'Created {} session.'.format(session_name))
+        log('debug', f'Created {session_name} session.')
 
         if session_name not in self.sessions or overwrite:
             self.sessions[session_name] = chat_downloader_class(
@@ -362,22 +360,22 @@ def run(propagate_interrupt=False, **kwargs):
         for message in chat:
             callback(message)
 
-        log('info', 'Finished retrieving chat{}.'.format(
-            '' if chat.is_live else ' replay'))
+        log('info',
+            f"Finished retrieving chat{'' if chat.is_live else ' replay'}.")
 
     except (
         ChatGeneratorError,
         ParsingError,
         TestingException
     ) as e:  # Errors which may be bugs
-        log('error', '{}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose'.format(e))
+        log('error', f'{e}. Please report this at https://github.com/xenova/chat-downloader/issues/new/choose')
 
     except ChatDownloaderError as e:  # Expected errors
         log('error', e)
 
     except ConnectionError as e:
         log(
-            'error', 'Unable to establish a connection. Please check your internet connection. {}'.format(e))
+            'error', f'Unable to establish a connection. Please check your internet connection. {e}')
 
     except RequestException as e:
         log('error', e)

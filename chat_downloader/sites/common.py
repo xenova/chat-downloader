@@ -51,7 +51,7 @@ class Image():
         self.height = height
 
         if width and height and not image_id:
-            self.id = '{}x{}'.format(width, height)
+            self.id = f'{width}x{height}'
         elif image_id:
             self.id = image_id
 
@@ -244,7 +244,7 @@ class Chat():
 
     def _init_writer(self):
         if self._output_writer.is_initialised():
-            return # Ignore if writer is already initialised
+            return  # Ignore if writer is already initialised
 
         # Special formatting of output name:
         # Allowed keys are specified here
@@ -278,7 +278,7 @@ class Chat():
         try:
             item = next(self.chat)
 
-            if self._output_writer is not None: # writer has been attached
+            if self._output_writer is not None:  # writer has been attached
                 self._init_writer()
 
             if self.callback is not None:  # user-defined callback
@@ -452,7 +452,7 @@ class BaseChatDownloader:
                 cj.load(ignore_discard=True, ignore_expires=True)
             else:
                 raise CookieError(
-                    'The file "{}" could not be found.'.format(cookies))
+                    f'The file "{cookies}" could not be found.')
         self.session.cookies = cj
 
     def get_session_headers(self, key):
@@ -602,7 +602,7 @@ class BaseChatDownloader:
         """
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
-                'Maximum number of retries has been reached ({}).'.format(max_attempts))
+                f'Maximum number of retries has been reached ({max_attempts}).')
 
         if text is None:
             text = []
@@ -623,31 +623,24 @@ class BaseChatDownloader:
         must_sleep = time_to_sleep >= 0
         if must_sleep:
             if interruptible_retry:
-                sleep_text = '(sleep for {}s or press Enter)'.format(
-                    time_to_sleep)
+                sleep_text = f'(sleep for {time_to_sleep}s or press Enter)'
             else:
-                sleep_text = '(sleep for {}s)'.format(time_to_sleep)
+                sleep_text = f'(sleep for {time_to_sleep}s)'
         else:
             sleep_text = ''
 
-        retry_text = 'Retry #{} {}.'.format(attempt_number, sleep_text)
+        retry_text = f'Retry #{attempt_number} {sleep_text}.'
 
         if isinstance(error, Exception):
-            retry_text += ' {} ({})'.format(error, error.__class__.__name__)
+            retry_text += f' {error} ({error.__class__.__name__})'
 
         if isinstance(error, JSONDecodeError):
-            log(
-                'debug',
-                error.__dict__
-            )
+            log('debug', error.__dict__)
             page_title = get_title_of_webpage(error.doc)
             if page_title:
-                log('debug', 'Title: {}'.format(page_title))
+                log('debug', f'Title: {page_title}')
 
-        log(
-            'warning',
-            text + [retry_text]
-        )
+        log('warning', text + [retry_text])
 
         if must_sleep:
             if interruptible_retry:
@@ -669,8 +662,7 @@ class BaseChatDownloader:
         """
         invalid_types = set(messages_types_to_add) - set(allowed_message_types)
         if invalid_types:
-            raise InvalidParameter(
-                'Invalid types specified: {}'.format(invalid_types))
+            raise InvalidParameter(f'Invalid types specified: {invalid_types}')
 
     @staticmethod
     def get_mapped_keys(remapping):
