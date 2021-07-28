@@ -249,7 +249,7 @@ class Chat():
         # Allowed keys are specified here
         self._output_writer.file_name = self._output_writer.file_name.format(
             title=self.title,
-            # TODO add ID
+            id=self.id
         )
 
         # Only actually initialise here
