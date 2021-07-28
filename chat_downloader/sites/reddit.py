@@ -72,7 +72,7 @@ class RedditChatDownloader(BaseChatDownloader):
         bearer = multi_get(info, 'user', 'session', 'accessToken')
 
         self.authed_headers = {
-            f'authorization': f'Bearer {bearer}',
+            'authorization': f'Bearer {bearer}',
             **self.session.headers
         }
 
