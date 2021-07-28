@@ -1270,7 +1270,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration),
             title=title,
             duration=duration,
-            is_live=False
+            is_live=False,
+            id=vod_id
         )
 
     def _get_chat_by_clip_id(self, match, params):
@@ -1310,7 +1311,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration, offset),
             title=title,
             duration=duration,
-            is_live=False
+            is_live=False,
+            id=clip_id
         )
 
     _MESSAGE_REGEX = re.compile(
@@ -1695,7 +1697,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 stream_id, params),
             title=title,
             duration=None,
-            is_live=is_live
+            is_live=is_live,
+            id=stream_id
         )
 
     # # e.g. 'https://www.twitch.tv/spamfish/videos?filter=all'

@@ -245,7 +245,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'Video unavailable. This video is no longer available due to a copyright claim by International Olympic Committee.',
+            'name': 'This video is no longer available due to a copyright claim by International Olympic Committee.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=cjk2UKkzY0g',
             },
@@ -1819,8 +1819,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # params['exit_on_fail'] = True
 
         title = try_get_first_value(user_video_args)
-
-        chat_item = Chat(title=title)  # Create empty chat object
+        chat_item = Chat(title=title, id=title)  # Create empty chat object
         chat_item.chat = self._get_chat_messages_by_user_args(
             user_video_args, chat_item, params)
 
@@ -1893,7 +1892,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
             title=title,
             duration=duration,
             is_live=is_live,
-            start_time=start_time
+            start_time=start_time,
+            id=video_id
         )
 
     def _get_chat_by_video_id(self, match, params):

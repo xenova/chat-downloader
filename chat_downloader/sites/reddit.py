@@ -372,7 +372,7 @@ class RedditChatDownloader(BaseChatDownloader):
             socket_url = post_info.get('liveCommentsWebsocket')
 
             chat_item = Chat(title=title, is_live=is_live,
-                             start_time=start_time)
+                             start_time=start_time, id=post_id)
 
             if is_live and socket_url:  # live stream
 

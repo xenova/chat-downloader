@@ -860,6 +860,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             duration=initial_info.get('duration'),
             is_live=is_live,
             author=initial_info.get('author'),
+            id=video_id
         )
 
     _STREAM_PAGE = 'https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG'

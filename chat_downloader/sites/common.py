@@ -200,7 +200,7 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat=None, callback=None, title=None, duration=None, is_live=None, start_time=None, **kwargs):
+    def __init__(self, chat=None, callback=None, title=None, duration=None, is_live=None, start_time=None, id=None, **kwargs):
         """Create a Chat object
 
         :param chat: Generator method for retrieving chat messages, defaults to None
@@ -225,6 +225,7 @@ class Chat():
         self.duration = duration
         self.is_live = is_live
         self.start_time = start_time
+        self.id = id
 
         # TODO
         # author/user/uploader/creator
