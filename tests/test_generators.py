@@ -16,9 +16,14 @@ from chat_downloader.debugging import (
 )
 
 args = {
-    'timeout': 10,
+    # Tests
     'max_tests_per_site': 50,
     'sites': ['all'],
+
+    # Program params
+    'timeout': 10,
+    'max_attempts': 5,
+    'interruptible_retry': False,
 
     # For Twitch and Facebook:
     'livestream_limit': 10,
@@ -63,15 +68,8 @@ class TestURLGenerators(unittest.TestCase):
 def generator(site, url):
 
     def test_template(self):
-        params = {
-            'url': url,
-            'timeout': args['timeout'],
-            'max_attempts': 5,
-            'interruptible_retry': False
-        }
-
         print('\r ➤ ', url)
-        run(propagate_interrupt=True, **params)
+        run(propagate_interrupt=True, url=url, **args)
 
     return test_template
 
