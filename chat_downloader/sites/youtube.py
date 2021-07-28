@@ -131,20 +131,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'Get chat messages from live chat replay',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
-                'max_messages': 10
-            },
-
-            'expected_result': {
-                'message_types': ['text_message'],
-                'action_types': ['add_chat_item'],
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
-            }
-        },
-        {
-            'name': 'Get top chat messages from live chat replay',  # Premiere
+            'name': 'Get top chat messages from live chat replay',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
                 'start_time': 0,
