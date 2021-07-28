@@ -9,12 +9,9 @@ from ..utils.core import flatten_json
 class CW:
     """
     Base class for continuous file writers.
-
-    Can be used as a context manager (using the `with` keyword).
-    Otherwise, the writer can be explicitly closed.
     """
 
-    def __init__(self, file_name, overwrite=True):
+    def __init__(self, file_name, overwrite=True, **kwargs):
         """Create a CW object.
 
         :param file_name: The name of the file to write to
@@ -23,23 +20,10 @@ class CW:
         :type overwrite: bool, optional
         """
         self.file_name = file_name
-        # subclasses must set self.file
-
-        if not os.path.exists(file_name) or overwrite:
-            directory = os.path.dirname(file_name)
-            if directory:  # (non-empty directory - i.e. not in current folder)
-                # must make parent directory
-                os.makedirs(directory, exist_ok=True)
-            open(file_name, 'w').close()  # create an empty file
-
-    def __enter__(self):
-        return self
+        self.overwrite = overwrite
 
     def close(self):
         self.file.close()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
 
     def write(self, item, flush=False):
         """Write a chat item to the file. This method should be implemented in subclasses.
@@ -63,15 +47,19 @@ class JSONCW(CW):
     Class used to control the continuous writing of a list of dictionaries to a JSON file.
     """
 
-    def __init__(self, file_name, overwrite=True, indent=None, separator=', ', indent_character=' ', sort_keys=True):
-        super().__init__(file_name, overwrite)
+    def __init__(self, file_name, indent=None, separator=', ', indent_character=' ', sort_keys=True, **kwargs):
+        super().__init__(file_name, **kwargs)
+
+        self.indent = indent
+        self.separator = separator
+        self.indent_character = indent_character
+        self.sort_keys = sort_keys
+
         # open file for appending and reading in binary mode.
         self.file = open(self.file_name, 'rb+')
 
-        # self.file.seek(0)  # go to beginning of file
-
         previous_items = []  # save previous
-        if not overwrite:  # may have other data
+        if not self.overwrite:  # may have other data
             try:
                 previous_items = json.load(self.file)
             except json.decoder.JSONDecodeError:
@@ -79,11 +67,6 @@ class JSONCW(CW):
                 pass
 
         self.file.truncate(0)  # empty file
-
-        self.indent = indent
-        self.separator = separator
-        self.indent_character = indent_character
-        self.sort_keys = sort_keys
 
         # rewrite with new formatting
         for previous_item in previous_items:
@@ -111,12 +94,9 @@ class JSONCW(CW):
             # If empty, write the start of an array
             self.file.write('['.encode())
         else:
-            # print(self.file.closed)
             # seek to last character
             self.file.seek(-len(indent_padding) - 1, os.SEEK_END)
             self.file.write(self.separator.encode())  # Write the separator
-
-            # self.file.truncate()
 
         self.file.write(to_write.encode())  # Dump the item
         self.file.write((indent_padding + ']').encode())  # Close the array
@@ -130,13 +110,12 @@ class CSVCW(CW):
     Class used to control the continuous writing of a list of dictionaries to a CSV file.
     """
 
-    def __init__(self, file_name, overwrite=True, sort_keys=True):
-        super().__init__(file_name, overwrite)
+    def __init__(self, file_name, sort_keys=True, **kwargs):
+        super().__init__(file_name, **kwargs)
+        self.sort_keys = sort_keys
+        self.file = open(self.file_name, 'a+', newline='', encoding='utf-8')
 
-        self.file = open(self.file_name, 'a+', newline='',
-                         encoding='utf-8')  # , buffering=1
-
-        if not overwrite:
+        if not self.overwrite:
             # save previous data
             self.file.seek(0)  # go to beginning of file
             csv_dict_reader = csv.DictReader(self.file)
@@ -147,7 +126,6 @@ class CSVCW(CW):
             self.all_items = []
 
         self._reset_dict_writer()
-        self.sort_keys = sort_keys
 
     def _reset_dict_writer(self):
         self.csv_dict_writer = csv.DictWriter(
@@ -182,10 +160,10 @@ class JSONLCW(CW):
     Class used to control the continuous writing of a JSON lines.
     """
 
-    def __init__(self, file_name, overwrite=True, sort_keys=True):
-        super().__init__(file_name, overwrite)
-        self.file = open(self.file_name, 'a', encoding='utf-8')
+    def __init__(self, file_name, sort_keys=True, **kwargs):
+        super().__init__(file_name, **kwargs)
         self.sort_keys = sort_keys
+        self.file = open(self.file_name, 'a', encoding='utf-8')
 
     def write(self, item, flush=False):
         print(json.dumps(item, sort_keys=self.sort_keys),
@@ -197,13 +175,12 @@ class TXTCW(CW):
     Class used to control the continuous writing of a text to a TXT file.
     """
 
-    def __init__(self, file_name, overwrite=True):
-        super().__init__(file_name, overwrite)
-        self.file = open(self.file_name, 'a',
-                         encoding='utf-8')  # , buffering=1
+    def __init__(self, file_name, **kwargs):
+        super().__init__(file_name, **kwargs)
+        self.file = open(self.file_name, 'a', encoding='utf-8')
 
     def write(self, item, flush=False):
-        print(item, file=self.file, flush=flush)  # , flush=True
+        print(item, file=self.file, flush=flush)
 
 
 class ContinuousWriter:
@@ -214,19 +191,73 @@ class ContinuousWriter:
         'txt': TXTCW
     }
 
-    def __init__(self, file_name, **kwargs):
-        extension = os.path.splitext(file_name)[1][1:].lower()
-        writer_class = self._SUPPORTED_WRITERS.get(extension, TXTCW)
+    def __init__(self, file_name=None, overwrite=True, format=None, lazy_initialise=False, **kwargs):
+        """Create a ContinuousWriter object.
 
-        # remove invalid keyword arguments
-        new_kwargs = {
-            key: kwargs[key] for key in kwargs if key in writer_class.__init__.__code__.co_varnames}
-        self.writer = writer_class(file_name, **new_kwargs)
+        :param file_name: The name of the file to write to
+        :type file_name: str
+        :param overwrite: Whether to overwrite if the file already exists, defaults to True
+        :type overwrite: bool, optional
+        :param format: The output format, defaults to None (use the extension to decide)
+        :type format: str, optional
+        :param lazy_initialise: Skip file creation on initialisation, defaults to False.
+        :type lazy_initialise: bool, optional
+        """
+        super().__setattr__('data', dict())
+        self.file_name = file_name
+        self.overwrite = overwrite
+        self.format = format
+        self.lazy_initialise = lazy_initialise
+
+        self.data.update(kwargs)
+
+        self._initialised = False
+        if not self.lazy_initialise:
+            self._real_init()
+
+        self.writer=None
+    def __getattr__(self, name):
+        if name in self.data:
+            return self.data[name]
+
+        raise AttributeError(
+            f"'ContinuousWriter' object has no attribute '{name}'")
+
+    def __setattr__(self, key, value):
+        self.data[key] = value
 
     def is_default(self):
         return isinstance(self.writer, TXTCW)
 
+    def is_initialised(self):
+        return self._initialised
+
+    def _real_init(self):
+        if self._initialised:
+            return
+
+        self._initialised = True
+
+        if self.file_name is None:
+            raise AttributeError('File name not set')
+
+        if not os.path.exists(self.file_name) or self.overwrite:
+            directory = os.path.dirname(self.file_name)
+            if directory:  # (non-empty directory - i.e. not in current folder)
+                # must make parent directory
+                os.makedirs(directory, exist_ok=True)
+            open(self.file_name, 'w').close()  # create an empty file
+
+        extension = self.format or os.path.splitext(self.file_name)[
+            1][1:].lower()
+        writer_class = ContinuousWriter._SUPPORTED_WRITERS.get(
+            extension, TXTCW)
+        self.writer = writer_class(**self.data)
+
     def write(self, item, flush=False):
+        if not self._initialised:  # create file when first item is written
+            self._real_init()
+
         self.writer.write(item, flush)
 
     def __enter__(self):

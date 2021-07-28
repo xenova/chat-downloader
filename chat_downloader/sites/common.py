@@ -240,15 +240,30 @@ class Chat():
         """
         return self
 
-    def attach_writer(self, writer):
-        # writer is a ContinuousWriter
-        self._output_writer = writer
+    def _init_writer(self):
+        if self._output_writer.is_initialised():
+            return # Ignore if writer is already initialised
+
+        # Special formatting of output name:
+        # Allowed keys are specified here
+        self._output_writer.file_name = self._output_writer.file_name.format(
+            title=self.title,
+            # TODO add ID
+        )
+
+        # Only actually initialise here
+        self._output_writer._real_init()
+
         if self._output_writer.is_default():
             self._output_callback = lambda item: self._output_writer.write(
                 self.format(item), flush=True)
         else:
             self._output_callback = lambda item: self._output_writer.write(
                 item, flush=True)
+
+    def attach_writer(self, writer):
+        # writer is a ContinuousWriter
+        self._output_writer = writer
 
     def __next__(self):
         """Get the next chat message from the generator
@@ -258,10 +273,14 @@ class Chat():
         """
         try:
             item = next(self.chat)
-            if self.callback:  # user-defined callback
+
+            if self._output_writer is not None: # writer has been attached
+                self._init_writer()
+
+            if self.callback is not None:  # user-defined callback
                 self.callback(item)
 
-            if self._output_callback:  # output callback
+            if self._output_callback is not None:  # output callback
                 self._output_callback(item)
 
             return item

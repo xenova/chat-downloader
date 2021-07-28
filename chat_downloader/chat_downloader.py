@@ -263,7 +263,12 @@ class ChatDownloader():
 
                 if params['output']:
                     chat.attach_writer(ContinuousWriter(
-                        params['output'], indent=params['indent'], sort_keys=params['sort_keys'], overwrite=params['overwrite']))
+                        params['output'],
+                        indent=params['indent'],
+                        sort_keys=params['sort_keys'],
+                        overwrite=params['overwrite'],
+                        lazy_initialise=True
+                    ))
 
                 chat.site = site_object
 
