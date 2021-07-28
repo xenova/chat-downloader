@@ -72,7 +72,7 @@ class RedditChatDownloader(BaseChatDownloader):
         bearer = multi_get(info, 'user', 'session', 'accessToken')
 
         self.authed_headers = {
-            f'authorization': 'Bearer {bearer}',
+            f'authorization': f'Bearer {bearer}',
             **self.session.headers
         }
 
@@ -336,7 +336,6 @@ class RedditChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, error=e, **program_params)
 
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
-    _FALLBACK_API_TEMPLATE = 'https://gateway.reddit.com/desktopapi/v1/postcomments/t3_{}?limit=1'
 
     def get_chat_by_post_id(self, post_id, params, attempt_number=0, initial_info=None):
 
@@ -377,7 +376,8 @@ class RedditChatDownloader(BaseChatDownloader):
             if is_live and socket_url:  # live stream
 
                 if not socket_url.startswith('wss://') or 'wss.redditmedia.com' not in socket_url:
-                    self.retry(attempt_number, text=f'Invalid websocket URL: {socket_url}', **params)
+                    self.retry(
+                        attempt_number, text=f'Invalid websocket URL: {socket_url}', **params)
                     return self.get_chat_by_post_id(post_id, params, attempt_number + 1)
 
                 chat_item.chat = self._get_chat_messages_by_socket(
@@ -390,7 +390,7 @@ class RedditChatDownloader(BaseChatDownloader):
             return chat_item
 
         elif status == 'failure':
-            if 'wait' in data.lower():
+            if isinstance(data, str) and 'wait' in data.lower():
                 message = f'Response from Reddit: "{data}"'
                 self.retry(attempt_number, text=message, **params)
                 return self.get_chat_by_post_id(post_id, params, attempt_number + 1)
@@ -439,7 +439,8 @@ class RedditChatDownloader(BaseChatDownloader):
                         yield parsed
 
                     else:
-                        debug_log(f'Unknown message type: {message_type}', data)
+                        debug_log(
+                            f'Unknown message type: {message_type}', data)
 
                 except websocket.WebSocketTimeoutException:
                     pass
@@ -574,13 +575,12 @@ class RedditChatDownloader(BaseChatDownloader):
             if isinstance(data, str) and 'wait' in data.lower():
                 message = f'Response from Reddit: "{data}"'
                 self.retry(attempt_number, text=message, **params)
-                return self.get_chat_by_subreddit_id(post_id, params, attempt_number + 1)
+                return self.get_chat_by_subreddit_id(subreddit_id, params, attempt_number + 1)
 
             raise RedditError(data)
 
         else:  # Unknown
             raise UnexpectedError(f'Info: {initial_info}')
-
 
     _RPAN_API_URL = 'https://www.reddit.com/r/{}/new.json'
 
@@ -595,14 +595,11 @@ class RedditChatDownloader(BaseChatDownloader):
 
     # 'TheRedditStudio' - {"reason": "private", "message": "Forbidden", "error": 403}
 
-    def generate_urls(self, **kwargs):
+    def generate_urls(self, **program_params):
         # TODO add sort-by-viewers option
         # TODO add options for live and past
 
-        max_attempts = 30  # TODO make param
-        program_params = {
-            'max_attempts': max_attempts
-        }
+        max_attempts = program_params.get('max_attempts')
 
         # Get live streams
         for attempt_number in attempts(max_attempts):
@@ -638,7 +635,8 @@ class RedditChatDownloader(BaseChatDownloader):
             'limit': limit
         }
 
-        api_url = self._RPAN_API_URL.format(random.choice(self._RPAN_SUBREDDITS))
+        api_url = self._RPAN_API_URL.format(
+            random.choice(self._RPAN_SUBREDDITS))
         count = 0
         while True:
             rpan_info = self._try_get_info(
