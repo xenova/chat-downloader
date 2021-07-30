@@ -337,6 +337,12 @@ class RedditChatDownloader(BaseChatDownloader):
 
     _API_TEMPLATE = 'https://strapi.reddit.com/videos/t3_{}'
 
+    _STATE_REMAPPING = {
+        'IS_LIVE': 'live',
+        'NOT_STARTED': 'upcoming',
+        'ENDED': 'vod'
+    }
+
     def get_chat_by_post_id(self, post_id, params, attempt_number=0, initial_info=None):
 
         if initial_info is None:  # Optimisation
@@ -361,8 +367,6 @@ class RedditChatDownloader(BaseChatDownloader):
 
             title = post_info.get('title')
 
-            state = stream_info.get('state')
-            is_live = state in ('IS_LIVE', 'NOT_STARTED')  # ENDED
             start_time = (stream_info.get('hls_exists_at') or stream_info.get(
                 'publish_at') or stream_info.get('update_at'))
             if start_time:
@@ -370,10 +374,14 @@ class RedditChatDownloader(BaseChatDownloader):
 
             socket_url = post_info.get('liveCommentsWebsocket')
 
-            chat_item = Chat(title=title, is_live=is_live,
-                             start_time=start_time, id=post_id)
+            live_status = self._STATE_REMAPPING.get(stream_info.get('state'), 'other')
 
-            if is_live and socket_url:  # live stream
+            chat_item = Chat(title=title,
+                             status=live_status,
+                             start_time=start_time,
+                             id=post_id)
+
+            if live_status in ('live', 'upcoming') and socket_url:  # live stream
 
                 if not socket_url.startswith('wss://') or 'wss.redditmedia.com' not in socket_url:
                     self.retry(

@@ -1,5 +1,5 @@
 import inspect
-import datetime
+from datetime import datetime
 import re
 import sys
 import locale
@@ -15,7 +15,7 @@ def base64_encode(text):
 
 def timestamp_to_microseconds(timestamp):
     """Convert RFC3339 timestamp to microseconds. This is needed since
-        ``datetime.datetime.strptime()`` does not support nanosecond precision.
+        ``datetime.strptime()`` does not support nanosecond precision.
 
     :param timestamp: RFC3339 timestamp
     :type timestamp: str
@@ -24,7 +24,7 @@ def timestamp_to_microseconds(timestamp):
     """
 
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
+    return round((datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
 
 
 def time_to_seconds(time):
@@ -70,7 +70,7 @@ def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
     :return: Human readable timestamp corresponding to the format
     :rtype: str
     """
-    return datetime.datetime.fromtimestamp(microseconds // 1000000).strftime(format)
+    return datetime.fromtimestamp(microseconds // 1000000).strftime(format)
 
 
 def ensure_seconds(time, default=None):
@@ -164,11 +164,11 @@ def try_get_first_value(dictionary, default=None):
         return default
 
 
-def try_parse_json(text):
+def try_parse_json(text, default=None):
     try:
         return json.loads(text)
     except json.decoder.JSONDecodeError:
-        return None
+        return default
 
 
 def wrap_as_list(item):
@@ -402,3 +402,6 @@ def safe_path(text, replace_char='_'):
     https://stackoverflow.com/a/31976060
     """
     return re.sub(r'[\/:*?"<>|]', replace_char, text)
+
+def parse_iso8601(date_str):
+    return datetime.fromisoformat(date_str).timestamp() * 1e6 # Microseconds

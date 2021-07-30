@@ -232,7 +232,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             raise VideoUnavailable('Video unavailable')
 
         return {
-            'is_live': video_data.get('is_live_streaming'),
+            'status': 'live' if video_data.get('is_live_streaming') else 'vod',
             'broadcast_status': video_data.get('broadcast_status'),
             'title': video_data.get('title_with_fallback'),
             'username': multi_get(video_data, 'owner', 'name'),
@@ -834,13 +834,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         start_time = params.get('start_time')
         end_time = params.get('end_time')
 
-        is_live = initial_info.get('is_live')
-
         # if start or end time specified, use chat replay...
         # The tool works for both active and finished live streams.
         # if start/end time are specified, vods will be prioritised
         # if is live stream and no start/end time specified
-        if is_live and not start_time and not end_time:
+        if initial_info.get('status') == 'live' and not start_time and not end_time:
             generator = self._get_live_chat_messages_by_video_id(
                 video_id, params)
         else:
@@ -851,11 +849,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         return Chat(
             generator,
-            title=initial_info.get('title'),
-            duration=initial_info.get('duration'),
-            is_live=is_live,
-            author=initial_info.get('author'),
-            id=video_id
+            id=video_id,
+            **initial_info
         )
 
     _STREAM_PAGE = 'https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG'

@@ -360,8 +360,7 @@ def run(propagate_interrupt=False, **kwargs):
         for message in chat:
             callback(message)
 
-        log('info',
-            f"Finished retrieving chat{'' if chat.is_live else ' replay'}.")
+        log('info', 'Finished retrieving chat messages.')
 
     except (
         ChatGeneratorError,
