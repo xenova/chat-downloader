@@ -1129,18 +1129,31 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'past': (503, 'Past live streams')
     }
 
-    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='live', params=None):
-        """[summary]
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='all', params=None):
+        """Retrieve all videos listed on the user's channel
+
         If more than one of `channel_id`, `user_id` and `custom_username`
         are specifed, the first one specified will be returned.
 
-        :param channel_id: [description], defaults to None
-        :type channel_id: [type], optional
-        :param user_id: [description], defaults to None
-        :type user_id: [type], optional
+        :param channel_id: The user's channel ID, defaults to None.
+            (e.g., https://www.youtube.com/channel/<channel_id>)
+        :type channel_id: str, optional
+        :param user_id: The user's ID, defaults to None
+            (e.g., https://www.youtube.com/user/<user_id>)
+        :type user_id: str, optional
         :param custom_username: [description], defaults to None
-        :type custom_username: [type], optional
-        :raises ValueError: [description]
+            (e.g., https://www.youtube.com/c/<custom_username>)
+        :type custom_username: str, optional
+        :param video_type: The type of videos to retrieve, defaults to 'all'.
+            Must be one of 'all', 'live', 'upcoming' or 'past'.
+        :type video_type: str, optional
+        :param params: Additional program parameters, defaults to None
+        :type params: dict, optional
+        :raises ValueError: If no user is specified or an invalid video_type is specified
+        :raises UserNotFound: If the user cannot be found
+        :raises NoVideos: If the channel has no videos
+        :yield: The next video
+        :rtype: dict
         """
 
         _id = ''
