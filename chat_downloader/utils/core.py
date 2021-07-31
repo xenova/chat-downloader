@@ -167,7 +167,7 @@ def try_get_first_value(dictionary, default=None):
 def try_parse_json(text, default=None):
     try:
         return json.loads(text)
-    except json.decoder.JSONDecodeError:
+    except (json.decoder.JSONDecodeError, TypeError):
         return default
 
 
