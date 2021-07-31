@@ -437,6 +437,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME + '/{}?continuation={}'
     _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + '/youtubei/v1/live_chat/get_{}?key={}'
+    _YOUTUBE_BROWSE_API_TEMPLATE = _YT_HOME + '/youtubei/v1/browse?key={}'
 
     _MESSAGE_GROUPS = {
         'messages': [
@@ -572,7 +573,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return default_text
 
     @ staticmethod
-    def _parse_header_text(info):
+    def _parse_text(info):
         return YouTubeChatDownloader._parse_runs(info)['message'] or YouTubeChatDownloader._get_simple_text(info)
 
     @ staticmethod
@@ -850,8 +851,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'customThumbnail': r('badge_icons', _parse_thumbnails),
 
         # membership_item
-        'headerPrimaryText': r('header_primary_text', _parse_header_text),
-        'headerSubtext': r('header_secondary_text', _parse_header_text),
+        'headerPrimaryText': r('header_primary_text', _parse_text),
+        'headerSubtext': r('header_secondary_text', _parse_text),
         'sponsorPhoto': r('sponsor_icons', _parse_thumbnails),
 
         # ticker_paid_sticker_item
@@ -1111,8 +1112,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _VIDEO_REMAPPING = {
         'videoId': 'video_id',
         'title': r('title', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
-        'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
-        'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+        'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
+        'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
 
         # 'videoId', 'thumbnail', 'title', 'viewCountText', 'navigationEndpoint', 'ownerBadges', 'trackingParams', 'shortViewCountText', 'menu', 'thumbnailOverlays'
     }
@@ -1122,6 +1123,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
     _VIDEO_TYPE_REMAPPING = {
+        'all': 'all',
         'live': (501, 'Live now'),
         'upcoming': (502, 'Upcoming live streams'),
         'past': (503, 'Past live streams')
@@ -1164,35 +1166,70 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         user_url = f'https://www.youtube.com/{_type}/{_id}'
 
-        yt_initial_data, ytcfg, player_response_info = self._get_initial_info(
-            f'{user_url}/videos?view=2&live_view={vid_type[0]}', params)
+        if vid_type == 'all':
+            vids_url = f'{user_url}/videos'
+        else:
+            vids_url = f'{user_url}/videos?view=2&live_view={vid_type[0]}'
+
+        yt_info, ytcfg, _ = self._get_initial_info(vids_url, params)
 
         section_list_renderer = multi_get(
-            yt_initial_data, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
-
+            yt_info, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
         if not section_list_renderer:
             raise UserNotFound(f'Unable to find user: "{user_url}"')
 
-        # Check that the returned grid is what was asked for
-        # YouTube tries to correct your mistake by selecting the uploads tab
-        # if you try to access a tab that is not visible.
         sub_menu_items = multi_get(
             section_list_renderer, 'subMenu', 'channelSubMenuRenderer', 'contentTypeSubMenuItems')
         if not sub_menu_items:
             raise NoVideos('This channel has no videos.')
 
+        # Check that the returned grid is what was asked for
+        # YouTube tries to correct your mistake by selecting the uploads tab
+        # if you try to access a tab that is not visible.
         selected = list(filter(lambda x: x['selected'], sub_menu_items))
-        if not selected or selected[0]['title'] != vid_type[1]:
+        if vid_type != 'all' and (not selected or selected[0]['title'] != vid_type[1]):
             log('debug',
                 f'"{vid_type[1]}" tab is not visible for this channel (i.e. there are no such videos).')
             return
 
-        items = section_list_renderer['contents'][0]['itemSectionRenderer']['contents'][0]['gridRenderer']['items']
+        api_key = ytcfg.get('INNERTUBE_API_KEY')
+        continuation_url = self._YOUTUBE_BROWSE_API_TEMPLATE.format(api_key)
 
-        for item in items:
-            vid = item.get('gridVideoRenderer')
-            if vid:
-                yield self._parse_video(vid)
+        # innertube_context =
+        # print('innertube_context', innertube_context)
+        continuation_params = {
+            'context': ytcfg.get('INNERTUBE_CONTEXT') or {}
+        }
+        continuation = None
+        first_time = True
+        while True:
+            if first_time:
+                items = multi_get(section_list_renderer, 'contents', 0,
+                                  'itemSectionRenderer', 'contents', 0, 'gridRenderer', 'items')
+                first_time = False
+            else:
+                continuation_params['continuation'] = continuation
+                yt_info = self._get_continuation_info(
+                    continuation_url, params, json=continuation_params)
+                items = multi_get(yt_info, 'onResponseReceivedActions',
+                                  0, 'appendContinuationItemsAction', 'continuationItems')
+
+            if not items:
+                break
+
+            continuation = None
+            for item in items:
+                vid = item.get('gridVideoRenderer')
+                continuation_item = item.get('continuationItemRenderer')
+
+                if vid:
+                    yield self._parse_video(vid)
+                elif continuation_item:
+                    continuation = multi_get(
+                        continuation_item, 'continuationEndpoint', 'continuationCommand', 'token')
+
+            if not continuation:
+                break
 
     def get_playlist_items(self, playlist_url, params=None):
 
@@ -1250,7 +1287,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         return f'SAPISIDHASH {time_now}_{sapisidhash}'
 
     def _get_continuation_info(self, continuation_url, program_params, **post_kwargs):
-        max_attempts = program_params.get('max_attempts')
+        if program_params is None:
+            program_params = {}
+        max_attempts = program_params.get('max_attempts', 1)
 
         for attempt_number in attempts(max_attempts):
             try:
