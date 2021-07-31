@@ -1156,9 +1156,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             end_time = ensure_seconds(e_time, max_duration)
             content_offset_seconds = (start_time or 0) + offset
 
-        # print('start', start_time)
-        # print('end', end_time)
-
         max_attempts = params.get('max_attempts')
 
         messages_groups_to_add = params.get('message_groups') or []
@@ -1290,7 +1287,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, error=e, **params)
 
         vod_id = multi_get(clip, 'video', 'id')
-        # print(clip)
+
         if vod_id is None:
             raise NoChatReplay(
                 "This clip's past broadcast has expired and chat replay is no longer available.")
