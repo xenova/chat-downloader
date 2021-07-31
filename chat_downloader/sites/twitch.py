@@ -1264,7 +1264,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration),
             title=title,
             duration=duration,
-            status='vod',
+            status='past',
+            video_type='video',
             id=vod_id
         )
 
@@ -1305,7 +1306,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration, offset),
             title=title,
             duration=duration,
-            status='clip',
+            status='past',
+            video_type='clip',
             id=clip_id
         )
 
@@ -1684,6 +1686,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             title=title,
             duration=None,
             status='live' if is_live else 'upcoming',  # Always live or upcoming
+            video_type='video',
             id=stream_id
         )
 

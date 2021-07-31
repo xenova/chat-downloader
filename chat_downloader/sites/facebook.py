@@ -232,7 +232,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             raise VideoUnavailable('Video unavailable')
 
         return {
-            'status': 'live' if video_data.get('is_live_streaming') else 'vod',
+            'status': 'live' if video_data.get('is_live_streaming') else 'past',
+            'video_type': 'video',
             'broadcast_status': video_data.get('broadcast_status'),
             'title': video_data.get('title_with_fallback'),
             'username': multi_get(video_data, 'owner', 'name'),
@@ -553,7 +554,8 @@ class FacebookChatDownloader(BaseChatDownloader):
         if 'profile_picture_depth_0' in author_info:
             info['author']['images'] = []
             for size in ((0, 32), (1, 24)):
-                url = multi_get(author_info, f'profile_picture_depth_{size[0]}', 'uri')
+                url = multi_get(
+                    author_info, f'profile_picture_depth_{size[0]}', 'uri')
                 info['author']['images'].append(
                     Image(url, size[1], size[1]).json())
 

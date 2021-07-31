@@ -340,7 +340,7 @@ class RedditChatDownloader(BaseChatDownloader):
     _STATE_REMAPPING = {
         'IS_LIVE': 'live',
         'NOT_STARTED': 'upcoming',
-        'ENDED': 'vod'
+        'ENDED': 'past'
     }
 
     def get_chat_by_post_id(self, post_id, params, attempt_number=0, initial_info=None):
@@ -374,10 +374,11 @@ class RedditChatDownloader(BaseChatDownloader):
 
             socket_url = post_info.get('liveCommentsWebsocket')
 
-            live_status = self._STATE_REMAPPING.get(stream_info.get('state'), 'other')
+            live_status = self._STATE_REMAPPING.get(stream_info.get('state'))
 
             chat_item = Chat(title=title,
                              status=live_status,
+                             video_type='video',
                              start_time=start_time,
                              id=post_id)
 

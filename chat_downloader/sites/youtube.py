@@ -1122,14 +1122,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _parse_video(video_renderer):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
-    _VIDEO_TYPE_REMAPPING = {
+    _VIDEO_STATUS_REMAPPING = {
         'all': 'all',
         'live': (501, 'Live now'),
         'upcoming': (502, 'Upcoming live streams'),
         'past': (503, 'Past live streams')
     }
 
-    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='all', params=None):
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_status='all', params=None):
         """Retrieve all videos listed on the user's channel
 
         If more than one of `channel_id`, `user_id` and `custom_username`
@@ -1144,12 +1144,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         :param custom_username: [description], defaults to None
             (e.g., https://www.youtube.com/c/<custom_username>)
         :type custom_username: str, optional
-        :param video_type: The type of videos to retrieve, defaults to 'all'.
+        :param video_status: Determines which videos will be retrieved, defaults to 'all'.
             Must be one of 'all', 'live', 'upcoming' or 'past'.
-        :type video_type: str, optional
+        :type video_status: str, optional
         :param params: Additional program parameters, defaults to None
         :type params: dict, optional
-        :raises ValueError: If no user is specified or an invalid video_type is specified
+        :raises ValueError: If no user is specified or an invalid video_status is specified
         :raises UserNotFound: If the user cannot be found
         :raises NoVideos: If the channel has no videos
         :yield: The next video
@@ -1171,11 +1171,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise ValueError('No user type specified.')
 
         # live, past, upcoming
-        vid_type = self._VIDEO_TYPE_REMAPPING.get(video_type.lower())
+        vid_type = self._VIDEO_STATUS_REMAPPING.get(video_status.lower())
 
         if not vid_type:
             raise ValueError(
-                f'Invalid argument passed for video_type. Must be one of {set(self._VIDEO_TYPE_REMAPPING.keys())}')
+                f'Invalid argument passed for video_status. Must be one of {set(self._VIDEO_STATUS_REMAPPING.keys())}')
 
         user_url = f'https://www.youtube.com/{_type}/{_id}'
 
@@ -1411,6 +1411,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 clip_details.get('startTimeMs', 0)) / 1e3)
             details['clip_end_time'] = (float_or_none(
                 clip_details.get('endTimeMs', 0)) / 1e3)
+            details['video_type'] = 'clip'
+
+        elif not video_details.get('isLiveContent'):
+            details['video_type'] = 'premiere'
+
+        else:
+            details['video_type'] = 'video'
 
         start_timestamp = live_details.get('startTimestamp')
         end_timestamp = live_details.get('endTimestamp')
@@ -1434,22 +1441,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
             for x in sub_menu_items
         }
 
+        # live, upcoming or past
         if video_details.get('isLive') or live_details.get('isLiveNow'):
             details['status'] = 'live'
 
         elif video_details.get('isUpcoming'):
             details['status'] = 'upcoming'
 
-        # not live or upcoming, but is live content
-        elif video_details.get('isLiveContent'):
-            details['status'] = 'vod'
-
-        elif details['continuation_info']:  # Not live content, but has chat
-            details['status'] = 'premiere'
-
         else:
-            details['status'] = None
-            log('debug', 'Unknown status: {}'.format(yt_initial_data))
+            details['status'] = 'past'
 
         return details, player_response_info, yt_initial_data, ytcfg
 
@@ -1600,7 +1600,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         continuation = continuation_info[1]
         log('debug', f'Getting {chat_type} chat ({continuation_info[0]}).')
 
-        is_replay = status not in ('live', 'upcoming')
+        is_replay = status == 'past'
 
         api_type = 'live_chat'
         if is_replay:
@@ -2031,9 +2031,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         sleep_amount = 30  # params.get('retry_timeout')
 
         while True:
-            for video_type in ('live', 'upcoming'):
+            for video_status in ('live', 'upcoming'):
                 # prioritise live videos
-                for video in self.get_user_videos(**user_video_args, video_type=video_type, params=params):
+                for video in self.get_user_videos(**user_video_args, video_status=video_status, params=params):
                     video_id = video['video_id']
                     video_title = video['title']
 
@@ -2045,7 +2045,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         chat = self.get_chat_by_video_id(video_id, params)
 
                         log('info',
-                            f"Found a{'n upcoming' if video_type == 'upcoming' else ''} livestream: \"{video_title}\" ({video_id}).")
+                            f"Found a{'n upcoming' if video_status == 'upcoming' else ''} livestream: \"{video_title}\" ({video_id}).")
 
                         # update chat item by copying over
                         chat_dict = chat.__dict__.copy()
