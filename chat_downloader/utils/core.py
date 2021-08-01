@@ -1,5 +1,5 @@
 import inspect
-from datetime import datetime
+import datetime
 import re
 import sys
 import locale
@@ -15,7 +15,7 @@ def base64_encode(text):
 
 def timestamp_to_microseconds(timestamp):
     """Convert RFC3339 timestamp to microseconds. This is needed since
-        ``datetime.strptime()`` does not support nanosecond precision.
+        ``datetime.datetime.strptime()`` does not support nanosecond precision.
 
     :param timestamp: RFC3339 timestamp
     :type timestamp: str
@@ -24,7 +24,7 @@ def timestamp_to_microseconds(timestamp):
     """
 
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
+    return round((datetime.datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
 
 
 def time_to_seconds(time):
@@ -70,7 +70,7 @@ def microseconds_to_timestamp(microseconds, format='%Y-%m-%d %H:%M:%S'):
     :return: Human readable timestamp corresponding to the format
     :rtype: str
     """
-    return datetime.fromtimestamp(microseconds // 1000000).strftime(format)
+    return datetime.datetime.fromtimestamp(microseconds // 1000000).strftime(format)
 
 
 def ensure_seconds(time, default=None):
@@ -404,5 +404,113 @@ def safe_path(text, replace_char='_'):
     return re.sub(r'[\/:*?"<>|]', replace_char, text)
 
 
-def parse_iso8601(date_str):
-    return datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S%z').timestamp()*1e6
+# Adapted from https://github.com/micktwomey/pyiso8601/
+ISO8601_REGEX = re.compile(
+    r"""
+    (?P<year>[0-9]{4})
+    (
+        (
+            (-(?P<monthdash>[0-9]{1,2}))
+            |
+            (?P<month>[0-9]{2})
+            (?!$)  # Don't allow YYYYMM
+        )
+        (
+            (
+                (-(?P<daydash>[0-9]{1,2}))
+                |
+                (?P<day>[0-9]{2})
+            )
+            (
+                (
+                    (?P<separator>[ T])
+                    (?P<hour>[0-9]{2})
+                    (:{0,1}(?P<minute>[0-9]{2})){0,1}
+                    (
+                        :{0,1}(?P<second>[0-9]{1,2})
+                        ([.,](?P<second_fraction>[0-9]+)){0,1}
+                    ){0,1}
+                    (?P<timezone>
+                        Z
+                        |
+                        (
+                            (?P<tz_sign>[-+])
+                            (?P<tz_hour>[0-9]{2})
+                            :{0,1}
+                            (?P<tz_minute>[0-9]{2}){0,1}
+                        )
+                    ){0,1}
+                ){0,1}
+            )
+        ){0,1}  # YYYY-MM
+    ){0,1}  # YYYY only
+    $
+    """,
+    re.VERBOSE,
+)
+
+UTC = datetime.timezone.utc
+
+
+
+def parse_timezone(matches, default_timezone=UTC):
+    """Parses ISO 8601 time zone specs into tzinfo offsets"""
+    tz = matches.get('timezone', None)
+    if tz == 'Z':
+        return UTC
+
+    if tz is None:
+        return default_timezone
+    sign = matches.get('tz_sign', None)
+    hours = int(matches.get('tz_hour', 0))
+    minutes = int(matches.get('tz_minute', 0))
+    description = f'{sign}{hours:02d}:{minutes:02d}'
+    if sign == '-':
+        hours = -hours
+        minutes = -minutes
+    return datetime.timezone(datetime.timedelta(hours=hours, minutes=minutes), description)
+
+
+def parse_date(datestring, default_timezone=UTC):
+    """Parses ISO 8601 dates into datetime objects
+    The timezone is parsed from the date string. However it is quite common to
+    have dates without a timezone (not strictly correct). In this case the
+    default timezone specified in default_timezone is used. This is UTC by
+    default.
+    :param datestring: The date to parse as a string
+    :param default_timezone: A datetime tzinfo instance to use when no timezone
+                             is specified in the datestring. If this is set to
+                             None then a naive datetime object is returned.
+    :returns: A datetime.datetime instance
+    :raises: ValueError when there is a problem parsing the date or
+             constructing the datetime instance.
+    """
+    try:
+        m = ISO8601_REGEX.match(datestring)
+    except Exception as e:
+        raise ValueError(e)
+
+    if not m:
+        raise ValueError(f'Unable to parse date string {datestring!r}')
+
+    groups = {k: v for k, v in m.groupdict().items() if v is not None}
+
+    try:
+        return datetime.datetime(
+            year=int(groups.get('year', 0)),
+            month=int(groups.get('month', groups.get('monthdash', 1))),
+            day=int(groups.get('day', groups.get('daydash', 1))),
+            hour=int(groups.get('hour', 0)),
+            minute=int(groups.get('minute', 0)),
+            second=int(groups.get('second', 0)),
+            microsecond=int(
+                float(f"0.{groups.get('second_fraction', 0)}") * 1e6
+            ),
+            tzinfo=parse_timezone(groups, default_timezone=default_timezone),
+        )
+    except Exception as e:
+        raise ValueError(e)
+
+
+def parse_iso8601(data_str):
+    return parse_date(data_str).timestamp() * 1e6
