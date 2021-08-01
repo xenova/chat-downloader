@@ -403,5 +403,6 @@ def safe_path(text, replace_char='_'):
     """
     return re.sub(r'[\/:*?"<>|]', replace_char, text)
 
+
 def parse_iso8601(date_str):
-    return datetime.fromisoformat(date_str).timestamp() * 1e6 # Microseconds
+    return datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S%z').timestamp()*1e6
