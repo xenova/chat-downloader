@@ -182,7 +182,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
 
-    def _graphql_request(self, program_params, **post_kwargs):
+    def _graphql_request(self, program_params, retry_on_error=True, **post_kwargs):
         data = {
             'av': '0',
             '__user': '0',
@@ -202,7 +202,12 @@ class FacebookChatDownloader(BaseChatDownloader):
             try:
                 response = self._session_post(self._GRAPH_API, **post_kwargs)
                 response_json = response.json()
-                self._check_for_errors(response_json)
+
+                # Check for errors
+                for error in response_json.get('errors') or []:
+                    if error.get('code') == 1675004:
+                        raise RateLimitError(f'Rate limit exceeded: {error}')
+
                 return response_json
 
             except JSONDecodeError as e:
@@ -211,6 +216,12 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             except RequestException as e:
                 self.retry(attempt_number, error=e, **program_params)
+
+            except RateLimitError as e:
+                if retry_on_error:
+                    self.retry(attempt_number, error=e, **program_params)
+                else:
+                    raise e
 
     _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
@@ -682,11 +693,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
-    def _check_for_errors(self, json_data):
-        # Check for errors
-        for error in json_data.get('errors') or []:
-            if error.get('code') == 1675004:
-                raise RateLimitError(f'Rate limit exceeded: {error}')
 
     def _get_chat_from_vod(self, feedback_id, stream_start_time, end_time, params):
         # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
@@ -718,7 +724,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             data['variables'] = json.dumps(variables)
 
-            json_data = self._graphql_request(params, data=data)
+            json_data = self._graphql_request(params, retry_on_error=False, data=data)
 
             info = multi_get(json_data, 'data', 'feedback')
             if not info:
