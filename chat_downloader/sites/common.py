@@ -18,7 +18,8 @@ from ..errors import (
 from ..utils.core import (
     get_title_of_webpage,
     pause,
-    safe_print
+    safe_print,
+    safe_path
 )
 
 from ..utils.timed_utils import (
@@ -50,7 +51,7 @@ class Image():
         self.height = height
 
         if width and height and not image_id:
-            self.id = '{}x{}'.format(width, height)
+            self.id = f'{width}x{height}'
         elif image_id:
             self.id = image_id
 
@@ -200,7 +201,7 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat=None, callback=None, title=None, duration=None, is_live=None, start_time=None, **kwargs):
+    def __init__(self, chat=None, callback=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
         """Create a Chat object
 
         :param chat: Generator method for retrieving chat messages, defaults to None
@@ -211,8 +212,12 @@ class Chat():
         :type title: str, optional
         :param duration: Duration of the stream or video, defaults to None
         :type duration: float, optional
-        :param is_live: True if the stream is live, defaults to None
-        :type is_live: bool, optional
+        :param status: Status of the stream or video (e.g., live, upcoming, past),
+            defaults to None
+        :type status: str, optional
+        :param video_type: Type of the stream or video (e.g., video, premiere, clip),
+            defaults to None
+        :type video_type: str, optional
         :param start_time: Start time of the stream (or upload date of video)
             in UNIX microseconds, defaults to None
         :type start_time: float, optional
@@ -223,8 +228,12 @@ class Chat():
 
         self.title = title
         self.duration = duration
-        self.is_live = is_live
+
+        self.status = status
+        self.video_type = video_type
+
         self.start_time = start_time
+        self.id = id
 
         # TODO
         # author/user/uploader/creator
@@ -240,15 +249,32 @@ class Chat():
         """
         return self
 
-    def attach_writer(self, writer):
-        # writer is a ContinuousWriter
-        self._output_writer = writer
+    def _init_writer(self):
+        if self._output_writer.is_initialised():
+            return  # Ignore if writer is already initialised
+
+        # Special formatting of output name:
+        # Allowed keys are specified here
+        # Remove invalid characters from output file name
+        self._output_writer.file_name = self._output_writer.file_name.format(
+            title=safe_path(self.title),
+            id=safe_path(self.id)
+        )
+
+        log('debug', f'Writing to file: {self._output_writer.file_name}')
+        # Only actually initialise here
+        self._output_writer._real_init()
+
         if self._output_writer.is_default():
             self._output_callback = lambda item: self._output_writer.write(
                 self.format(item), flush=True)
         else:
             self._output_callback = lambda item: self._output_writer.write(
                 item, flush=True)
+
+    def attach_writer(self, writer):
+        # writer is a ContinuousWriter
+        self._output_writer = writer
 
     def __next__(self):
         """Get the next chat message from the generator
@@ -258,10 +284,14 @@ class Chat():
         """
         try:
             item = next(self.chat)
-            if self.callback:  # user-defined callback
+
+            if self._output_writer is not None:  # writer has been attached
+                self._init_writer()
+
+            if self.callback is not None:  # user-defined callback
                 self.callback(item)
 
-            if self._output_callback:  # output callback
+            if self._output_callback is not None:  # output callback
                 self._output_callback(item)
 
             return item
@@ -429,7 +459,7 @@ class BaseChatDownloader:
                 cj.load(ignore_discard=True, ignore_expires=True)
             else:
                 raise CookieError(
-                    'The file "{}" could not be found.'.format(cookies))
+                    f'The file "{cookies}" could not be found.')
         self.session.cookies = cj
 
     def get_session_headers(self, key):
@@ -579,7 +609,7 @@ class BaseChatDownloader:
         """
         if attempt_number >= max_attempts:
             raise RetriesExceeded(
-                'Maximum number of retries has been reached ({}).'.format(max_attempts))
+                f'Maximum number of retries has been reached ({max_attempts}).')
 
         if text is None:
             text = []
@@ -600,31 +630,24 @@ class BaseChatDownloader:
         must_sleep = time_to_sleep >= 0
         if must_sleep:
             if interruptible_retry:
-                sleep_text = '(sleep for {}s or press Enter)'.format(
-                    time_to_sleep)
+                sleep_text = f'(sleep for {time_to_sleep}s or press Enter)'
             else:
-                sleep_text = '(sleep for {}s)'.format(time_to_sleep)
+                sleep_text = f'(sleep for {time_to_sleep}s)'
         else:
             sleep_text = ''
 
-        retry_text = 'Retry #{} {}.'.format(attempt_number, sleep_text)
+        retry_text = f'Retry #{attempt_number} {sleep_text}.'
 
         if isinstance(error, Exception):
-            retry_text += ' {} ({})'.format(error, error.__class__.__name__)
+            retry_text += f' {error} ({error.__class__.__name__})'
 
         if isinstance(error, JSONDecodeError):
-            log(
-                'debug',
-                error.__dict__
-            )
+            log('debug', error.__dict__)
             page_title = get_title_of_webpage(error.doc)
             if page_title:
-                log('debug', 'Title: {}'.format(page_title))
+                log('debug', f'Title: {page_title}')
 
-        log(
-            'warning',
-            text + [retry_text]
-        )
+        log('warning', text + [retry_text])
 
         if must_sleep:
             if interruptible_retry:
@@ -646,8 +669,7 @@ class BaseChatDownloader:
         """
         invalid_types = set(messages_types_to_add) - set(allowed_message_types)
         if invalid_types:
-            raise InvalidParameter(
-                'Invalid types specified: {}'.format(invalid_types))
+            raise InvalidParameter(f'Invalid types specified: {invalid_types}')
 
     @staticmethod
     def get_mapped_keys(remapping):

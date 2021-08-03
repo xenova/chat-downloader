@@ -33,7 +33,7 @@ reference_regex = r':ref:`(.*)`'
 def replace_reference_tag(match):
     text = match.group(1)
     url = relative_link_dict.get(text)
-    return '`{} <{}{}>`_'.format(text, BASE_READTHEDOCS_URL, url)
+    return f'`{text} <{BASE_READTHEDOCS_URL}{url}>`_'
 
 
 print(re.sub(reference_regex, replace_reference_tag, substitution))

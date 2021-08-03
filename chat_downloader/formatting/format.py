@@ -40,7 +40,7 @@ class ItemFormatter:
         if path is not None:
             if not os.path.exists(path):
                 raise FormatFileNotFound(
-                    'Format file not found: "{}"'.format(path))
+                    f'Format file not found: "{path}"')
 
             with open(path) as custom_formats:
                 self.format_file.update(json.load(custom_formats))
@@ -128,7 +128,7 @@ class ItemFormatter:
             if not format_object:
                 if format_name != 'default':
                     raise FormatNotFound(
-                        'Format not found: "{}"'.format(format_name))
+                        f'Format not found: "{format_name}"')
                 else:
                     format_object = default_format_object  # Set to default
 

@@ -12,7 +12,7 @@ for site in get_all_sites():
 
     print(site._NAME, '\n', len(site._NAME)*'-', sep='')
     for group, item in message_groups.items():
-        print('- {}'.format(group))
+        print(f'- {group}')
         for i in item:
-            print('  - {}'.format(i))
+            print(f'  - {i}')
     print()

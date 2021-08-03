@@ -59,16 +59,14 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         datr = regex_search(initial_data, self._INITIAL_DATR_REGEX)
         if not datr:
-            raise FacebookError(
-                'Unable to set datr cookie: {}'.format(initial_data))
+            raise FacebookError(f'Unable to set datr cookie: {initial_data}')
 
         self.set_cookie_value('.facebook.com', 'datr', datr)
         self.set_cookie_value('.facebook.com', 'wd', '1920x1080')
 
         lsd = regex_search(initial_data, self._INITIAL_LSD_REGEX)
         if not lsd:
-            raise FacebookError(
-                'Unable to set lsd cookie: {}'.format(initial_data))
+            raise FacebookError(f'Unable to set lsd cookie: {initial_data}')
 
         self.lsd = lsd
         self.update_session_headers({
@@ -184,7 +182,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
 
-    def _graphql_request(self, program_params, **post_kwargs):
+    def _graphql_request(self, program_params, retry_on_error=True, **post_kwargs):
         data = {
             'av': '0',
             '__user': '0',
@@ -204,15 +202,26 @@ class FacebookChatDownloader(BaseChatDownloader):
             try:
                 response = self._session_post(self._GRAPH_API, **post_kwargs)
                 response_json = response.json()
-                self._check_for_errors(response_json)
+
+                # Check for errors
+                for error in response_json.get('errors') or []:
+                    if error.get('code') == 1675004:
+                        raise RateLimitError(f'Rate limit exceeded: {error}')
+
                 return response_json
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
-                           text='Unable to parse JSON: `{}`'.format(response.text))
+                           text=f'Unable to parse JSON: `{response.text}`')
 
             except RequestException as e:
                 self.retry(attempt_number, error=e, **program_params)
+
+            except RateLimitError as e:
+                if retry_on_error:
+                    self.retry(attempt_number, error=e, **program_params)
+                else:
+                    raise e
 
     _VIDEO_TITLE_REGEX = r'<meta\s+name=["\'].*title["\']\s+content=["\']([^"\']+)["\']\s*/>'
 
@@ -234,7 +243,8 @@ class FacebookChatDownloader(BaseChatDownloader):
             raise VideoUnavailable('Video unavailable')
 
         return {
-            'is_live': video_data.get('is_live_streaming'),
+            'status': 'live' if video_data.get('is_live_streaming') else 'past',
+            'video_type': 'video',
             'broadcast_status': video_data.get('broadcast_status'),
             'title': video_data.get('title_with_fallback'),
             'username': multi_get(video_data, 'owner', 'name'),
@@ -301,8 +311,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         # VideoTipJarPayment
         quantity = item.get('quantity')
         if quantity:
-            item['text'] = 'Sent {} Star{}'.format(
-                quantity, 's' if quantity != 1 else '')
+            item['text'] = f"Sent {quantity} Star{'s' if quantity != 1 else ''}"
 
         # For photos:
         blurred_image = item.pop('blurred_image', None)
@@ -326,7 +335,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         original_type_name = original_item.get('__typename')
         if original_type_name not in FacebookChatDownloader._KNOWN_ATTACHMENT_TYPES:
             debug_log(
-                'Unknown attachment type: {}'.format(original_type_name),
+                f'Unknown attachment type: {original_type_name}',
                 original_item,
                 item
             )
@@ -368,7 +377,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         attachment = multi_get(item, 'style_type_renderer',
                                'attachment') or item.get('attachment')
         if not attachment:
-            debug_log('No attachment: {}'.format(item))
+            debug_log(f'No attachment: {item}')
             return {}
 
         return FacebookChatDownloader._parse_attachment(attachment)
@@ -385,7 +394,7 @@ class FacebookChatDownloader(BaseChatDownloader):
         missing_keys = attachment.keys() - FacebookChatDownloader._KNOWN_ATTACHMENT_KEYS
         if missing_keys:
             debug_log(
-                'Missing attachment keys: {}'.format(missing_keys),
+                f'Missing attachment keys: {missing_keys}',
                 attachment,
                 parsed
             )
@@ -557,7 +566,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             info['author']['images'] = []
             for size in ((0, 32), (1, 24)):
                 url = multi_get(
-                    author_info, 'profile_picture_depth_{}'.format(size[0]), 'uri')
+                    author_info, f'profile_picture_depth_{size[0]}', 'uri')
                 info['author']['images'].append(
                     Image(url, size[1], size[1]).json())
 
@@ -618,7 +627,7 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             feedback = multi_get(json_data, 'data', 'video', 'feedback')
             if not feedback:
-                log('debug', 'No feedback: {}'.format(json_data))
+                log('debug', f'No feedback: {json_data}')
                 continue
 
             top_level_comments = multi_get(
@@ -628,11 +637,11 @@ class FacebookChatDownloader(BaseChatDownloader):
             if errors:
                 # TODO will usually resume getting chat..
                 # maybe add timeout?
-                log('debug', 'Errors detected: {}'.format(errors))
+                log('debug', f'Errors detected: {errors}')
                 continue
 
             if not top_level_comments:
-                log('debug', 'No top level comments: {}'.format(json_data))
+                log('debug', f'No top level comments: {json_data}')
                 continue
 
             # Parse items:
@@ -640,7 +649,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             for edge in top_level_comments.get('edges') or []:
                 node = edge.get('node')
                 if not node:
-                    log('debug', 'No node found in edge: {}'.format(edge))
+                    log('debug', f'No node found in edge: {edge}')
                     continue
                 parsed_items.append(FacebookChatDownloader._parse_node(node))
 
@@ -684,12 +693,6 @@ class FacebookChatDownloader(BaseChatDownloader):
             if first_try:
                 first_try = False
 
-    def _check_for_errors(self, json_data):
-        # Check for errors
-        for error in json_data.get('errors') or []:
-            if error.get('code') == 1675004:
-                raise RateLimitError(
-                    'Rate limit exceeded: {}'.format(error))
 
     def _get_chat_from_vod(self, feedback_id, stream_start_time, end_time, params):
         # method 1 - only works for vods. Guaranteed to get all, but can't choose start time
@@ -721,11 +724,11 @@ class FacebookChatDownloader(BaseChatDownloader):
 
             data['variables'] = json.dumps(variables)
 
-            json_data = self._graphql_request(params, data=data)
+            json_data = self._graphql_request(params, retry_on_error=False, data=data)
 
             info = multi_get(json_data, 'data', 'feedback')
             if not info:
-                log('debug', 'No feedback: {}'.format(json_data))
+                log('debug', f'No feedback: {json_data}')
                 break
 
             display_comments = info.get('display_comments')
@@ -735,7 +738,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             for edge in reversed(edges):
                 node = edge.get('node')
                 if not node:
-                    log('debug', 'No node found in edge: {}'.format(edge))
+                    log('debug', f'No node found in edge: {edge}')
                     continue
 
                 parsed = FacebookChatDownloader._parse_node(
@@ -793,7 +796,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             for edge in edges:
                 node = edge.get('node')
                 if not node:
-                    log('debug', 'No node found in edge: {}'.format(edge))
+                    log('debug', f'No node found in edge: {edge}')
                     continue
                 yield FacebookChatDownloader._parse_node(node, True)
 
@@ -839,13 +842,11 @@ class FacebookChatDownloader(BaseChatDownloader):
         start_time = params.get('start_time')
         end_time = params.get('end_time')
 
-        is_live = initial_info.get('is_live')
-
         # if start or end time specified, use chat replay...
         # The tool works for both active and finished live streams.
         # if start/end time are specified, vods will be prioritised
         # if is live stream and no start/end time specified
-        if is_live and not start_time and not end_time:
+        if initial_info.get('status') == 'live' and not start_time and not end_time:
             generator = self._get_live_chat_messages_by_video_id(
                 video_id, params)
         else:
@@ -856,10 +857,8 @@ class FacebookChatDownloader(BaseChatDownloader):
 
         return Chat(
             generator,
-            title=initial_info.get('title'),
-            duration=initial_info.get('duration'),
-            is_live=is_live,
-            author=initial_info.get('author'),
+            id=video_id,
+            **initial_info
         )
 
     _STREAM_PAGE = 'https://www.facebook.com/gaming/browse/live/?s=VIEWERS&language=ALL_LANG'
@@ -932,7 +931,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             top_live = multi_get(json_data, 'data', 'gaming_video', key)
 
             if not top_live:
-                log('debug', 'No data found: {}'.format(json_data))
+                log('debug', f'No data found: {json_data}')
                 return
 
             edges = top_live.get('edges') or []

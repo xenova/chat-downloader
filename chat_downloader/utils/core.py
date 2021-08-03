@@ -24,7 +24,7 @@ def timestamp_to_microseconds(timestamp):
     """
 
     info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.datetime.strptime('{}Z'.format(info[0]), '%Y-%m-%dT%H:%M:%SZ').timestamp() + float('0.{}'.format(info[1]))) * 1e6)
+    return round((datetime.datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
 
 
 def time_to_seconds(time):
@@ -164,11 +164,11 @@ def try_get_first_value(dictionary, default=None):
         return default
 
 
-def try_parse_json(text):
+def try_parse_json(text, default=None):
     try:
         return json.loads(text)
-    except json.decoder.JSONDecodeError:
-        return None
+    except (json.decoder.JSONDecodeError, TypeError):
+        return default
 
 
 def wrap_as_list(item):
@@ -232,10 +232,10 @@ def flatten_json(original_json):
     def flatten(item, prefix=''):
         if isinstance(item, dict):
             for key in item:
-                flatten(item[key], '{}{}.'.format(prefix, key))
+                flatten(item[key], f'{prefix}{key}.')
         elif isinstance(item, list):
             for index in range(len(item)):
-                flatten(item[index], '{}{}.'.format(prefix, index))
+                flatten(item[index], f'{prefix}{index}.')
         else:
             final[prefix[:-1]] = item
     flatten(original_json)
@@ -395,3 +395,122 @@ def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
+
+def safe_path(text, replace_char='_'):
+    """Ensure generated file name/path is safe
+    https://stackoverflow.com/a/31976060
+    """
+    return re.sub(r'[\/:*?"<>|]', replace_char, text)
+
+
+# Adapted from https://github.com/micktwomey/pyiso8601/
+ISO8601_REGEX = re.compile(
+    r"""
+    (?P<year>[0-9]{4})
+    (
+        (
+            (-(?P<monthdash>[0-9]{1,2}))
+            |
+            (?P<month>[0-9]{2})
+            (?!$)  # Don't allow YYYYMM
+        )
+        (
+            (
+                (-(?P<daydash>[0-9]{1,2}))
+                |
+                (?P<day>[0-9]{2})
+            )
+            (
+                (
+                    (?P<separator>[ T])
+                    (?P<hour>[0-9]{2})
+                    (:{0,1}(?P<minute>[0-9]{2})){0,1}
+                    (
+                        :{0,1}(?P<second>[0-9]{1,2})
+                        ([.,](?P<second_fraction>[0-9]+)){0,1}
+                    ){0,1}
+                    (?P<timezone>
+                        Z
+                        |
+                        (
+                            (?P<tz_sign>[-+])
+                            (?P<tz_hour>[0-9]{2})
+                            :{0,1}
+                            (?P<tz_minute>[0-9]{2}){0,1}
+                        )
+                    ){0,1}
+                ){0,1}
+            )
+        ){0,1}  # YYYY-MM
+    ){0,1}  # YYYY only
+    $
+    """,
+    re.VERBOSE,
+)
+
+UTC = datetime.timezone.utc
+
+
+
+def parse_timezone(matches, default_timezone=UTC):
+    """Parses ISO 8601 time zone specs into tzinfo offsets"""
+    tz = matches.get('timezone', None)
+    if tz == 'Z':
+        return UTC
+
+    if tz is None:
+        return default_timezone
+    sign = matches.get('tz_sign', None)
+    hours = int(matches.get('tz_hour', 0))
+    minutes = int(matches.get('tz_minute', 0))
+    description = f'{sign}{hours:02d}:{minutes:02d}'
+    if sign == '-':
+        hours = -hours
+        minutes = -minutes
+    return datetime.timezone(datetime.timedelta(hours=hours, minutes=minutes), description)
+
+
+def parse_date(datestring, default_timezone=UTC):
+    """Parses ISO 8601 dates into datetime objects
+    The timezone is parsed from the date string. However it is quite common to
+    have dates without a timezone (not strictly correct). In this case the
+    default timezone specified in default_timezone is used. This is UTC by
+    default.
+    :param datestring: The date to parse as a string
+    :param default_timezone: A datetime tzinfo instance to use when no timezone
+                             is specified in the datestring. If this is set to
+                             None then a naive datetime object is returned.
+    :returns: A datetime.datetime instance
+    :raises: ValueError when there is a problem parsing the date or
+             constructing the datetime instance.
+    """
+    try:
+        m = ISO8601_REGEX.match(datestring)
+    except Exception as e:
+        raise ValueError(e)
+
+    if not m:
+        raise ValueError(f'Unable to parse date string {datestring!r}')
+
+    groups = {k: v for k, v in m.groupdict().items() if v is not None}
+
+    try:
+        return datetime.datetime(
+            year=int(groups.get('year', 0)),
+            month=int(groups.get('month', groups.get('monthdash', 1))),
+            day=int(groups.get('day', groups.get('daydash', 1))),
+            hour=int(groups.get('hour', 0)),
+            minute=int(groups.get('minute', 0)),
+            second=int(groups.get('second', 0)),
+            microsecond=int(
+                float(f"0.{groups.get('second_fraction', 0)}") * 1e6
+            ),
+            tzinfo=parse_timezone(groups, default_timezone=default_timezone),
+        )
+    except Exception as e:
+        raise ValueError(e)
+
+
+def parse_iso8601(data_str):
+    return parse_date(data_str).timestamp() * 1e6

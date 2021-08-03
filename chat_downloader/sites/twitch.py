@@ -78,7 +78,7 @@ class TwitchChatIRC():
         channel_lower = channel_name.lower()
 
         if self.current_channel != channel_lower:
-            self.send_raw('JOIN #{}'.format(channel_lower))
+            self.send_raw(f'JOIN #{channel_lower}')
             self.current_channel = channel_lower
 
     def set_timeout(self, message_receive_timeout):
@@ -109,7 +109,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         {
             'name': 'Livestream',
             'params': {
-                'url': 'https://www.twitch.tv/xqcow',
+                'url': 'https://www.twitch.tv/xenova',
                 'timeout': 5
             }
         },
@@ -270,9 +270,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                     locations[emote_id] = []
 
-                locations[emote_id].append(
-                    '{}-{}'.format(begin, end)
-                )
+                locations[emote_id].append(f'{begin}-{end}')
 
         for emote_id in message_emotes:
             message_emotes[emote_id]['locations'] = ','.join(
@@ -308,7 +306,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                         emote_id, theme, size[1]),
                     size[0],
                     size[0],
-                    '{0}x{0}-{1}'.format(size[0], theme)
+                    f'{size[0]}x{size[0]}-{theme}'
                 ).json()
 
                 emote_image_list.append(image)
@@ -1126,12 +1124,12 @@ class TwitchChatDownloader(BaseChatDownloader):
             name = livestream['broadcaster']['name']
 
             # e.g. https://www.twitch.tv/shroud
-            yield '{}/{}'.format(self._TWITCH_HOME, name)
+            yield f'{self._TWITCH_HOME}/{name}'
 
             vods = self.get_user_videos(name, num_vods)
             for vod in vods:
                 # e.g. https://www.twitch.tv/videos/12345678
-                yield '{}/{}'.format(self._TWITCH_VIDEOS, vod['id'])
+                yield f"{self._TWITCH_VIDEOS}/{vod['id']}"
 
             clips = self.get_user_clips(name, num_clips)
             for clip in clips:
@@ -1158,9 +1156,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             end_time = ensure_seconds(e_time, max_duration)
             content_offset_seconds = (start_time or 0) + offset
 
-        # print('start', start_time)
-        # print('end', end_time)
-
         max_attempts = params.get('max_attempts')
 
         messages_groups_to_add = params.get('message_groups') or []
@@ -1172,8 +1167,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         # do not need inactivity timeout (not live)
         cursor = ''
         while True:
-            url = '{}&cursor={}&content_offset_seconds={}'.format(
-                api_url, cursor, content_offset_seconds)
+            url = f'{api_url}&cursor={cursor}&content_offset_seconds={content_offset_seconds}'
 
             for attempt_number in attempts(max_attempts):
                 try:
@@ -1196,9 +1190,9 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                 if missing_keys:
                     debug_log(
-                        'Missing keys found: {}'.format(missing_keys),
-                        'Original data: {}'.format(comment),
-                        'Parsed data: {}'.format(data),
+                        f'Missing keys found: {missing_keys}',
+                        f'Original data: {comment}',
+                        f'Parsed data: {data}',
                         comment.keys(),
                         TwitchChatDownloader._KNOWN_COMMENT_KEYS
                     )
@@ -1226,7 +1220,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 message_count += 1
                 yield data
 
-            log('debug', 'Total number of messages: {}'.format(message_count))
+            log('debug', f'Total number of messages: {message_count}')
 
             cursor = info.get('_next')
 
@@ -1270,7 +1264,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration),
             title=title,
             duration=duration,
-            is_live=False
+            status='past',
+            video_type='video',
+            id=vod_id
         )
 
     def _get_chat_by_clip_id(self, match, params):
@@ -1292,7 +1288,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, error=e, **params)
 
         vod_id = multi_get(clip, 'video', 'id')
-        # print(clip)
+
         if vod_id is None:
             raise NoChatReplay(
                 "This clip's past broadcast has expired and chat replay is no longer available.")
@@ -1300,7 +1296,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         offset = clip.get('videoOffsetSeconds')
 
         duration = clip.get('durationSeconds')
-        title = '{} ({})'.format(clip.get('title'), clip_id)
+        title = f"{clip.get('title')} ({clip_id})"
 
         channel_id = multi_get(clip, 'broadcaster', 'id')
         self._update_subscriber_badge_info(channel_id)
@@ -1310,7 +1306,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 vod_id, params, duration, offset),
             title=title,
             duration=duration,
-            is_live=False
+            status='past',
+            video_type='clip',
+            id=clip_id
         )
 
     _MESSAGE_REGEX = re.compile(
@@ -1344,7 +1342,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 new_badge[key] = new_badge_info.get(key)
 
             image_urls = [
-                (new_badge.pop('image_url_{}x'.format(i), ''), i * 18) for i in (1, 2, 4)]
+                (new_badge.pop(f'image_url_{i}x', ''), i * 18) for i in (1, 2, 4)]
             if image_urls:
                 new_badge['icons'] = []
 
@@ -1371,14 +1369,6 @@ class TwitchChatDownloader(BaseChatDownloader):
             if key_length == 1:
                 # If there's no /, we assign a value of None (null).
                 split.append(None)
-            elif key_length == 2:
-                pass
-            else:
-                debug_log(
-                    'Invalid badge found: {}.'.format(badge),
-                    'Badge information: {}.'.format(badges)
-                )
-                continue
 
             info.append(TwitchChatDownloader._parse_badge_info(
                 split[0], split[1], channel_id))
@@ -1393,8 +1383,8 @@ class TwitchChatDownloader(BaseChatDownloader):
             info['message_type'] = new_message_type
         else:
             debug_log(
-                'Unknown message type: {}'.format(original_message_type),
-                'Parsed data: {}'.format(info)
+                f'Unknown message type: {original_message_type}',
+                f'Parsed data: {info}'
             )
 
     @staticmethod
@@ -1406,8 +1396,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 emote['name'] = message[first_location[0]:first_location[1] + 1]
             except Exception:
                 debug_log(
-                    'Invalid emote: {}'.format(emote),
-                    'Message: {}'.format(message)
+                    f'Invalid emote: {emote}',
+                    f'Message: {message}'
                 )
                 continue
 
@@ -1427,8 +1417,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                 pass
             else:  # TODO never reaches this
                 debug_log(
-                    'Invalid item found: {}.'.format(item),
-                    'All items: {}.'.format(split_info),
+                    f'Invalid item found: {item}.',
+                    f'All items: {split_info}.',
                 )
                 continue
 
@@ -1482,7 +1472,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 # unknown action type
                 info['action_type'] = original_action_type
                 debug_log([
-                    'Unknown action type: {}'.format(info['action_type']),
+                    f"Unknown action type: {info['action_type']}",
                     match,
                     info
                 ])
@@ -1607,10 +1597,9 @@ class TwitchChatDownloader(BaseChatDownloader):
 
                             if missing_keys:
                                 debug_log(
-                                    'Missing keys found: {}'.format(
-                                        missing_keys),
-                                    'Original data: {}'.format(match.groups()),
-                                    'Parsed data: {}'.format(data)
+                                    f'Missing keys found: {missing_keys}',
+                                    f'Original data: {match.groups()}',
+                                    f'Parsed data: {data}'
                                 )
                             # check whether to skip this message or not, based on its type
 
@@ -1627,8 +1616,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                             message_count += 1
                             yield data
 
-                        log('debug', 'Total number of messages: {}'.format(
-                            message_count))
+                        log('debug',
+                            f'Total number of messages: {message_count}')
 
                     elif full_readbuffer:
                         # No matches, but data has been read successfully.
@@ -1636,8 +1625,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                         # This is used to periodically reset the readbuffer,
                         # to avoid a massive buffer from forming.
 
-                        log('debug', 'No matches found in "\n{}\n"'.format(
-                            readbuffer.strip()))  # never pause
+                        # never pause
+                        log('debug',
+                            f'No matches found in "\n{readbuffer.strip()}\n"')
                         readbuffer = ''
 
                     current_time = time.time()
@@ -1681,7 +1671,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 self.retry(attempt_number, error=e, **params)
 
         if not stream_info:
-            raise UserNotFound('Unable to find user: "{}"'.format(stream_id))
+            raise UserNotFound(f'Unable to find user: "{stream_id}"')
 
         is_live = multi_get(stream_info, 'stream', 'type') == 'live'
         channel_id = multi_get(stream_info, 'channel', 'id')
@@ -1695,7 +1685,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 stream_id, params),
             title=title,
             duration=None,
-            is_live=is_live
+            status='live' if is_live else 'upcoming',  # Always live or upcoming
+            video_type='video',
+            id=stream_id
         )
 
     # # e.g. 'https://www.twitch.tv/spamfish/videos?filter=all'

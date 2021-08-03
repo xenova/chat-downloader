@@ -17,6 +17,7 @@ from ..errors import (
     VideoUnplayable,
     InvalidParameter,
     UserNotFound,
+    VideoNotFound,
     NoVideos
 )
 from ..utils.timed_utils import interruptible_sleep
@@ -37,7 +38,9 @@ from ..utils.core import (
     ensure_seconds,
     attempts,
     try_parse_json,
-    regex_search
+    regex_search,
+    parse_iso8601,
+    get_title_of_webpage
 )
 
 from ..debugging import (log, debug_log)
@@ -131,20 +134,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'Get chat messages from live chat replay',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
-                'max_messages': 10
-            },
-
-            'expected_result': {
-                'message_types': ['text_message'],
-                'action_types': ['add_chat_item'],
-                'messages_condition': lambda messages: 0 < len(messages) <= 10,
-            }
-        },
-        {
-            'name': 'Get top chat messages from live chat replay',  # Premiere
+            'name': 'Get top chat messages from live chat replay',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=wXspodtIxYU',
                 'start_time': 0,
@@ -238,7 +228,16 @@ class YouTubeChatDownloader(BaseChatDownloader):
         {
             'name': 'This video is no longer available because the YouTube account associated with this video has been terminated.',
             'params': {
-                'url': 'https://www.youtube.com/watch?v=V36LpHqtcDY',
+                'url': 'https://www.youtube.com/watch?v=iM9sA2o4Krc',
+            },
+            'expected_result': {
+                'error': VideoUnavailable,
+            }
+        },
+        {
+            'name': 'This video is no longer available due to a copyright claim by International Olympic Committee.',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=cjk2UKkzY0g',
             },
             'expected_result': {
                 'error': VideoUnavailable,
@@ -366,6 +365,62 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'expected_result': {
                 'error': NoChatReplay,
             }
+        },
+
+        # Clips
+        {
+            'name': 'Chat replay of clip (past broadcast)',
+            'params': {
+                'url': 'https://www.youtube.com/clip/Ugy_1IfsnZUWZSXL6C94AaABCQ',
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Chat replay of clip (premiere)',
+            'params': {
+                'url': 'https://www.youtube.com/clip/UgzNZCNnPzq-M3_Utjl4AaABCQ',
+            },
+            'expected_result': {
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+        {
+            'name': 'Clip does not have a chat replay.',
+            'params': {
+                'url': 'https://www.youtube.com/clip/UgxJiPo-4EeSYDfrYp94AaABCQ',
+            },
+            'expected_result': {
+                'error': NoChatReplay,
+            }
+        },
+        {
+            'name': 'Sign in to confirm your age. This clip may be inappropriate for some users.',
+            'params': {
+                'url': 'https://www.youtube.com/clip/UgyfnqwleyOmnO-qA1h4AaABCQ',
+            },
+            'expected_result': {
+                'error': LoginRequired,
+            }
+        },
+        {
+            'name': "Clip not available. The clip can be unavailable if it was deleted, or if the video it's based on was removed or edited.",
+            'params': {
+                'url': 'https://youtube.com/clip/UgwVu73xQ5FUiGnteZJ4AaABCQ',
+            },
+            'expected_result': {
+                'error': VideoUnavailable,
+            }
+        },
+        {
+            'name': 'Clip does not exist',
+            'params': {
+                'url': 'https://youtube.com/clip/x',
+            },
+            'expected_result': {
+                'error': VideoNotFound,
+            }
         }
     ]
 
@@ -378,9 +433,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _YT_HOME = 'https://www.youtube.com'
     _YT_VIDEO_TEMPLATE = _YT_HOME + '/watch?v={}'
+    _YT_CLIP_TEMPLATE = _YT_HOME + '/clip/{}'
 
     _YOUTUBE_INIT_API_TEMPLATE = _YT_HOME + '/{}?continuation={}'
     _YOUTUBE_CHAT_API_TEMPLATE = _YT_HOME + '/youtubei/v1/live_chat/get_{}?key={}'
+    _YOUTUBE_BROWSE_API_TEMPLATE = _YT_HOME + '/youtubei/v1/browse?key={}'
 
     _MESSAGE_GROUPS = {
         'messages': [
@@ -465,6 +522,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                      # here is it! the YouTube video ID
                      (?P<id>[0-9A-Za-z_-]{11})''',
 
+        '_get_chat_by_clip_id': r'''(?x)
+                (?:https?://|//)
+                    (?:\w+\.)?
+                    (?:
+                        youtube?\.com
+                    )/clip/
+                    (?P<id>[a-zA-Z0-9_-]+)''',
 
         # while this does match 'watch' urls, it will never
         # return this since the above regex is run before this
@@ -509,7 +573,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             return default_text
 
     @ staticmethod
-    def _parse_header_text(info):
+    def _parse_text(info):
         return YouTubeChatDownloader._parse_runs(info)['message'] or YouTubeChatDownloader._get_simple_text(info)
 
     @ staticmethod
@@ -570,7 +634,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         return message_info
 
     @ staticmethod
-    def _parse_item(item, info=None):
+    def _parse_item(item, info=None, offset=0):
         if info is None:
             info = {}
         # info is starting point
@@ -599,7 +663,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 item_endpoint, 'showLiveChatItemEndpoint', 'renderer')
 
             if renderer:
-                info.update(YouTubeChatDownloader._parse_item(renderer))
+                info.update(YouTubeChatDownloader._parse_item(
+                    renderer, offset=offset))
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
@@ -626,6 +691,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
             pass
             # has no current video time information
             # (usually live video or a sub-item)
+
+        # non-zero, non-null offset and has time_in_seconds info
+        if offset and 'time_in_seconds' in info:
+            info['time_in_seconds'] -= offset
+            info['time_text'] = seconds_to_time(info['time_in_seconds'])
 
         if 'message' not in info:  # Ensure the parsed item contains the 'message' key
             info['message'] = None
@@ -781,8 +851,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'customThumbnail': r('badge_icons', _parse_thumbnails),
 
         # membership_item
-        'headerPrimaryText': r('header_primary_text', _parse_header_text),
-        'headerSubtext': r('header_secondary_text', _parse_header_text),
+        'headerPrimaryText': r('header_primary_text', _parse_text),
+        'headerSubtext': r('header_secondary_text', _parse_text),
         'sponsorPhoto': r('sponsor_icons', _parse_thumbnails),
 
         # ticker_paid_sticker_item
@@ -1003,7 +1073,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         for item in items:
             yield self._YT_VIDEO_TEMPLATE.format(item['video_id'])
-        # print('b')
 
         # downloader.get_playlist_items
 
@@ -1014,9 +1083,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'max_attempts': 10
         }
 
-        html, yt_info = self._get_initial_info(self._LIVE_PLAYLIST_URL, params)
+        yt_initial_data, ytcfg, player_response_info = self._get_initial_info(
+            self._LIVE_PLAYLIST_URL, params)
 
-        sections = yt_info['contents']['twoColumnBrowseResultsRenderer']['tabs'][
+        sections = yt_initial_data['contents']['twoColumnBrowseResultsRenderer']['tabs'][
             0]['tabRenderer']['content']['sectionListRenderer']['contents']
 
         for section in sections:
@@ -1042,8 +1112,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _VIDEO_REMAPPING = {
         'videoId': 'video_id',
         'title': r('title', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
-        'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
-        'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+        'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
+        'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
 
         # 'videoId', 'thumbnail', 'title', 'viewCountText', 'navigationEndpoint', 'ownerBadges', 'trackingParams', 'shortViewCountText', 'menu', 'thumbnailOverlays'
     }
@@ -1052,24 +1122,38 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _parse_video(video_renderer):
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
-    _VIDEO_TYPE_REMAPPING = {
+    _VIDEO_STATUS_REMAPPING = {
+        'all': 'all',
         'live': (501, 'Live now'),
         'upcoming': (502, 'Upcoming live streams'),
         'past': (503, 'Past live streams')
     }
 
-    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='live', params=None):
-        """[summary]
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_status='all', params=None):
+        """Retrieve all videos listed on the user's channel
+
         If more than one of `channel_id`, `user_id` and `custom_username`
         are specifed, the first one specified will be returned.
 
-        :param channel_id: [description], defaults to None
-        :type channel_id: [type], optional
-        :param user_id: [description], defaults to None
-        :type user_id: [type], optional
+        :param channel_id: The user's channel ID, defaults to None.
+            (e.g., https://www.youtube.com/channel/<channel_id>)
+        :type channel_id: str, optional
+        :param user_id: The user's ID, defaults to None
+            (e.g., https://www.youtube.com/user/<user_id>)
+        :type user_id: str, optional
         :param custom_username: [description], defaults to None
-        :type custom_username: [type], optional
-        :raises ValueError: [description]
+            (e.g., https://www.youtube.com/c/<custom_username>)
+        :type custom_username: str, optional
+        :param video_status: Determines which videos will be retrieved, defaults to 'all'.
+            Must be one of 'all', 'live', 'upcoming' or 'past'.
+        :type video_status: str, optional
+        :param params: Additional program parameters, defaults to None
+        :type params: dict, optional
+        :raises ValueError: If no user is specified or an invalid video_status is specified
+        :raises UserNotFound: If the user cannot be found
+        :raises NoVideos: If the channel has no videos
+        :yield: The next video
+        :rtype: dict
         """
 
         _id = ''
@@ -1087,52 +1171,86 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise ValueError('No user type specified.')
 
         # live, past, upcoming
-        vid_type = self._VIDEO_TYPE_REMAPPING.get(video_type.lower())
+        vid_type = self._VIDEO_STATUS_REMAPPING.get(video_status.lower())
 
         if not vid_type:
-            raise ValueError('Invalid argument passed for video_type. Must be one of {}'.format(
-                set(self._VIDEO_TYPE_REMAPPING.keys())))
+            raise ValueError(
+                f'Invalid argument passed for video_status. Must be one of {set(self._VIDEO_STATUS_REMAPPING.keys())}')
 
-        user_url = 'https://www.youtube.com/{}/{}'.format(_type, _id)
+        user_url = f'https://www.youtube.com/{_type}/{_id}'
 
-        html, yt_info = self._get_initial_info(
-            '{}/videos?view=2&live_view={}'.format(user_url, vid_type[0]), params)
+        if vid_type == 'all':
+            vids_url = f'{user_url}/videos'
+        else:
+            vids_url = f'{user_url}/videos?view=2&live_view={vid_type[0]}'
+
+        yt_info, ytcfg, _ = self._get_initial_info(vids_url, params)
 
         section_list_renderer = multi_get(
             yt_info, 'contents', 'twoColumnBrowseResultsRenderer', 'tabs', 1, 'tabRenderer', 'content', 'sectionListRenderer')
-
         if not section_list_renderer:
-            raise UserNotFound('Unable to find user: "{}"'.format(user_url))
+            raise UserNotFound(f'Unable to find user: "{user_url}"')
 
-        # Check that the returned grid is what was asked for
-        # YouTube tries to correct your mistake by selecting the uploads tab
-        # if you try to access a tab that is not visible.
         sub_menu_items = multi_get(
             section_list_renderer, 'subMenu', 'channelSubMenuRenderer', 'contentTypeSubMenuItems')
         if not sub_menu_items:
             raise NoVideos('This channel has no videos.')
 
+        # Check that the returned grid is what was asked for
+        # YouTube tries to correct your mistake by selecting the uploads tab
+        # if you try to access a tab that is not visible.
         selected = list(filter(lambda x: x['selected'], sub_menu_items))
-        if not selected or selected[0]['title'] != vid_type[1]:
-            log('debug', '"{}" tab is not visible for this channel (i.e. there are no such videos).'.format(
-                vid_type[1]))
+        if vid_type != 'all' and (not selected or selected[0]['title'] != vid_type[1]):
+            log('debug',
+                f'"{vid_type[1]}" tab is not visible for this channel (i.e. there are no such videos).')
             return
 
-        items = section_list_renderer['contents'][0]['itemSectionRenderer']['contents'][0]['gridRenderer']['items']
+        api_key = ytcfg.get('INNERTUBE_API_KEY')
+        continuation_url = self._YOUTUBE_BROWSE_API_TEMPLATE.format(api_key)
 
-        for item in items:
-            vid = item.get('gridVideoRenderer')
-            if vid:
-                yield self._parse_video(vid)
+        # innertube_context =
+        # print('innertube_context', innertube_context)
+        continuation_params = {
+            'context': ytcfg.get('INNERTUBE_CONTEXT') or {}
+        }
+        continuation = None
+        first_time = True
+        while True:
+            if first_time:
+                items = multi_get(section_list_renderer, 'contents', 0,
+                                  'itemSectionRenderer', 'contents', 0, 'gridRenderer', 'items')
+                first_time = False
             else:
-                print(item)
+                continuation_params['continuation'] = continuation
+                yt_info = self._get_continuation_info(
+                    continuation_url, params, json=continuation_params)
+                items = multi_get(yt_info, 'onResponseReceivedActions',
+                                  0, 'appendContinuationItemsAction', 'continuationItems')
+
+            if not items:
+                break
+
+            continuation = None
+            for item in items:
+                vid = item.get('gridVideoRenderer')
+                continuation_item = item.get('continuationItemRenderer')
+
+                if vid:
+                    yield self._parse_video(vid)
+                elif continuation_item:
+                    continuation = multi_get(
+                        continuation_item, 'continuationEndpoint', 'continuationCommand', 'token')
+
+            if not continuation:
+                break
 
     def get_playlist_items(self, playlist_url, params=None):
 
-        html, yt_info = self._get_initial_info(playlist_url, params)
+        yt_initial_data, ytcfg, player_response_info = self._get_initial_info(
+            playlist_url, params)
 
         items = self._get_rendered_content(
-            yt_info)['playlistVideoListRenderer']['contents']
+            yt_initial_data)['playlistVideoListRenderer']['contents']
 
         for item in items:
             playlist_video = item.get('playlistVideoRenderer')
@@ -1160,7 +1278,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             consent_id = random.randint(100, 999)
 
         self.set_cookie_value('.youtube.com', 'CONSENT',
-                              'YES+cb.20210328-17-p0.en+FX+{}'.format(consent_id))
+                              f'YES+cb.20210328-17-p0.en+FX+{consent_id}')
 
     def _generate_sapisidhash_header(self):
         sapis_id = self.get_cookie_value('SAPISID')
@@ -1182,7 +1300,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         return f'SAPISIDHASH {time_now}_{sapisidhash}'
 
     def _get_continuation_info(self, continuation_url, program_params, **post_kwargs):
-        max_attempts = program_params.get('max_attempts')
+        if program_params is None:
+            program_params = {}
+        max_attempts = program_params.get('max_attempts', 1)
 
         for attempt_number in attempts(max_attempts):
             try:
@@ -1199,12 +1319,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         self.retry(attempt_number,
                                    text=error_message, **program_params)
                         continue
+                    # 404 means deleted while live
 
                 return json_response
 
             except JSONDecodeError as e:
                 self.retry(attempt_number, error=e, **program_params,
-                           text='Unable to parse JSON: `{}`'.format(response.text))
+                           text=f'Unable to parse JSON: `{response.text}`')
 
             except RequestException as e:
                 self.retry(attempt_number, error=e, **program_params)
@@ -1216,69 +1337,135 @@ class YouTubeChatDownloader(BaseChatDownloader):
         max_attempts = params.get('max_attempts', 1)
         for attempt_number in attempts(max_attempts):
             try:
-                html = self._session_get(url).text
+                response = self._session_get(url)
+                html = response.text
                 yt = regex_search(html, self._YT_INITIAL_DATA_RE)
-                yt_initial_data = json.loads(yt)
-                return html, yt_initial_data
+                yt_initial_data = try_parse_json(yt)
 
-            except (JSONDecodeError, RequestException) as e:
+                if response.status_code != 200:
+                    # Check for errors
+                    title = get_title_of_webpage(html)
+                    if response.status_code == 404:
+                        raise VideoNotFound(title)
+                    elif response.status_code // 100 == 5:  # Server error, retry
+                        self.retry(attempt_number, text=title, **params)
+                        continue
+
+                if not yt_initial_data:  # Fatal error
+                    log('debug', html)
+                    raise ParsingError(f'Unable to parse initial video data')
+
+                cfg = regex_search(html, self._YT_CFG_RE)
+                ytcfg = try_parse_json(cfg, {})
+
+                player_response = regex_search(
+                    html, self._YT_INITIAL_PLAYER_RESPONSE_RE)
+
+                player_response_info = try_parse_json(player_response, {})
+
+                return yt_initial_data, ytcfg, player_response_info
+
+            except RequestException as e:
                 self.retry(attempt_number, error=e, **params)
 
-        return None, None
+        return None, None, None
 
-    def _get_initial_video_info(self, video_id, params=None):
-        """ Get initial YouTube video information. """
-        original_url = self._YT_VIDEO_TEMPLATE.format(video_id)
+    def get_video_data(self, video_id, params=None):
+        return self._parse_video_data(video_id, params)[0]
 
-        html, yt_initial_data = self._get_initial_info(original_url, params)
-
-        if not yt_initial_data:  # Fatal error
-            raise ParsingError(
-                'Unable to parse initial video data. {}'.format(html))
-
+    def _parse_video_data(self, video_id, params=None, video_type='video'):
         details = {}
 
-        cfg = regex_search(html, self._YT_CFG_RE)
-        details['ytcfg'] = try_parse_json(cfg) if cfg else {}
+        if video_type == 'clip':
+            original_url = self._YT_CLIP_TEMPLATE.format(video_id)
+        else:  # video_type == 'video'
+            original_url = self._YT_VIDEO_TEMPLATE.format(video_id)
 
-        player_response = regex_search(
-            html, self._YT_INITIAL_PLAYER_RESPONSE_RE)
-        player_response_info = try_parse_json(
-            player_response) if player_response else None
+        yt_initial_data, ytcfg, player_response_info = self._get_initial_info(
+            original_url, params)
 
         if not player_response_info:
-            log(
-                'warning', 'Unable to parse player response, proceeding with caution: {}'.format(html))
-            player_response_info = {}
+            log('debug', yt_initial_data)
+            log('warning', f'Unable to parse player response, proceeding with caution')
 
         streaming_data = player_response_info.get('streamingData') or {}
-        formats = streaming_data.get(
-            'adaptiveFormats') or streaming_data.get('formats')
+        first_format = multi_get(streaming_data, 'adaptiveFormats', 0) or multi_get(
+            streaming_data, 'formats', 0) or {}
 
-        details['start_time'] = float_or_none(
-            multi_get(formats, 0, 'lastModified'))
+        # Live streaming details
+        player_renderer = multi_get(
+            player_response_info, 'microformat', 'playerMicroformatRenderer') or {}
+        live_details = player_renderer.get('liveBroadcastDetails') or {}
 
-        # Try to get continuation info
-        contents = yt_initial_data.get('contents') or {}
+        # Video info
+        video_details = player_response_info.get('videoDetails') or {}
+        details['title'] = video_details.get('title')
+        details['author'] = video_details.get('author')
+        details['author_id'] = video_details.get('channelId')
+        details['original_video_id'] = video_details.get('videoId')
 
-        conversation_bar = multi_get(
-            contents, 'twoColumnWatchNextResults', 'conversationBar')
-        sub_menu_items = multi_get(conversation_bar, 'liveChatRenderer', 'header', 'liveChatHeaderRenderer',
-                                   'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems') or {}
+        # Clip info
+        clip_details = player_response_info.get('clipConfig')
+        if clip_details:
+            details['clip_start_time'] = (float_or_none(
+                clip_details.get('startTimeMs', 0)) / 1e3)
+            details['clip_end_time'] = (float_or_none(
+                clip_details.get('endTimeMs', 0)) / 1e3)
+            details['video_type'] = 'clip'
+
+        elif not video_details.get('isLiveContent'):
+            details['video_type'] = 'premiere'
+
+        else:
+            details['video_type'] = 'video'
+
+        start_timestamp = live_details.get('startTimestamp')
+        end_timestamp = live_details.get('endTimestamp')
+        details['start_time'] = parse_iso8601(
+            start_timestamp) if start_timestamp else None
+        details['end_time'] = parse_iso8601(
+            end_timestamp) if end_timestamp else None
+
+        details['duration'] = (float_or_none(first_format.get('approxDurationMs', 0)) / 1e3) or float_or_none(
+            video_details.get('lengthSeconds')) or float_or_none(player_renderer.get('lengthSeconds'))
+
+        if not details['duration'] and details['start_time'] and details['end_time']:
+            details['duration'] = (
+                details['end_time'] - details['start_time'])/1e6
+
+        # Parse continuation info
+        sub_menu_items = multi_get(yt_initial_data, 'contents', 'twoColumnWatchNextResults', 'conversationBar', 'liveChatRenderer',
+                                   'header', 'liveChatHeaderRenderer', 'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems') or {}
         details['continuation_info'] = {
             x['title']: x['continuation']['reloadContinuationData']['continuation']
             for x in sub_menu_items
         }
-        details['is_live'] = 'Live chat' in details['continuation_info']
 
-        playability_status = player_response_info.get(
-            'playabilityStatus') or {}
-        status = playability_status.get('status')
-        error_screen = playability_status.get('errorScreen')
+        # live, upcoming or past
+        if video_details.get('isLive') or live_details.get('isLiveNow'):
+            details['status'] = 'live'
 
-        # Only raise an error if there is no continuation info. Sometimes you
-        # are able to view chat, but not the video (e.g. for very long livestreams)
+        elif video_details.get('isUpcoming'):
+            details['status'] = 'upcoming'
+
+        else:
+            details['status'] = 'past'
+
+        return details, player_response_info, yt_initial_data, ytcfg
+
+    def _get_initial_video_info(self, video_id, params=None, video_type='video'):
+        """ Get initial YouTube video information. """
+
+        details, player_response_info, yt_initial_data, ytcfg = self._parse_video_data(
+            video_id, params, video_type)
+
+        # Error checking
         if not details['continuation_info']:
+            # Only raise an error if there is no continuation info. Sometimes you
+            # are able to view chat, but not the video (e.g. for very long livestreams)
+            playability_status = player_response_info.get(
+                'playabilityStatus') or {}
+            error_screen = playability_status.get('errorScreen')
             if error_screen:  # There is a error screen visible
                 error_reasons = {
                     'reason': '',
@@ -1298,12 +1485,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 for error_reason in error_reasons:
                     if error_reasons[error_reason]:
                         if isinstance(error_reasons[error_reason], str):
-                            error_message += ' {}.'.format(
-                                error_reasons[error_reason].rstrip('.'))
+                            error_message += f" {error_reasons[error_reason].rstrip('.')}."
                         else:
                             error_message += str(error_reasons[error_reason])
 
                 error_message = error_message.strip()
+
+                status = playability_status.get('status')
 
                 if status == 'ERROR':
                     raise VideoUnavailable(error_message)
@@ -1312,20 +1500,28 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
                 else:
-                    log('debug', 'Unknown status: {}. {}'.format(
-                        status, playability_status))
-                    error_message = '{}: {}'.format(status, error_message)
+                    log('debug',
+                        f'Unknown playability status: {status}. {playability_status}')
+                    error_message = f'{status}: {error_message}'
                     raise VideoUnavailable(error_message)
-            elif not contents:
-                log('debug', 'Initial YouTube data: {}'.format(
-                    yt_initial_data))
+
+            # Check for pop up
+            popup_info = multi_get(yt_initial_data, 'onResponseReceivedActions',
+                                   0, 'openPopupAction', 'popup', 'confirmDialogRenderer')
+            if popup_info:
+                error_message = multi_get(popup_info, 'title', 'simpleText')
+                dialog_messages = multi_get(popup_info, 'dialogMessages') or []
+                error_message += '. ' + \
+                    ' '.join(map(lambda x: x.get('simpleText'), dialog_messages))
+                raise VideoUnavailable(error_message)
+            elif not yt_initial_data.get('contents'):
+                log('debug', f'Initial YouTube data: {yt_initial_data}')
                 raise VideoUnavailable(
                     'Unable to find initial video contents.')
             else:
                 # Video exists, but you cannot view chat for some reason
-
-                error_runs = multi_get(conversation_bar, 'conversationBarRenderer',
-                                       'availabilityMessage', 'messageRenderer', 'text')
+                error_runs = multi_get(yt_initial_data, 'contents', 'twoColumnWatchNextResults', 'conversationBar',
+                                       'conversationBarRenderer', 'availabilityMessage', 'messageRenderer', 'text')
                 error_message = self._parse_runs(error_runs, False)[
                     'message'] if error_runs else 'Video does not have a chat replay.'
 
@@ -1335,10 +1531,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 else:
                     raise NoChatReplay(error_message)
 
-        video_details = player_response_info.get('videoDetails') or {}
-        details['title'] = video_details.get('title')
-        details['duration'] = int_or_none(video_details.get('lengthSeconds'))
-        return details
+        return details, ytcfg
 
     def _extract_account_syncid(self, ytcfg):
         sync_ids = ytcfg.get('DATASYNC_ID').split('||')
@@ -1382,14 +1575,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         return headers
 
-    def _get_chat_messages(self, initial_info, params):
+    def _get_chat_messages(self, initial_info, ytcfg, params):
 
         initial_continuation_info = initial_info.get('continuation_info') or {}
+        if len(initial_continuation_info) < 2:
+            raise NoContinuation(
+                f'Initial continuation information could not be found: {initial_info}')
 
-        # stream_start_time = initial_info.get('start_time')
-        is_live = initial_info.get('is_live')
+        status = initial_info.get('status')
 
         # duration = initial_info.get('duration')
+        # stream_start_time = initial_info.get('start_time')
+        offset = initial_info.get('offset')  # Clips
 
         start_time = ensure_seconds(params.get('start_time'))
         end_time = ensure_seconds(params.get('end_time'))
@@ -1397,25 +1594,20 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
         chat_type = params.get('chat_type').title()  # Live or Top
-
-        continuation_items = list(initial_continuation_info.items())
-        if len(continuation_items) < 2:
-            raise NoContinuation(
-                'Initial continuation information could not be found: {}'.format(initial_continuation_info))
-
         continuation_index = 0 if chat_type == 'Top' else 1
-        continuation = continuation_items[continuation_index][1]
-        log('debug', 'Getting {} chat ({}).'.format(
-            chat_type, continuation_items[continuation_index][0]))
+        continuation_info = list(initial_continuation_info.items())[
+            continuation_index]
+        continuation = continuation_info[1]
+        log('debug', f'Getting {chat_type} chat ({continuation_info[0]}).')
+
+        is_replay = status == 'past'
 
         api_type = 'live_chat'
-        if not is_live:
+        if is_replay:
             api_type += '_replay'
 
         init_page = self._YOUTUBE_INIT_API_TEMPLATE.format(
             api_type, continuation)
-
-        ytcfg = initial_info.get('ytcfg')
 
         api_key = ytcfg.get('INNERTUBE_API_KEY')
 
@@ -1435,7 +1627,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             self._MESSAGE_GROUPS.keys()
         if 'all' not in messages_groups_to_add and invalid_groups:
             raise InvalidParameter(
-                'Invalid groups specified: {}'.format(invalid_groups))
+                f'Invalid groups specified: {invalid_groups}')
 
         self.check_for_invalid_types(
             messages_types_to_add, self._MESSAGE_TYPES)
@@ -1467,14 +1659,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     'authorization': auth
                 })
 
-            info = None
-
             if first_time:
                 # must run to get first few messages, otherwise might miss some
-                html, yt_info = self._get_initial_info(init_page, params)
+                yt_info = self._get_initial_info(init_page, params)[0]
 
             else:
-                if not is_live and offset_milliseconds is not None:
+                if is_replay and offset_milliseconds is not None:
                     continuation_params['currentPlayerState'] = {
                         'playerOffsetMs': offset_milliseconds}
 
@@ -1489,28 +1679,25 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'click_tracking': multi_get(continuation_params, 'context', 'clickTracking'),
                 'continuation': multi_get(continuation_params, 'continuation')
             }
-            log('debug', 'Continuation parameters: {}'.format(debug_info))
-            log('debug', 'Session headers: {}'.format(
-                ', '.join(self.session.headers.keys())))  # Only display keys
-
-            info = multi_get(
-                yt_info, 'continuationContents', 'liveChatContinuation')
+            log('debug', [
+                f'Continuation parameters: {debug_info}',
+                f"Session headers: {', '.join(self.session.headers.keys())}"
+            ])
 
             logged_in_info = multi_get(
                 yt_info, 'responseContext', 'serviceTrackingParams', 1, 'params', 0)
-            log('debug', 'Logged-in info: {}'.format(logged_in_info))
+            log('debug', f'Logged-in info: {logged_in_info}')
 
+            info = multi_get(yt_info, 'continuationContents',
+                             'liveChatContinuation')
             if not info:
-                log('debug', 'No continuation information found: {}'.format(
-                    yt_info))
-
+                log('debug', f'No continuation information found: {yt_info}')
                 return
 
             actions = info.get('actions') or []
 
             if actions:
                 for action in actions:
-                    # print(action)
                     data = {}
 
                     # if it is a replay chat item action, must re-base it
@@ -1541,7 +1728,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                         original_message_type = try_get_first_key(
                             original_item)
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data, offset)
 
                     elif original_action_type in self._KNOWN_REMOVE_ACTION_TYPES:
                         original_item = action
@@ -1550,7 +1737,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         else:  # markChatItemsByAuthorAsDeletedAction
                             original_message_type = 'banUser'
 
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data, offset)
 
                     elif original_action_type in self._KNOWN_REPLACE_ACTION_TYPES:
                         original_item = multi_get(
@@ -1558,7 +1745,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                         original_message_type = try_get_first_key(
                             original_item)
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data, offset)
 
                     elif original_action_type in self._KNOWN_TOOLTIP_ACTION_TYPES:
                         original_item = multi_get(
@@ -1566,7 +1753,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                         original_message_type = try_get_first_key(
                             original_item)
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data, offset)
 
                     elif original_action_type in self._KNOWN_ADD_BANNER_TYPES:
                         original_item = multi_get(
@@ -1578,12 +1765,14 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                             header = original_item[original_message_type].get(
                                 'header')
-                            parsed_header = self._parse_item(header)
+                            parsed_header = self._parse_item(
+                                header, offset=offset)
                             header_message = parsed_header.get('message')
 
                             contents = original_item[original_message_type].get(
                                 'contents')
-                            parsed_contents = self._parse_item(contents)
+                            parsed_contents = self._parse_item(
+                                contents, offset=offset)
 
                             data.update(parsed_header)
                             data.update(parsed_contents)
@@ -1591,25 +1780,23 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         else:
                             debug_log(
                                 'No bannerRenderer item',
-                                'Action type: {}'.format(
-                                    original_action_type),
-                                'Action: {}'.format(action),
-                                'Parsed data: {}'.format(data)
+                                f'Action type: {original_action_type}',
+                                f'Action: {action}',
+                                f'Parsed data: {data}'
                             )
 
                     elif original_action_type in self._KNOWN_REMOVE_BANNER_TYPES:
                         original_item = action
                         original_message_type = 'removeBanner'
-                        data = self._parse_item(original_item, data)
+                        data = self._parse_item(original_item, data, offset)
 
                     elif original_action_type in self._KNOWN_IGNORE_ACTION_TYPES:
-                        continue
-                        # ignore these
+                        continue  # ignore these
+
                     else:
                         # not processing these
                         debug_log(
-                            'Unknown action: {}'.format(
-                                original_action_type),
+                            f'Unknown action: {original_action_type}',
                             action,
                             data
                         )
@@ -1620,19 +1807,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     if not data:
                         debug_log(
-                            'Parse of action returned empty results: {}'.format(
-                                original_action_type),
+                            f'Parse of action returned empty results: {original_action_type}',
                             action
                         )
 
                     if missing_keys:
                         debug_log(
-                            'Missing keys found: {}'.format(missing_keys),
-                            'Message type: {}'.format(original_message_type),
-                            'Action type: {}'.format(
-                                original_action_type),
-                            'Action: {}'.format(action),
-                            'Parsed data: {}'.format(data)
+                            f'Missing keys found: {missing_keys}',
+                            f'Message type: {original_message_type}',
+                            f'Action type: {original_action_type}',
+                            f'Action: {action}',
+                            f'Parsed data: {data}'
                         )
 
                     if original_message_type:
@@ -1648,20 +1833,18 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             # skip placeholder items
                         elif original_message_type not in self._KNOWN_ACTION_TYPES[original_action_type]:
                             debug_log(
-                                'Unknown message type "{}" for action "{}"'.format(
-                                    original_message_type, original_action_type),
-                                'New message type: {}'.format(
-                                    data['message_type']),
-                                'Action: {}'.format(action),
-                                'Parsed data: {}'.format(data)
+                                f'Unknown message type "{original_message_type}" for action "{original_action_type}"',
+                                f"New message type: {data['message_type']}",
+                                f'Action: {action}',
+                                f'Parsed data: {data}'
                             )
 
                     else:  # no type # can ignore message
                         debug_log(
                             'No message type',
-                            'Action type: {}'.format(original_action_type),
-                            'Action: {}'.format(action),
-                            'Parsed data: {}'.format(data)
+                            f'Action type: {original_action_type}',
+                            f'Action: {action}',
+                            f'Parsed data: {data}'
                         )
                         continue
 
@@ -1678,9 +1861,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         continue
 
                     # if from a replay, check whether to skip this message or not, based on its time
-                    if not is_live:
+                    if is_replay:
                         # assume message is at beginning if it does not have a time component
-                        time_in_seconds = data.get('time_in_seconds', 0)
+                        time_in_seconds = data.get(
+                            'time_in_seconds', 0) + (offset or 0)
 
                         before_start = start_time is not None and time_in_seconds < start_time
                         after_end = end_time is not None and time_in_seconds > end_time
@@ -1691,17 +1875,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             return  # while actually searching, if time is invalid
 
                     # try to reconstruct time in seconds from timestamp and stream start
-                    # if data.get('time_in_seconds') is None and data.get('timestamp') is not None:
+                    # if data.get('time_in_seconds') is None and data.get('timestamp') and stream_start_time:
                     #     data['time_in_seconds'] = (data['timestamp'] - stream_start_time)/1e6
                     #     data['time_text'] = seconds_to_time(int(data['time_in_seconds']))
 
                     message_count += 1
                     yield data
 
-                log('debug', 'Total number of messages: {}'.format(
-                    message_count))
-
-            elif not is_live:
+                log('debug', f'Total number of messages: {message_count}')
+            elif is_replay:
                 # no more actions to process in a chat replay
                 break
             else:
@@ -1717,8 +1899,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 continuation_key = try_get_first_key(cont)
                 continuation_info = cont[continuation_key]
 
-                log('debug', 'Continuation info: {}'.format(
-                    continuation_info))
+                log('debug', f'Continuation info: {continuation_info}')
 
                 if continuation_key in self._KNOWN_CHAT_CONTINUATIONS:
 
@@ -1734,9 +1915,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 elif continuation_key in self._KNOWN_SEEK_CONTINUATIONS:
                     pass
                     # ignore these continuations
+
                 else:
                     debug_log(
-                        'Unknown continuation: {}'.format(continuation_key),
+                        f'Unknown continuation: {continuation_key}',
                         cont
                     )
 
@@ -1762,7 +1944,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     sleep_duration = max(min(sleep_duration, 8000), 0)
 
-                    log('debug', 'Sleeping for {}ms.'.format(sleep_duration))
+                    log('debug', f'Sleeping for {sleep_duration}ms.')
                     interruptible_sleep(sleep_duration / 1000)
 
             if no_continuation:  # no continuation, end
@@ -1770,6 +1952,31 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             if first_time:
                 first_time = False
+
+    def _get_chat_by_clip_id(self, match, params):
+        return self.get_chat_by_clip_id(match.group('id'), params)
+
+    def get_chat_by_clip_id(self, clip_id, params):
+
+        initial_info, ytcfg = self._get_initial_video_info(
+            clip_id, params, video_type='clip')
+
+        initial_info['offset'] = clip_start_time = initial_info.get(
+            'clip_start_time')
+        clip_end_time = initial_info.get('clip_end_time')
+
+        max_duration = clip_end_time - clip_start_time
+
+        params['start_time'] = ensure_seconds(
+            params.get('start_time'), 0) + clip_start_time
+        params['end_time'] = ensure_seconds(params.get(
+            'end_time'), max_duration) + clip_start_time
+
+        return Chat(
+            self._get_chat_messages(initial_info, ytcfg, params),
+            id=clip_id,
+            **initial_info
+        )
 
     def _get_chat_by_user(self, match, params):
         match_id = match.group('id')
@@ -1810,8 +2017,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # params['exit_on_fail'] = True
 
         title = try_get_first_value(user_video_args)
-
-        chat_item = Chat(title=title)  # Create empty chat object
+        chat_item = Chat(title=title, id=title)  # Create empty chat object
         chat_item.chat = self._get_chat_messages_by_user_args(
             user_video_args, chat_item, params)
 
@@ -1825,21 +2031,21 @@ class YouTubeChatDownloader(BaseChatDownloader):
         sleep_amount = 30  # params.get('retry_timeout')
 
         while True:
-            for video_type in ('live', 'upcoming'):
+            for video_status in ('live', 'upcoming'):
                 # prioritise live videos
-                for video in self.get_user_videos(**user_video_args, video_type=video_type, params=params):
+                for video in self.get_user_videos(**user_video_args, video_status=video_status, params=params):
                     video_id = video['video_id']
                     video_title = video['title']
 
                     if video_id in list_of_vids_to_ignore:
-                        log('debug', 'Skipping video with ID: "{}"'.format(video_id))
+                        log('debug', f'Skipping video with ID: "{video_id}"')
                         continue
 
                     try:
                         chat = self.get_chat_by_video_id(video_id, params)
 
-                        log('info', 'Found a{} livestream: "{}" ({}).'.format(
-                            'n upcoming' if video_type == 'upcoming' else '', video_title, video_id))
+                        log('info',
+                            f"Found a{'n upcoming' if video_status == 'upcoming' else ''} livestream: \"{video_title}\" ({video_id}).")
 
                         # update chat item by copying over
                         chat_dict = chat.__dict__.copy()
@@ -1854,12 +2060,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
                     except ChatDownloaderError as e:
                         # For some reason, doesn't work
-                        log('warning', 'Unable to get chat for "{}" ({}) due to an error: "{}"'.format(
-                            video['title'], video_id, e))
-                        # TODO exit on error?
+                        log('warning',
+                            f"Unable to get chat for \"{video['title']}\" ({video_id}) due to an error: \"{e}\"")
 
-            log('info', 'There are no active or upcoming livestreams with a live chat. Retrying in {} seconds.'.format(
-                sleep_amount))
+            log('info',
+                f'There are no active or upcoming livestreams with a live chat. Retrying in {sleep_amount} seconds.')
             interruptible_sleep(sleep_amount)
 
             # continue forever, until reaching a video with valid chat
@@ -1872,19 +2077,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         :return: Chat object for the corresponding YouTube video
         :rtype: Chat
         """
-        initial_info = self._get_initial_video_info(video_id, params)
-
-        title = initial_info.get('title')
-        duration = initial_info.get('duration')
-        start_time = initial_info.get('start_time')
-        is_live = initial_info.get('is_live')
+        initial_info, ytcfg = self._get_initial_video_info(video_id, params)
 
         return Chat(
-            self._get_chat_messages(initial_info, params),
-            title=title,
-            duration=duration,
-            is_live=is_live,
-            start_time=start_time
+            self._get_chat_messages(initial_info, ytcfg, params),
+            id=video_id,
+            **initial_info
         )
 
     def _get_chat_by_video_id(self, match, params):
