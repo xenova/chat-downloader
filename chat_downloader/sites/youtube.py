@@ -226,15 +226,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
             }
         },
         {
-            'name': 'This video is no longer available because the YouTube account associated with this video has been terminated.',
-            'params': {
-                'url': 'https://www.youtube.com/watch?v=iM9sA2o4Krc',
-            },
-            'expected_result': {
-                'error': VideoUnavailable,
-            }
-        },
-        {
             'name': 'This video is no longer available due to a copyright claim by International Olympic Committee.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=cjk2UKkzY0g',
