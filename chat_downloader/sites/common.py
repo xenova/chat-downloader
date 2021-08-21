@@ -201,13 +201,11 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat=None, callback=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
+    def __init__(self, chat=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
         """Create a Chat object
 
         :param chat: Generator method for retrieving chat messages, defaults to None
         :type chat: generator, optional
-        :param callback: Function to call on every message, defaults to None
-        :type callback: function, optional
         :param title: Stream or video title, defaults to None
         :type title: str, optional
         :param duration: Duration of the stream or video, defaults to None
@@ -224,7 +222,6 @@ class Chat():
         """
 
         self.chat = chat
-        self.callback = callback
 
         self.title = title
         self.duration = duration
@@ -287,9 +284,6 @@ class Chat():
 
             if self._output_writer is not None:  # writer has been attached
                 self._init_writer()
-
-            if self.callback is not None:  # user-defined callback
-                self.callback(item)
 
             if self._output_callback is not None:  # output callback
                 self._output_callback(item)
