@@ -2038,15 +2038,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         log('info',
                             f"Found a{'n upcoming' if video_status == 'upcoming' else ''} livestream: \"{video_title}\" ({video_id}).")
 
-                        # update chat item by copying over
-                        chat_dict = chat.__dict__.copy()
-                        for key in ('chat', 'callback'):
-                            chat_dict.pop(key, None)
+                        for key, value in vars(chat).items():  # Update chat item
+                            if key != 'chat' and not key.startswith('_'):
+                                setattr(chat_item, key, value)
 
-                        for i in chat_dict:
-                            setattr(chat_item, i, chat_dict[i])
-
-                        yield from chat.chat
+                        yield from chat
                         break
 
                     except ChatDownloaderError as e:
