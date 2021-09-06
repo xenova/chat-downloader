@@ -778,6 +778,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         '£': 'GBP',
         '€': 'EUR',
         '₹': 'INR',
+        '₪': 'ILS',
+        '₱': 'PHP',
 
         '₩': 'KRW',
         '￦': 'KRW',
@@ -788,7 +790,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     # All other currency symbols use the ISO 4217 format:
     # https://en.wikipedia.org/wiki/ISO_4217
-    # e.g. 'CHF', 'COP', 'HUF', 'PHP', 'PLN', 'RUB', 'SEK', 'PEN', 'ARS', 'CLP', 'NOK', 'BAM', 'SGD'
+    # e.g. 'CHF', 'COP', 'HUF', 'PLN', 'RUB', 'SEK', 'PEN', 'ARS', 'CLP', 'NOK', 'BAM', 'SGD'
 
     @ staticmethod
     def _parse_currency(item):
