@@ -901,7 +901,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _KEYS_TO_IGNORE = [
         # to actually ignore
-        'contextMenuAccessibility', 'contextMenuEndpoint', 'trackingParams', 'accessibility',
+        'contextMenuAccessibility', 'contextMenuEndpoint', 'trackingParams', 'accessibility', 'dwellTimeMs',
 
         'empty',  # signals liveChatMembershipItemRenderer has no message body
 
