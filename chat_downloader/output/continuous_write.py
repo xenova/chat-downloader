@@ -208,7 +208,7 @@ class ContinuousWriter:
         self.overwrite = overwrite
         self.format = format
         self.lazy_initialise = lazy_initialise
-
+        self.writer = None
         self.data.update(kwargs)
 
         self._initialised = False
