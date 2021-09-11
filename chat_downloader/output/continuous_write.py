@@ -215,7 +215,6 @@ class ContinuousWriter:
         if not self.lazy_initialise:
             self._real_init()
 
-        self.writer=None
     def __getattr__(self, name):
         if name in self.data:
             return self.data[name]
