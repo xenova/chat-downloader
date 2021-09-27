@@ -64,6 +64,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _NAME = 'youtube.com'
 
     _SITE_DEFAULT_PARAMS = {
+        'message_groups': ['messages', 'superchat'],
         'format': 'youtube',
     }
 
