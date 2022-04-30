@@ -179,7 +179,7 @@ class FacebookChatDownloader(BaseChatDownloader):
             }
         },
     ]
-
+    _TESTS = [] # Remove support for facebook
     _GRAPH_API = _FB_HOMEPAGE + '/api/graphql/'
 
     def _graphql_request(self, program_params, retry_on_error=True, **post_kwargs):
