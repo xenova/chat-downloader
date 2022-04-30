@@ -415,7 +415,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         }
     ]
 
-    _YT_INITIAL_BOUNDARY_RE = r'\s*(?:var\s+meta|</script|\n)'
+    _YT_INITIAL_BOUNDARY_RE = r'\s*(?:var\s+(?:meta|head)|</script|\n)'
     _YT_INITIAL_DATA_RE = r'(?:window\s*\[\s*["\']ytInitialData["\']\s*\]|ytInitialData)\s*=\s*({.+?})\s*;' + \
         _YT_INITIAL_BOUNDARY_RE
     _YT_INITIAL_PLAYER_RESPONSE_RE = r'ytInitialPlayerResponse\s*=\s*({.+?})\s*;' + \
