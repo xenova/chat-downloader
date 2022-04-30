@@ -32,10 +32,6 @@ class TestSites(unittest.TestCase):
             {
                 'custom_username': 'overwatchleague',
                 'video_status': 'past'
-            },
-            {
-                'channel_id': 'UCS9uQI-jC3DE0L4IpXyvr6w',
-                'video_status': 'upcoming'
             }
         ]
 

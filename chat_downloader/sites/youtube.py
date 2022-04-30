@@ -380,7 +380,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         {
             'name': 'Clip does not have a chat replay.',
             'params': {
-                'url': 'https://www.youtube.com/clip/UgxJiPo-4EeSYDfrYp94AaABCQ',
+                'url': 'https://www.youtube.com/clip/UgwVu73xQ5FUiGnteZJ4AaABCQ',
             },
             'expected_result': {
                 'error': NoChatReplay,
@@ -398,7 +398,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         {
             'name': "Clip not available. The clip can be unavailable if it was deleted, or if the video it's based on was removed or edited.",
             'params': {
-                'url': 'https://youtube.com/clip/UgwVu73xQ5FUiGnteZJ4AaABCQ',
+                'url': 'https://youtube.com/clip/UgxJiPo-4EeSYDfrYp94AaABCQ',
             },
             'expected_result': {
                 'error': VideoUnavailable,
