@@ -385,5 +385,10 @@ def run(propagate_interrupt=False, **kwargs):
         else:
             log('error', 'Keyboard Interrupt')
 
+    else:  # No exceptions raised
+        return
+
     finally:
         downloader.close()
+
+    return 1
