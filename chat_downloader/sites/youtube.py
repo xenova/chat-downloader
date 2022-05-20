@@ -978,8 +978,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _KNOWN_ADD_BANNER_TYPES = {
         'addBannerToLiveChatCommand': [
             'liveChatBannerRenderer',
-            'liveChatBannerHeaderRenderer'
-            'liveChatTextMessageRenderer'
+            'liveChatBannerHeaderRenderer',
+            'liveChatTextMessageRenderer',
         ]
     }
 
