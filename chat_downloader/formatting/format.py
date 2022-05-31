@@ -45,6 +45,29 @@ class ItemFormatter:
             with open(path) as custom_formats:
                 self.format_file.update(json.load(custom_formats))
 
+    def _item_template_substitution(self, item, format_object):
+        """Perform substitution using a per-item template and keys
+
+        :param item: The chat (sub)item to choose the value to replace the key with
+        :type item: dict
+        :param format_object: The format object which defines how the
+            replacement should be done
+        :type format_object: dict
+        :return: The replacement value as a string
+        :rtype: str
+        """
+
+        if not isinstance(item, dict):
+            return str(item)
+
+        item_template = format_object.get('item_template') or ''
+        keys = format_object.get('keys') or {}
+
+        substitution = re.sub(self._INDEX_REGEX, lambda match: self._replace(
+            match, item, keys), item_template)
+
+        return substitution
+
     def _replace(self, match, item, format_object):
         """Replace a match object with
 
@@ -91,14 +114,11 @@ class ItemFormatter:
 
                 # Apply separator
                 separator = formatting_info.get('separator')
-                if separator:
-                    if index == 'author.badges':
+                if separator is not None:
+                    if isinstance(value, (tuple, list)):
+                        # Recurse
                         value = separator.join(
-                            filter(None, map(lambda key: key.get('title'), value))
-                        )
-                    elif isinstance(value, (tuple, list)):
-                        value = separator.join(
-                            map(lambda x: str(x), value))
+                            map(lambda subitem: self._item_template_substitution(subitem, formatting_info), value))
                     else:
                         pass
             else:
