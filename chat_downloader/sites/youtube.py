@@ -1006,6 +1006,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'removeChatItemAction': [
             'banUser',
         ],
+        'removeChatItemByAuthorAction': [
+            'banUser',
+        ],
         'markChatItemsByAuthorAsDeletedAction': [
             'banUser'  # deletedStateMessage
         ],
