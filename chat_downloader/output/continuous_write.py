@@ -263,7 +263,8 @@ class ContinuousWriter:
         return self
 
     def close(self):
-        self.writer.close()
+        if self._initialised:
+            self.writer.close()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
