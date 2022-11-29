@@ -1492,6 +1492,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     raise LoginRequired(error_message)
                 elif status == 'UNPLAYABLE':
                     raise VideoUnplayable(error_message)
+                elif status == 'LIVE_STREAM_OFFLINE':
+                    raise ChatDisabled(error_message)
                 else:
                     log('debug',
                         f'Unknown playability status: {status}. {playability_status}')
