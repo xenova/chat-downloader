@@ -200,8 +200,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
+        {  # https://github.com/xenova/chat-downloader/issues/178#issuecomment-1330029347
+            'name': 'Chat replay with membership gifts',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=cb0h-KbpDo8',
+                'start_time': '5:22:20',
+                'end_time': '5:22:35',
+                'message_groups': ['all']
+            },
+            'expected_result': {
+                'message_types': ['text_message', 'sponsorships_gift_purchase_announcement', 'ticker_sponsor_item'],
+                'action_types': ['add_chat_item', 'add_live_chat_ticker_item'],
+                'messages_condition': lambda messages: len(messages) > 0,
+            }
+        },
+
         {
-            # 874:24:05 current test
             'name': 'Get chat messages from an unplayable stream.',
             'params': {
                 'url': 'https://www.youtube.com/watch?v=V2Afni3S-ok',
@@ -214,6 +228,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
+
+
+
 
         # TESTING FOR ERRORS
         {
@@ -439,6 +456,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
             'membership_item',
             'paid_message',
             'paid_sticker',
+
+            # Gifts
+            'sponsorships_gift_purchase_announcement',
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
@@ -657,6 +677,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 info.update(YouTubeChatDownloader._parse_item(
                     renderer, offset=offset))
 
+        header = item_info.get('header')
+        if header:
+            info.update(YouTubeChatDownloader._parse_item(
+                header, offset=offset))
+
         BaseChatDownloader._move_to_dict(info, 'author')
 
         # TODO determine if youtube glitch has occurred
@@ -841,6 +866,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # ticker_sponsor_item
         'detailText': r(None, _parse_runs, True),
+        'detailIcon': r('detail_icon', lambda x: x.get('iconType')),
         'customThumbnail': r('badge_icons', _parse_thumbnails),
 
         # membership_item
@@ -875,6 +901,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # tooltip
         'detailsText': r(None, _parse_runs, True),
+
+        # gifts
+        'primaryText': r('message', _parse_text),
 
     }
 
@@ -945,6 +974,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             'liveChatPaidStickerRenderer',
             'liveChatModeChangeMessageRenderer',  # e.g. slow mode enabled
+
+            # Gifting
+            'liveChatSponsorshipsGiftPurchaseAnnouncementRenderer',  # purchase
+            'liveChatSponsorshipsGiftRedemptionAnnouncementRenderer',  # receive
+
+            'liveChatSponsorshipsHeaderRenderer',
 
             # TODO find examples of:
             # 'liveChatPurchasedProductMessageRenderer',  # product purchased
@@ -1723,7 +1758,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         original_item = action
                         if original_action_type == 'markChatItemAsDeletedAction':
                             original_message_type = 'deletedMessage'
-                        else:  # markChatItemsByAuthorAsDeletedAction
+                        else:  # markChatItemsByAuthorAsDeletedAction, removeChatItemAction
                             original_message_type = 'banUser'
 
                         data = self._parse_item(original_item, data, offset)
@@ -1731,7 +1766,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     elif original_action_type in self._KNOWN_REPLACE_ACTION_TYPES:
                         original_item = multi_get(
                             action, original_action_type, 'replacementItem')
-
                         original_message_type = try_get_first_key(
                             original_item)
                         data = self._parse_item(original_item, data, offset)
@@ -1739,7 +1773,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     elif original_action_type in self._KNOWN_TOOLTIP_ACTION_TYPES:
                         original_item = multi_get(
                             action, original_action_type, 'tooltip')
-
                         original_message_type = try_get_first_key(
                             original_item)
                         data = self._parse_item(original_item, data, offset)
@@ -1751,24 +1784,13 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         if original_item:
                             original_message_type = try_get_first_key(
                                 original_item)
-
-                            header = original_item[original_message_type].get(
-                                'header')
-                            if header:
-                                parsed_header = self._parse_item(
-                                    header, offset=offset)
-                                header_message = parsed_header.get('message')
-
                             contents = original_item[original_message_type].get(
                                 'contents')
                             parsed_contents = self._parse_item(
                                 contents, offset=offset)
 
-                            if header:
-                                data.update(parsed_header)
                             data.update(parsed_contents)
-                            if header:
-                                data['header_message'] = header_message
+
                         else:
                             debug_log(
                                 'No bannerRenderer item',
