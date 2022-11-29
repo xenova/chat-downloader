@@ -882,6 +882,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # paid_message
         'authorNameTextColor', 'timestampColor', 'bodyBackgroundColor',
         'headerTextColor', 'headerBackgroundColor', 'bodyTextColor',
+        'textInputBackgroundColor',
 
         # paid_sticker
         'backgroundColor', 'moneyChipTextColor', 'moneyChipBackgroundColor',
@@ -967,7 +968,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     # [message deleted] or [message retracted]
     _KNOWN_REMOVE_ACTION_TYPES = {
-        'markChatItemsByAuthorAsDeletedAction': [  # TODO ban?
+        'removeChatItemAction': [
+            'banUser',
+        ],
+        'markChatItemsByAuthorAsDeletedAction': [
             'banUser'  # deletedStateMessage
         ],
         'markChatItemAsDeletedAction': [
@@ -1003,7 +1007,6 @@ class YouTubeChatDownloader(BaseChatDownloader):
     # liveChatPaidMessageFooterRenderer
     # liveChatProductButtonRenderer
     # liveChatPurchaseMessageEndpoint
-    # removeChatItemAction
     # replaceLiveChatRendererAction
     # showLiveChatDialogAction
     # showLiveChatSurveyCommand
@@ -2020,7 +2023,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         sleep_amount = 30  # params.get('retry_timeout')
 
         while True:
-            for video in self.get_user_videos(**user_video_args, video_status='live', params=params):
+            for video in self.get_user_videos(**user_video_args, video_type='live', params=params):
                 video_id = video['video_id']
                 video_title = video['title']
 
