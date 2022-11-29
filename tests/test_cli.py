@@ -16,6 +16,6 @@ class TestCLI(unittest.TestCase):
     """
 
     def test_cli(self):
-        url = 'https://www.youtube.com/watch?v=5qap5aO4i9A'
+        url = 'https://www.youtube.com/watch?v=jfKfPfyJRdk'
         args = [url, '--timeout', '10']
         main(args)
