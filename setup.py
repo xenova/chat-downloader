@@ -18,7 +18,6 @@ with open('README.rst') as readme_file:
 requirements = [
     'requests',
     'isodate',
-    'argparse',
     'docstring-parser',
     'colorlog',
     'websocket-client'
