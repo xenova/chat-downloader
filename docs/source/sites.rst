@@ -24,15 +24,6 @@
     :show-inheritance:
 
 
-:py:class:`FacebookChatDownloader`
-**********************************
-
-.. autoclass:: chat_downloader.sites.FacebookChatDownloader
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
 :py:class:`BaseChatDownloader`
 ******************************
 .. autoclass:: chat_downloader.sites.BaseChatDownloader

@@ -23,15 +23,7 @@ class TestSites(unittest.TestCase):
         tests = [
             {
                 'channel_id': 'UCSJ4gkVC6NrvII8umztf0Ow',
-                'video_status': 'live'
-            },
-            {
-                'user_id': 'NASAtelevision',
-                'video_status': 'all'
-            },
-            {
-                'custom_username': 'overwatchleague',
-                'video_status': 'past'
+                'video_type': 'live'
             }
         ]
 

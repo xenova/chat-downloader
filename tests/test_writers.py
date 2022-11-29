@@ -19,7 +19,7 @@ class TestWriters(unittest.TestCase):
     def test_writers(self):
 
         test_urls = [
-            'https://www.youtube.com/watch?v=5qap5aO4i9A',
+            'https://www.youtube.com/watch?v=jfKfPfyJRdk',
             'https://www.youtube.com/channel/UCSJ4gkVC6NrvII8umztf0Ow'
         ]
 

@@ -341,7 +341,7 @@ class BaseChatDownloader:
         {
             'name': 'Get a certain number of messages from a livestream.',
             'params': {
-                'url': 'https://www.youtube.com/watch?v=5qap5aO4i9A',
+                'url': 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
                 'max_messages': 10,
                 'timeout': 60,  # As a fallback
             },
@@ -355,7 +355,7 @@ class BaseChatDownloader:
         {
             'name': 'Scheme not supplied',
             'params': {
-                'url': 'www.youtube.com/watch?v=5qap5aO4i9A',
+                'url': 'www.youtube.com/watch?v=jfKfPfyJRdk',
                 'max_messages': 10,
                 'timeout': 60,  # As a fallback
             },

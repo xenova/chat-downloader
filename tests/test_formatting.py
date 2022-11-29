@@ -15,7 +15,7 @@ class TestFormatting(unittest.TestCase):
     """
 
     def test_formatting(self):
-        test_url = 'https://www.youtube.com/watch?v=5qap5aO4i9A'
+        test_url = 'https://www.youtube.com/watch?v=jfKfPfyJRdk'
         chat = ChatDownloader().get_chat(test_url, format='24_hour', max_messages=10)
         for message in chat:
             chat.print_formatted(message)
