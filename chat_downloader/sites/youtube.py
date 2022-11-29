@@ -228,7 +228,15 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 'messages_condition': lambda messages: len(messages) > 0,
             }
         },
-
+        {  # https://github.com/xenova/chat-downloader/issues/175#issue-1438381085
+            'name': 'Chat replay with a message that has no author name',
+            'params': {
+                'url': 'https://www.youtube.com/watch?v=-JU0rbfPECY',
+                'timeout': 5,
+                'start_time': '1:53:29',
+                'end_time': '1:53:30',
+            }
+        },
 
 
 
@@ -684,6 +692,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
+        # Sometimes YouTube channels can have no names, so, account for this
+        if 'author' in info and 'name' not in info['author']:
+            info['author']['name'] = ''
+
         # TODO determine if youtube glitch has occurred
         # round(time_in_seconds/timestamp) == 1
         time_in_seconds = info.get('time_in_seconds')
@@ -905,6 +917,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # gifts
         'primaryText': r('message', _parse_text),
 
+        'bannerProperties': 'banner_properties',
+        'headerOverlayImage': r('header_overlay_image', _parse_thumbnails),
     }
 
     _COLOUR_KEYS = [
