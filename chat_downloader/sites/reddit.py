@@ -38,7 +38,6 @@ import random
 import json
 import websocket
 import time
-import re
 
 
 class RedditError(SiteError):
@@ -173,22 +172,6 @@ class RedditChatDownloader(BaseChatDownloader):
                 'timeout': 5
             }
         },
-
-        # Subreddits:
-        {
-            'name': 'Get chat of top livestream/post for subreddit #1',
-            'params': {
-                'url': 'https://www.reddit.com/rpan/r/pan',
-                'timeout': 5
-            }
-        },
-        {
-            'name': 'Get chat of top livestream/post for subreddit #2',
-            'params': {
-                'url': 'https://www.reddit.com/r/RedditSessions',
-                'timeout': 5
-            }
-        }
     ]
 
     # Regex provided by youtube-dl
