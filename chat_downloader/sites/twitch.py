@@ -312,7 +312,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 emote_image_list.append(image)
         return emote_image_list
 
-    _EMOTE_REGEX = r'(\d+):([\d,-]+)'
+    _EMOTE_REGEX = r'(\w+):([\d,-]+)'
     _EMOTE_URL_TEMPLATE = 'https://static-cdn.jtvnw.net/emoticons/v2/{}/default/{}/{}'
 
     @staticmethod
