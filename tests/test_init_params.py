@@ -20,7 +20,7 @@ class TestInitParams(unittest.TestCase):
         session = ChatDownloader(**init_params)
 
         try:
-            url = 'https://www.youtube.com/watch?v=5qap5aO4i9A'
+            url = 'https://www.youtube.com/watch?v=jfKfPfyJRdk'
             chat = list(session.get_chat(url, max_messages=1))
 
             self.assertEqual(len(chat), 1)
