@@ -1285,17 +1285,48 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def get_playlist_items(self, playlist_url, params=None):
 
-        yt_initial_data, ytcfg, player_response_info = self._get_initial_info(
+        yt_initial_data, ytcfg, _ = self._get_initial_info(
             playlist_url, params)
 
-        items = self._get_rendered_content(
-            yt_initial_data)['playlistVideoListRenderer']['contents']
+        page_contents = self._get_rendered_content(yt_initial_data)
 
-        for item in items:
-            playlist_video = item.get('playlistVideoRenderer')
+        # TODO remove code duplication
+        api_key = ytcfg.get('INNERTUBE_API_KEY')
+        continuation_url = self._YOUTUBE_BROWSE_API_TEMPLATE.format(api_key)
 
-            if playlist_video:
-                yield self._parse_video(playlist_video)
+        continuation_params = {
+            'context': ytcfg.get('INNERTUBE_CONTEXT') or {}
+        }
+        continuation = None
+        first_time = True
+        while True:
+            if first_time:
+                items = multi_get(
+                    page_contents, 'playlistVideoListRenderer', 'contents')
+                first_time = False
+            else:
+                continuation_params['continuation'] = continuation
+                yt_info = self._get_continuation_info(
+                    continuation_url, params, json=continuation_params)
+                items = multi_get(yt_info, 'onResponseReceivedActions',
+                                  0, 'appendContinuationItemsAction', 'continuationItems')
+
+            if not items:
+                break
+
+            continuation = None
+            for item in items:
+                vid = item.get('playlistVideoRenderer')
+                continuation_item = item.get('continuationItemRenderer')
+
+                if vid:
+                    yield self._parse_video(vid)
+                elif continuation_item:
+                    continuation = multi_get(
+                        continuation_item, 'continuationEndpoint', 'continuationCommand', 'token')
+
+            if not continuation:
+                break
 
     _CONSENT_ID_REGEX = r'PENDING\+(\d+)'
     # https://github.com/ytdl-org/youtube-dl/blob/a8035827177d6b59aca03bd717acb6a9bdd75ada/youtube_dl/extractor/youtube.py#L251
@@ -1634,7 +1665,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
-        chat_type = params.get('chat_type').title()  # Live or Top
+        chat_type = params.get('chat_type', 'live').title()  # Live or Top
         continuation_index = 0 if chat_type == 'Top' else 1
         continuation_info = list(initial_continuation_info.items())[
             continuation_index]
