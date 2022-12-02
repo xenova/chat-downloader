@@ -45,6 +45,7 @@ from ..utils.core import (
 
 from ..debugging import (log, debug_log)
 
+from itertools import islice
 import json
 import time
 import random
@@ -1150,6 +1151,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
     _VIDEO_REMAPPING = {
         'videoId': 'video_id',
         'title': r('title', lambda x: YouTubeChatDownloader._parse_runs(x)['message']),
+        'videoType': 'video_type',
         'viewCountText': r('view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
         'shortViewCountText': r('short_view_count', lambda x: YouTubeChatDownloader._parse_text(x)),
 
@@ -1158,6 +1160,19 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     @staticmethod
     def _parse_video(video_renderer):
+        # Get video type:
+        # One of DEFAULT, UPCOMING, LIVE
+        video_type = 'DEFAULT'
+        thumbnail_overlays = multi_get(
+            video_renderer, 'thumbnailOverlays') or []
+        for thumbnail_overlay in thumbnail_overlays:
+            video_type = multi_get(
+                thumbnail_overlay, 'thumbnailOverlayTimeStatusRenderer', 'style')
+            if video_type:
+                break
+
+        video_renderer['videoType'] = video_type
+
         return r.remap_dict(video_renderer, YouTubeChatDownloader._VIDEO_REMAPPING)
 
     _VIDEO_TYPE_REMAPPING = {
@@ -2090,11 +2105,21 @@ class YouTubeChatDownloader(BaseChatDownloader):
         list_of_vids_to_ignore = params.get('ignore') or []
 
         sleep_amount = 30  # params.get('retry_timeout')
+        # For efficiency purposes, do not loop over all past broadcasts if not found
+        max_vids_to_try = 5
 
         while True:
-            for video in self.get_user_videos(**user_video_args, video_type='live', params=params):
+
+            vids = self.get_user_videos(
+                **user_video_args, video_type='live', params=params)
+
+            for video in islice(vids, max_vids_to_try):
                 video_id = video['video_id']
-                video_title = video['title']
+
+                if video['video_type'] not in ('LIVE', 'UPCOMING'):
+                    log('debug',
+                        f'Skipping video with ID: "{video_id}" (not live/upcoming)')
+                    continue
 
                 if video_id in list_of_vids_to_ignore:
                     log('debug', f'Skipping video with ID: "{video_id}"')
@@ -2104,7 +2129,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     chat = self.get_chat_by_video_id(video_id, params)
 
                     log('info',
-                        f"Found a livestream: \"{video_title}\" ({video_id}).")
+                        f"Found a livestream: \"{video['title']}\" ({video_id}).")
 
                     for key, value in vars(chat).items():  # Update chat item
                         if key != 'chat' and not key.startswith('_'):
