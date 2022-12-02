@@ -626,22 +626,21 @@ class YouTubeChatDownloader(BaseChatDownloader):
                 emoji = run['emoji']
                 emoji_id = emoji.get('emojiId')
 
-                name = multi_get(emoji, 'shortcuts', 0)
+                name = multi_get(emoji, 'shortcuts', 0) or emoji_id
 
-                if name:
-                    if emoji_id and emoji_id not in message_emotes:
+                if emoji_id and emoji_id not in message_emotes:
 
-                        # TODO change to remapping?
-                        message_emotes[emoji_id] = {
-                            'id': emoji_id,
-                            'name': name,
-                            'shortcuts': emoji.get('shortcuts'),
-                            'search_terms': emoji.get('searchTerms'),
-                            'images': YouTubeChatDownloader._parse_thumbnails(emoji.get('image', {})),
-                            'is_custom_emoji': emoji.get('isCustomEmoji', False)
-                        }
+                    # TODO change to remapping?
+                    message_emotes[emoji_id] = {
+                        'id': emoji_id,
+                        'name': name,
+                        'shortcuts': emoji.get('shortcuts'),
+                        'search_terms': emoji.get('searchTerms'),
+                        'images': YouTubeChatDownloader._parse_thumbnails(emoji.get('image', {})),
+                        'is_custom_emoji': emoji.get('isCustomEmoji', False)
+                    }
 
-                    message_info['message'] += name
+                message_info['message'] += name
 
             else:
                 # unknown run
