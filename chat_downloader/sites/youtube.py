@@ -559,7 +559,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
                         youtube(?:kids)?\.com
                     )/
                     (?:
-                        (?P<type>channel|c|user)/
+                        (?P<type>channel/|c/|user/|@)
                     )?
                     (?P<id>[a-zA-Z0-9_-]+)'''
     }
@@ -1182,7 +1182,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'live': 'streams',
     }
 
-    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, video_type='videos', params=None):
+    def get_user_videos(self, channel_id=None, user_id=None, custom_username=None, handle=None, video_type='videos', params=None):
         """Retrieve all videos listed on the user's channel
 
         If more than one of `channel_id`, `user_id` and `custom_username`
@@ -1194,9 +1194,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         :param user_id: The user's ID, defaults to None
             (e.g., https://www.youtube.com/user/<user_id>)
         :type user_id: str, optional
-        :param custom_username: [description], defaults to None
+        :param custom_username: User's custom username, defaults to None
             (e.g., https://www.youtube.com/c/<custom_username>)
         :type custom_username: str, optional
+        :param handle: User's handle, defaults to None
+            (e.g., https://www.youtube.com/@<handle>)
+        :type handle: str, optional
         :param video_type: Determines which videos will be retrieved, defaults to 'videos'.
             Must be one of 'videos', 'live', or 'shorts'.
         :type video_type: str, optional
@@ -1213,13 +1216,16 @@ class YouTubeChatDownloader(BaseChatDownloader):
         _type = ''
         if channel_id:
             _id = channel_id
-            _type = 'channel'
+            _type = 'channel/'
         elif user_id:
             _id = user_id
-            _type = 'user'
+            _type = 'user/'
         elif custom_username:
             _id = custom_username
-            _type = 'c'
+            _type = 'c/'
+        elif handle:
+            _id = handle
+            _type = '@'
         else:
             raise ValueError('No user type specified.')
 
@@ -1230,7 +1236,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
             raise ValueError(
                 f'Invalid argument passed for video_type. Must be one of {set(self._VIDEO_TYPE_REMAPPING.keys())}')
 
-        user_url = f'https://www.youtube.com/{_type}/{_id}'
+        user_url = f'https://www.youtube.com/{_type}{_id}'
         yt_info, ytcfg, _ = self._get_initial_info(
             f'{user_url}/{vid_type}', params)
 
@@ -2056,16 +2062,23 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     def _get_chat_by_user(self, match, params):
         match_id = match.group('id')
-        user_type = match.group('type')  # channel|c|user
+        user_type = match.group('type') or ''
+        user_type = user_type.rstrip('/')  # channel|c|user|@|
 
         if user_type == 'channel':
             return self.get_chat_by_channel_id(match_id, params)
 
-        if user_type == 'user':
+        elif user_type == 'user':
             return self.get_chat_by_user_id(match_id, params)
 
-        # Otherwise assume custom username
-        return self.get_chat_by_custom_username(match_id, params)
+        elif user_type in ('c', ''):
+            return self.get_chat_by_custom_username(match_id, params)
+
+        elif user_type == '@':
+            return self.get_chat_by_handle(match_id, params)
+
+        else:
+            raise ValueError(f'Invalid user_type: {user_type}')
 
     def get_chat_by_channel_id(self, channel_id, params):
         return self._get_chat_by_user_args({
@@ -2086,6 +2099,11 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def get_chat_by_custom_username(self, custom_username, params):
         return self._get_chat_by_user_args({
             'custom_username': custom_username
+        }, params)
+
+    def get_chat_by_handle(self, handle, params):
+        return self._get_chat_by_user_args({
+            'handle': handle
         }, params)
 
     def _get_chat_by_user_args(self, user_video_args, params):
