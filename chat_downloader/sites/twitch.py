@@ -1312,7 +1312,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         )
 
     _MESSAGE_REGEX = re.compile(
-        r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:.+#\S+)?(?:.:)*([^\r\n]*)', re.MULTILINE)
+        r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:[^#\r\n]+#)?\s(?:\S+)?(?:\s:([^\r\n]*))?', re.MULTILINE)
     # Groups:
     # 1. Tag info
     # 2. Action type
