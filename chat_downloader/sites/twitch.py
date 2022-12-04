@@ -525,7 +525,7 @@ class TwitchChatDownloader(BaseChatDownloader):
         'emotes': r('emotes', _parse_emotes),
         'flags': 'flags',
         'first-msg': r('is_first_message', _parse_bool),
-
+        'returning-chatter': r('is_returning_chatter', _parse_bool),
 
 
         # ROOMSTATE
