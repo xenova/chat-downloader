@@ -210,7 +210,6 @@ class TwitchChatDownloader(BaseChatDownloader):
     _CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
 
     _GQL_API_URL = 'https://gql.twitch.tv/gql'
-    _API_TEMPLATE = 'https://api.twitch.tv/v5/videos/{}/comments?client_id={}'
 
     _PING_TEXT = 'PING :tmi.twitch.tv'
     _PONG_TEXT = 'PONG :tmi.twitch.tv'
@@ -240,52 +239,43 @@ class TwitchChatDownloader(BaseChatDownloader):
         ]
 
     @staticmethod
-    def _parse_commenter(commenter):
-        info = {}
-        for key in commenter or []:
-            r.remap(info, TwitchChatDownloader._AUTHOR_REMAPPING,
-                    key, commenter[key])
-        return info
-
-    @staticmethod
     def _parse_message_info(message):
-        # Ignore: fragments, is_action
-        message_text = message.get('body') or ''
+        message_info = {
+            'author_colour': message.get('userColor'),
+            'author_badges': message.get('userBadges') or [],
+        }
 
-        message_emotes = {}
-        locations = {}
+        message_text = ''
+        emotes = {}
+        emote_locations = {}
 
-        for emoticon in message.get('emoticons') or []:
-            emote_id = emoticon.get('_id')
-            begin = emoticon.get('begin')
-            end = emoticon.get('end')
+        for fragment in message['fragments']:
+            message_text += fragment['text']
 
-            if emote_id:
-                if emote_id not in message_emotes:
-                    message_emotes[emote_id] = {
+            emote = fragment.get('emote')
+            if emote:
+                emote_id = emote['emoteID']
+                _, *positions = emote['id'].split(';')
+
+                begin, end = map(int, positions)
+
+                if emote_id not in emotes:
+                    emote_locations[emote_id] = []
+                    emotes[emote_id] = {
                         'id': emote_id,
                         'images': TwitchChatDownloader._generate_emote_image_list(emote_id),
                         'name': message_text[begin:end + 1]
                     }
 
-                    locations[emote_id] = []
+                emote_locations[emote_id].append(f'{begin}-{end}')
 
-                locations[emote_id].append(f'{begin}-{end}')
+        message_info['message'] = message_text
 
-        for emote_id in message_emotes:
-            message_emotes[emote_id]['locations'] = ','.join(
-                locations[emote_id])
-
-        message_info = {
-            'message': message_text,
-            'author_colour': message.get('user_color'),
-            'author_badges': message.get('user_badges') or [],
-            'user_notice_params': message.get('user_notice_params') or {},
-        }
-
-        if message_emotes:
-            message_info['emotes'] = list(message_emotes.values())
-            # TwitchChatDownloader._add_text_for_emotes(message_info['message'], message_info['emotes'])
+        if emotes:
+            for emote_id in emotes:
+                emotes[emote_id]['locations'] = ','.join(
+                    emote_locations[emote_id])
+            message_info['emotes'] = list(emotes.values())
 
         return message_info
 
@@ -345,15 +335,27 @@ class TwitchChatDownloader(BaseChatDownloader):
         'bio': 'bio'
     }
 
+    _USER_REMAPPING = {
+        'id': 'id',
+        'login': 'name',
+        'displayName': 'display_name',
+        'profileImageURL': 'profile_image_url',
+        'primaryColorHex': 'colour'
+    }
+
+    @staticmethod
+    def _parse_user(item):
+        if isinstance(item, dict):
+            return r.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
+        return {}
+
     _COMMENT_REMAPPING = {
-        '_id': 'message_id',
-        'created_at': r('timestamp', timestamp_to_microseconds),
-        'commenter': r('author', _parse_commenter),
+        'id': 'message_id',
+        'createdAt': r('timestamp', timestamp_to_microseconds),
+        'commenter': r('author', _parse_user),
 
-        'content_offset_seconds': 'time_in_seconds',
+        'contentOffsetSeconds': 'time_in_seconds',
 
-        'source': 'source',
-        'state': 'state',
         # TODO make sure body vs. fragments okay
         'message': r(None, _parse_message_info, True)
     }
@@ -802,8 +804,8 @@ class TwitchChatDownloader(BaseChatDownloader):
             self._SUBSCRIBER_BADGE_INFO[channel_id] = self._session_get_json(
                 url).get('badge_sets') or {}
 
-    @ staticmethod
-    def _parse_item(item, offset):
+    @staticmethod
+    def _parse_item(item, offset, channel_id=None):
         info = {}
 
         for key in item:
@@ -814,24 +816,10 @@ class TwitchChatDownloader(BaseChatDownloader):
             info['time_in_seconds'] -= offset
             info['time_text'] = seconds_to_time(int(info['time_in_seconds']))
 
-        channel_id = item.get('channel_id')
-
-        # author_badges
-
         badges = info.pop('author_badges', None)
         if badges:
             info['author']['badges'] = list(map(lambda x: TwitchChatDownloader._parse_badge_info(
-                x.get('_id'), x.get('version'), channel_id), badges))
-
-        user_notice_params = info.pop('user_notice_params', {})
-
-        for key in user_notice_params:
-            r.remap(info, TwitchChatDownloader._MESSAGE_PARAM_REMAPPING,
-                    key, user_notice_params[key], True)
-
-        # TODO add user colour to author dict
-        # TODO check this works
-        # author_colour
+                x.get('setID'), x.get('version'), channel_id), badges))
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
@@ -842,9 +830,6 @@ class TwitchChatDownloader(BaseChatDownloader):
         else:
             info['message_type'] = 'text_message'
 
-        # remove profile_image_url if present
-        info.pop('profile_image_url', None)
-
         return info
 
     _OPERATION_HASHES = {
@@ -854,6 +839,8 @@ class TwitchChatDownloader(BaseChatDownloader):
         'ClipsCards__User': 'b73ad2bfaecfd30a9e6c28fada15bd97032c83ec77a0440766a56fe0bd632777',
         'VideoMetadata': '226edb3e692509f727fd56821f5653c05740242c82b0388883e0c0e75dcbf687',
         'FilterableVideoTower_Videos': 'a937f1d22e269e39a03b509f65a7490f9fc247d7f83d6ac1421523e3b68042cb',
+
+        'VideoCommentsByOffsetOrCursor': 'b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a',
 
         # Not used yet
         # 'CollectionSideBar': '27111f1b382effad0b6def325caef1909c733fe6a4fbabf54f8d491ef2cf2f14',
@@ -877,20 +864,6 @@ class TwitchChatDownloader(BaseChatDownloader):
                 }
             }
         return self._download_base_gql(ops)
-
-    _USER_REMAPPING = {
-        'id': 'id',
-        'login': 'name',
-        'displayName': 'display_name',
-        'profileImageURL': 'profile_image_url',
-        'primaryColorHex': 'colour'
-    }
-
-    @staticmethod
-    def _parse_user(item):
-        if isinstance(item, dict):
-            return r.remap_dict(item, TwitchChatDownloader._USER_REMAPPING)
-        return None
 
     _GAME_REMAPPING = {
         'id': 'id',
@@ -1162,29 +1135,50 @@ class TwitchChatDownloader(BaseChatDownloader):
         messages_groups_to_add = params.get('message_groups') or []
         messages_types_to_add = params.get('message_types') or []
 
-        api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
+        # api_url = self._API_TEMPLATE.format(vod_id, self._CLIENT_ID)
 
         message_count = 0
         # do not need inactivity timeout (not live)
+
         cursor = ''
         while True:
-            url = f'{api_url}&cursor={cursor}&content_offset_seconds={content_offset_seconds}'
+            variables = {
+                'videoID': vod_id,
+            }
+
+            if cursor:
+                variables['cursor'] = cursor
+            else:
+                variables['contentOffsetSeconds'] = content_offset_seconds
+
+            query = [{
+                'operationName': 'VideoCommentsByOffsetOrCursor',
+                'variables': variables
+            }]
 
             for attempt_number in attempts(max_attempts):
                 try:
-                    info = self._session_get_json(url)
+                    info = self._download_gql(query)[0]['data']['video']
                     break
                 except (JSONDecodeError, RequestException) as e:
                     self.retry(attempt_number, error=e, **params)
 
-            error_message = multi_get(info, 'error', 'message')
+            comments = info.get('comments')
+            if not comments:
+                break
 
-            if error_message:
-                raise TwitchError(error_message)
+            # Used for custom badge retrieval
+            creator_channel_id = multi_get(info, 'creator', 'channel', 'id')
 
-            comments = info.get('comments') or []
-            for comment in comments:
-                data = self._parse_item(comment, offset)
+            edges = comments.get('edges') or []
+
+            for edge in edges:
+                cursor = edge.get('cursor')
+                node = edge.get('node')
+                if not node:
+                    continue
+
+                data = self._parse_item(node, offset, creator_channel_id)
 
                 # test for missing keys
                 missing_keys = data.keys() - TwitchChatDownloader._KNOWN_COMMENT_KEYS
@@ -1192,9 +1186,9 @@ class TwitchChatDownloader(BaseChatDownloader):
                 if missing_keys:
                     debug_log(
                         f'Missing keys found: {missing_keys}',
-                        f'Original data: {comment}',
+                        f'Original data: {node}',
                         f'Parsed data: {data}',
-                        comment.keys(),
+                        node.keys(),
                         TwitchChatDownloader._KNOWN_COMMENT_KEYS
                     )
 
@@ -1223,10 +1217,8 @@ class TwitchChatDownloader(BaseChatDownloader):
 
             log('debug', f'Total number of messages: {message_count}')
 
-            cursor = info.get('_next')
-
-            if not cursor:
-                return
+            if not comments['pageInfo']['hasNextPage']:
+                break
 
     def _get_chat_by_vod_id(self, match, params):
         return self.get_chat_by_vod_id(match.group('id'), params)
@@ -1326,17 +1318,22 @@ class TwitchChatDownloader(BaseChatDownloader):
     _BADGE_ID_REGEX = r'v1/([^/]+)/'
 
     @staticmethod
-    def _parse_badge_info(name, version, channel_id):
+    def _parse_badge_info(name, version, channel_id=None):
         new_badge = {
             'name': replace_with_underscores(name),
             'version': int_or_none(version, version)
         }
 
         # prioritise custom emotes (e.g. subscriber and bits)
-        channel_id = int(channel_id)
-        new_badge_info = multi_get(
-            TwitchChatDownloader._SUBSCRIBER_BADGE_INFO, channel_id, name, 'versions', version) or multi_get(
-            TwitchChatDownloader._BADGE_INFO, name, 'versions', version)
+
+        new_badge_info = None
+        if channel_id is not None:
+            new_badge_info = multi_get(TwitchChatDownloader._SUBSCRIBER_BADGE_INFO, int(
+                channel_id), name, 'versions', version)
+
+        if not new_badge_info:
+            new_badge_info = multi_get(
+                TwitchChatDownloader._BADGE_INFO, name, 'versions', version)
 
         if new_badge_info:
             for key in TwitchChatDownloader._BADGE_KEYS:
