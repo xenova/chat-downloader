@@ -468,6 +468,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             # Gifts
             'sponsorships_gift_purchase_announcement',
+            'sponsorships_gift_redemption_announcement'
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
