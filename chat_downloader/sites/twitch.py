@@ -1238,7 +1238,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             try:
                 video = self._download_gql(query)[0]['data']['video']
                 break
-            except (JSONDecodeError, RequestException) as e:
+            except (JSONDecodeError, RequestException, KeyError) as e:
                 self.retry(attempt_number, error=e, **params)
 
         if not video:
