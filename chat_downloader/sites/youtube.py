@@ -46,7 +46,6 @@ from ..utils.core import (
 from ..debugging import (log, debug_log)
 
 from itertools import islice
-import json
 import time
 import random
 import re
@@ -1083,7 +1082,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # TODO add support for poll actions
         'showLiveChatActionPanelAction': [],
         'updateLiveChatPollAction': [],
-        'closeLiveChatActionPanelAction': []
+        'closeLiveChatActionPanelAction': [],
+
+        'liveChatReportModerationStateCommand': [],
 
     }
 
