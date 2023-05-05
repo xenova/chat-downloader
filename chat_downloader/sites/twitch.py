@@ -207,7 +207,8 @@ class TwitchChatDownloader(BaseChatDownloader):
                         '''
     }
 
-    _CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
+    # _CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'  # public client id
+    _CLIENT_ID = 'kd1unb4b3q4t58fwlpcbzcbnm76a8fp'  # public client id
 
     _GQL_API_URL = 'https://gql.twitch.tv/gql'
 
