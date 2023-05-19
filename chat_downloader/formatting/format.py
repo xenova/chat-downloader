@@ -94,7 +94,8 @@ class ItemFormatter:
                 if separator:
                     if index == 'author.badges':
                         value = separator.join(
-                            map(lambda key: key.get('title'), value))
+                            filter(None, map(lambda key: key.get('title'), value))
+                        )
                     elif isinstance(value, (tuple, list)):
                         value = separator.join(
                             map(lambda x: str(x), value))

@@ -819,8 +819,11 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         badges = info.pop('author_badges', None)
         if badges:
-            info['author']['badges'] = list(map(lambda x: TwitchChatDownloader._parse_badge_info(
-                x.get('setID'), x.get('version'), channel_id), badges))
+            info['author']['badges'] = [
+                TwitchChatDownloader._parse_badge_info(x.get('setID'), x.get('version'), channel_id)
+                for x in badges
+                if x.get('setID') and x.get('version')
+            ]
 
         BaseChatDownloader._move_to_dict(info, 'author')
 
