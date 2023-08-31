@@ -1355,21 +1355,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _initialize_consent(self):
         if self.get_cookie_value('__Secure-3PSID'):
             return
-
-        consent_id = None
-        consent = self.get_cookie_value('CONSENT')
-
-        if consent:
-            if 'YES' in consent:
-                return
-
-            consent_id = regex_search(consent, self._CONSENT_ID_REGEX)
-
-        if not consent_id:
-            consent_id = random.randint(100, 999)
-
-        self.set_cookie_value('.youtube.com', 'CONSENT',
-                              f'YES+cb.20210328-17-p0.en+FX+{consent_id}')
+        socs = self.get_cookie_value('SOCS')
+        if socs and not socs.value.startswith('CAA'):  # not consented
+            return
+        self.set_cookie_value('.youtube.com', 'SOCS', 'CAI', secure=True)  # accept all (required for mixes)
 
     def _generate_sapisidhash_header(self):
         sapis_id = self.get_cookie_value('SAPISID')
