@@ -960,7 +960,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'header', 'contents', 'actionId',
 
         # tooltipRenderer
-        'dismissStrategy', 'suggestedPosition', 'promoConfig'
+        'dismissStrategy', 'suggestedPosition', 'promoConfig',
+
+        # redundant field for ticker renderer
+        'authorUsername',
     ]
 
     _KNOWN_KEYS = set(list(_REMAPPING.keys()) +
