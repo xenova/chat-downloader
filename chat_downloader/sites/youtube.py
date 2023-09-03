@@ -916,6 +916,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # gifts
         'primaryText': r('message', _parse_text),
 
+        'bannerType': 'banner_type',
         'bannerProperties': 'banner_properties',
         'headerOverlayImage': r('header_overlay_image', _parse_thumbnails),
     }
