@@ -523,8 +523,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
                             youtube\.googleapis\.com/)                        # the various hostnames, with wildcard subdomains
                          (?:.*?\#/)?                                          # handle anchor (#/) redirect urls
                          (?:                                                  # the various things that can precede the ID:
-                             # v/ or embed/ or e/
-                             (?:(?:v|embed|e)/(?!videoseries))
+                             # v/ or embed/ or e/, or the newer shorts/, live/ or watch/
+                             (?:(?:v|embed|e|shorts|live|watch)/(?!videoseries))
                              |(?:                                             # or the v= param in all its forms
                                  # preceding watch(_popup|.php) or nothing (like /?v=xxxx)
                                  (?:(?:watch|movie)(?:_popup)?(?:\.php)?/?)?
