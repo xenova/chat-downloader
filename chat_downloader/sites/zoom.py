@@ -37,7 +37,6 @@ class ZoomChatDownloader(BaseChatDownloader):
     _ZOOM_PATH_TEMPLATE = 'rec/play/{id}'
     _ZOOM_API_TEMPLATE = 'nws/recording/1.0/play/info/{file_id}'
 
-    _INITIAL_INFO_REGEX = r'(?s)window\.__data__\s*=\s*({.+?});'
     _CHAT_MESSAGES_REGEX = r'window\.__data__\.chatList\.push\((\{[\s\S]+?\})\)'
 
     _SITE_DEFAULT_PARAMS = {
@@ -96,7 +95,6 @@ class ZoomChatDownloader(BaseChatDownloader):
     _VALID_URLS = {
         '_get_chat_by_video_id': r'(?P<base_url>https?://(?:[^.]+\.)?zoom.us/)rec(?:ording)?/(?:play|share)/(?P<id>[A-Za-z0-9_.-]+)',
     }
-    _ERROR_MESSAGE_REGEX = r'<span class="error-message">\s*([^<]+?)\s*<\/span>'
 
     def _get_chat_by_video_id(self, match, params):
         match_id = match.group('id')
@@ -104,27 +102,7 @@ class ZoomChatDownloader(BaseChatDownloader):
         return self.get_chat_by_video_id(match_id, params, base_url=base_url)
 
     def get_chat_by_video_id(self, video_id, params, base_url=_ZOOM_HOMEPAGE):
-
-        url = base_url + self._ZOOM_PATH_TEMPLATE.format(id=video_id)
-        page_data = self._session_get(url).text
-
-        json_string = regex_search(page_data, self._INITIAL_INFO_REGEX)
-
-        if json_string is None:
-            error_message = regex_search(page_data, self._ERROR_MESSAGE_REGEX)
-            if error_message:
-                raise ZoomError(error_message.split('\n')[0])
-            else:
-                raise ParsingError('Error parsing video')
-
-        initial_info = self._parse_js_dict(json_string)
-        video_type = 'video' if initial_info.get('isVideo') else 'not_video'
-
-        file_id = initial_info.get('fileId')
-        if not file_id:
-            raise ParsingError('Error parsing video. Unable to find file ID.')
-
-        api_url = base_url + self._ZOOM_API_TEMPLATE.format(file_id=file_id)
+        api_url = base_url + self._ZOOM_API_TEMPLATE.format(file_id=video_id)
 
         api_data = self._session_get_json(api_url)
 
@@ -142,7 +120,7 @@ class ZoomChatDownloader(BaseChatDownloader):
         return Chat(
             self._get_chat_messages(chat_messages, params),
             title=title,
-            video_type=video_type,
+            video_type='video',
             start_time=result.get('fileStartTime'),
             id=video_id,
             duration=result.get('duration'),
