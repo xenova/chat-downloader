@@ -919,6 +919,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
         'bannerType': 'banner_type',
         'bannerProperties': 'banner_properties',
         'headerOverlayImage': r('header_overlay_image', _parse_thumbnails),
+
+        # hearted message
+        'creatorHeartButton': 'creator_heart_button',
     }
 
     _COLOUR_KEYS = [
