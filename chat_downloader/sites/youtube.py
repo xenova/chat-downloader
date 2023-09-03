@@ -922,6 +922,9 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         # hearted message
         'creatorHeartButton': 'creator_heart_button',
+
+        # other
+        'lowerBumper': 'lower_bumper',
     }
 
     _COLOUR_KEYS = [
