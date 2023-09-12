@@ -9,6 +9,7 @@
             },
             "author.badges": {
                 "template": "({}) ",
+                "item_template": "{title}",
                 "separator": ", "
             },
             "money.text": "*{}* ",
@@ -49,7 +50,7 @@
                 "deleted_message",
                 "ban_user"
             ],
-            "template":"{time_text|timestamp}{message}",
+            "template": "{time_text|timestamp}{message}",
             "inherit": "default",
             "keys": {
                 "message": "{}"
