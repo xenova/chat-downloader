@@ -65,6 +65,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _SITE_DEFAULT_PARAMS = {
         'format': 'youtube',
+        'message_groups': ['messages', 'superchat']
     }
 
     _TESTS = [
@@ -467,6 +468,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             # Gifts
             'sponsorships_gift_purchase_announcement',
+            'sponsorships_gift_redemption_announcement'
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
