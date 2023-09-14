@@ -1309,11 +1309,13 @@ class TwitchChatDownloader(BaseChatDownloader):
         )
 
     _MESSAGE_REGEX = re.compile(
-        r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:[^#\r\n]+#)?\s(?:\S+)?(?:\s:([^\r\n]*))?', re.MULTILINE)
+        # r'^@(.+?(?=\s+:)).*tmi\.twitch\.tv\s+(\S+)(?:[^#\r\n]+#)?\s(?:\S+)?(?:\s:([^\r\n]*))?', re.MULTILINE)
+        r'^@(.+?(?=\s+:))\s+:(.*)?tmi\.twitch\.tv\s+(\S+)(?:[^#\r\n]+#)?\s(?:\S+)?(?:\s:([^\r\n]*))?', re.MULTILINE)
     # Groups:
     # 1. Tag info
-    # 2. Action type
-    # 3. Message
+    # 2. ?User name
+    # 3. Action type
+    # 4. Message
 
     _BADGE_KEYS = ('title', 'image1x', 'image2x',
                    'image4x', 'clickAction', 'clickURL')
@@ -1416,7 +1418,7 @@ class TwitchChatDownloader(BaseChatDownloader):
             r.remap(info, TwitchChatDownloader._IRC_REMAPPING,
                     keys[0], keys[1], keep_unknown_keys=True, replace_char_with_underscores='-')
 
-        message_match = match.group(3)
+        message_match = match.group(4)
         if message_match:
             info['message'] = remove_prefixes(message_match, '\u0001ACTION ')
 
@@ -1443,16 +1445,20 @@ class TwitchChatDownloader(BaseChatDownloader):
             subscriber_badge['months'] = int_or_none(
                 subscriber_badge_metadata['version'], 0)
 
-        author_display_name = info.get('author_display_name')
-        if author_display_name:
-            info['author_name'] = author_display_name.lower()
+        user_name_match = match.group(2)
+        if user_name_match:
+            info['author_name'] = user_name_match.split('!')[0]
+
+        # author_display_name = info.get('author_display_name')
+        # if author_display_name:
+            # info['author_name'] = author_display_name.lower()
 
         in_reply_to = BaseChatDownloader._move_to_dict(info, 'in_reply_to')
 
         BaseChatDownloader._move_to_dict(in_reply_to, 'author')
         BaseChatDownloader._move_to_dict(info, 'author')
 
-        original_action_type = match.group(2)
+        original_action_type = match.group(3)
 
         if original_action_type:
             new_action_type = TwitchChatDownloader._ACTION_TYPE_REMAPPING.get(
