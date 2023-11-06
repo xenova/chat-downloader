@@ -68,7 +68,7 @@ pip install -e .[dev]
 
 
 7. When the tests pass, [add](https://git-scm.com/docs/git-add) the new files and [commit](https://git-scm.com/docs/git-commit) them and [push](https://git-scm.com/docs/git-push) the result, like this:
-    ```
+    ```bash
     git add path/to/code.py
     git commit -m 'message'
     git push origin name
