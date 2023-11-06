@@ -124,7 +124,7 @@ Chat Items
 
 Chat items/messages are parsed into JSON objects (a.k.a. dictionaries) and should follow a format similar to this:
 
-.. code-block::
+.. code:: json
 
     {
         ...
