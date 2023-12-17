@@ -126,19 +126,12 @@ For advanced python use-cases and examples, consult the `Python Documentation <h
 
 Docker
 ------
-
-.. code:: console
     
-    /home/download - the place where the file will be saved. Mount it to a desired place with -v option.
-
-    channelURL - the url of the stream you want to record.
-
-    channelName - the name for the stream.
-
-    uid - UserID, map to your desired User ID (fallback to 9001)
-
-    gid - GroupID, map to your desired Group ID (fallback to 9001)
-
+- **/home/download** - the place where the file will be saved. Mount it to a desired place with -v option.
+- **channelURL** - the url of the stream you want to record.
+- **channelName** - the name for the stream.
+- **uid** - UserID, map to your desired User ID (fallback to 9001)
+- **gid** - GroupID, map to your desired Group ID (fallback to 9001)
 
 The File will be saved as streamName-YearMonthDate-HourMinuteSecond.json
 
