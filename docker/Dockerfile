@@ -21,4 +21,4 @@ RUN ["chmod", "+x", "/home/script/entrypoint.sh"]
 
 ENTRYPOINT [ "/home/script/entrypoint.sh" ]
 
-CMD python download_chat.py ${channelURL} ${channelName}
+CMD python download_chat.py ${channelURL} ${channelName} ${fileFormat}
