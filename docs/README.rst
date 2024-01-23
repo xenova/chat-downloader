@@ -60,6 +60,11 @@ Alternatively, the tool can be installed with ``git``:
    $ cd chat-downloader
    $ python setup.py install
 
+The tool can be used with ``docker``:
+
+.. code:: console
+
+   $ docker run -v /path/to/download/:/home/download/ -e channelURL='https://www.twitch.tv/twitch' -e channelName='twitch' -e fileFormat='json' -e uid='1000' -e gid='1000' ghcr.io/xenova/chat-downloader:master
 
 #####
 Usage
@@ -98,6 +103,26 @@ Python
 
 For advanced python use-cases and examples, consult the :ref:`Python Documentation`.
 
+
+Docker
+------
+
+.. code:: console
+    
+    /home/download - the place where the file will be saved. Mount it to a desired place with -v option.
+
+    channelURL - the url of the stream you want to record.
+
+    channelName - the name for the stream.
+
+    fileFormat - file extension to be used.
+
+    uid - UserID, map to your desired User ID (fallback to 9001)
+
+    gid - GroupID, map to your desired Group ID (fallback to 9001)
+
+
+The File will be saved as streamName-YearMonthDate-HourMinuteSecond.ext
 
 ##########
 Chat Items
