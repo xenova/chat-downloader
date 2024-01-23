@@ -64,7 +64,7 @@ The tool can be used with ``docker``:
 
 .. code:: console
 
-   $ docker run -v /path/to/download/:/home/download/ -e channelURL='https://www.twitch.tv/twitch' -e channelName='twitch' -e uid='1000' -e gid='1000' ghcr.io/xenova/chat-downloader:master
+   $ docker run -v /path/to/download/:/home/download/ -e channelURL='https://www.twitch.tv/twitch' -e channelName='twitch' -e fileFormat='json' -e uid='1000' -e gid='1000' ghcr.io/xenova/chat-downloader:master
 
 #####
 Usage
@@ -115,12 +115,14 @@ Docker
 
     channelName - the name for the stream.
 
+    fileFormat - file extension to be used.
+
     uid - UserID, map to your desired User ID (fallback to 9001)
 
     gid - GroupID, map to your desired Group ID (fallback to 9001)
 
 
-The File will be saved as streamName-YearMonthDate-HourMinuteSecond.json
+The File will be saved as streamName-YearMonthDate-HourMinuteSecond.ext
 
 ##########
 Chat Items
