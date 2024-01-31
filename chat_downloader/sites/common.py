@@ -201,7 +201,7 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
+    def __init__(self, chat=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, date_time=None, **kwargs):
         """Create a Chat object
 
         :param chat: Generator method for retrieving chat messages, defaults to None
@@ -219,10 +219,13 @@ class Chat():
         :param start_time: Start time of the stream (or upload date of video)
             in UNIX microseconds, defaults to None
         :type start_time: float, optional
+        :param date_time: Date of Stream or clip created, defaults to None
+        :type date_time: str, optional
         """
 
         self.chat = chat
 
+        self.date_time = date_time
         self.title = title
         self.duration = duration
 
@@ -253,7 +256,9 @@ class Chat():
         # Special formatting of output name:
         # Allowed keys are specified here
         # Remove invalid characters from output file name
+        log('info', f'Retrieving chat for "{self.date_time}".')
         self._output_writer.file_name = self._output_writer.file_name.format(
+            date_time=safe_path(self.date_time),
             title=safe_path(self.title),
             id=safe_path(self.id)
         )

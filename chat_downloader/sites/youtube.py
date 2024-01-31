@@ -1,4 +1,4 @@
-
+from datetime import datetime
 from .common import (
     BaseChatDownloader,
     Chat,
@@ -2176,10 +2176,12 @@ class YouTubeChatDownloader(BaseChatDownloader):
         :rtype: Chat
         """
         initial_info, ytcfg = self._get_initial_video_info(video_id, params)
+        date_time = initial_info.get('start_time')/1000000
 
         return Chat(
             self._get_chat_messages(initial_info, ytcfg, params),
             id=video_id,
+            date_time=str(datetime.fromtimestamp(date_time)),
             **initial_info
         )
 
