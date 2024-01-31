@@ -1,5 +1,5 @@
 
-
+from datetime import datetime
 import json
 import re
 from .common import (
@@ -117,6 +117,7 @@ class ZoomChatDownloader(BaseChatDownloader):
 
         chat_messages = result.get('meetingChatList') or []
         title = multi_get(result, 'meet', 'topic')
+        date_time = datetime.fromtimestamp(float(result.get('fileStartTime'))/1000)
         return Chat(
             self._get_chat_messages(chat_messages, params),
             title=title,
@@ -124,6 +125,7 @@ class ZoomChatDownloader(BaseChatDownloader):
             start_time=result.get('fileStartTime'),
             id=video_id,
             duration=result.get('duration'),
+            date_time=str(date_time)
         )
 
     def _parse_js_dict(self, json_string):

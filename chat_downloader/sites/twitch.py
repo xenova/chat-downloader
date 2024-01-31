@@ -1252,6 +1252,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                 "Sorry. Unless you've got a time machine, that content is unavailable.")
         title = video.get('title')
         duration = video.get('lengthSeconds')
+        date_time = video.get('createdAt')
 
         channel_name = multi_get(video, 'owner', 'login')
         self._update_badge_info(channel_name)
@@ -1263,7 +1264,8 @@ class TwitchChatDownloader(BaseChatDownloader):
             duration=duration,
             status='past',
             video_type='video',
-            id=vod_id
+            id=vod_id,
+            date_time=date_time            
         )
 
     def _get_chat_by_clip_id(self, match, params):
@@ -1294,7 +1296,7 @@ class TwitchChatDownloader(BaseChatDownloader):
 
         duration = clip.get('durationSeconds')
         title = f"{clip.get('title')} ({clip_id})"
-
+        date_time = clip.get('createdAt')
         channel_name = multi_get(clip, 'broadcaster', 'login')
         self._update_badge_info(channel_name)
 
@@ -1305,7 +1307,8 @@ class TwitchChatDownloader(BaseChatDownloader):
             duration=duration,
             status='past',
             video_type='clip',
-            id=clip_id
+            id=clip_id,
+            date_time=date_time
         )
 
     _MESSAGE_REGEX = re.compile(
