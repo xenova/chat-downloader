@@ -1366,7 +1366,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if self.get_cookie_value('__Secure-3PSID'):
             return
         socs = self.get_cookie_value('SOCS')
-        if socs and not socs.value.startswith('CAA'):  # not consented
+        if socs and not str(socs).startswith('CAA'):  # not consented
             return
         self.set_cookie_value('.youtube.com', 'SOCS', 'CAI', secure=True)  # accept all (required for mixes)
 
