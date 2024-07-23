@@ -83,7 +83,7 @@ class JSONCW(CW):
         self.file.seek(0, os.SEEK_END)  # Go to the end of file
 
         to_write = json.dumps(
-            item, indent=self.indent, sort_keys=self.sort_keys)
+            item, ensure_ascii=False, indent=self.indent, sort_keys=self.sort_keys)
         if self.indent is not None:
             indent_padding = '\n'  # to add on a new line
             to_write = indent_padding + self._multiline_indent(to_write)
@@ -166,7 +166,7 @@ class JSONLCW(CW):
         self.file = open(self.file_name, 'a', encoding='utf-8')
 
     def write(self, item, flush=False):
-        print(json.dumps(item, sort_keys=self.sort_keys),
+        print(json.dumps(item, ensure_ascii=False, sort_keys=self.sort_keys),
               file=self.file, flush=flush)
 
 
