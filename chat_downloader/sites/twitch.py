@@ -255,7 +255,7 @@ class TwitchChatDownloader(BaseChatDownloader):
                     emotes[emote_id] = {
                         'id': emote_id,
                         'images': TwitchChatDownloader._generate_emote_image_list(emote_id),
-                        'name': message_text[begin:end + 1]
+                        'name': message_text.encode("utf-8")[begin:end + 1].decode("utf-8")
                     }
 
                 emote_locations[emote_id].append(f'{begin}-{end}')
