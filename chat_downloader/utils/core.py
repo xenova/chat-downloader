@@ -14,17 +14,15 @@ def base64_encode(text):
 
 
 def timestamp_to_microseconds(timestamp):
-    """Convert RFC3339 timestamp to microseconds. This is needed since
-        ``datetime.datetime.strptime()`` does not support nanosecond precision.
+    """Convert ISO 8601 timestamp to microseconds.
 
-    :param timestamp: RFC3339 timestamp
+    :param timestamp: ISO 8601 timestamp
     :type timestamp: str
     :return: The number of microseconds of the timestamp
     :rtype: int
     """
 
-    info = list(filter(None, re.split(r'[\.|Z]{1}', timestamp))) + [0]
-    return round((datetime.datetime.strptime(f'{info[0]}Z', '%Y-%m-%dT%H:%M:%SZ').timestamp() + float(f'0.{info[1]}')) * 1e6)
+    return int(datetime.datetime.fromisoformat(timestamp).timestamp() * 1e6)
 
 
 def time_to_seconds(time):
