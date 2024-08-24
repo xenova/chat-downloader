@@ -139,6 +139,7 @@ def main(cli_args=None):
 
     output_group = parser.add_argument_group('Output Arguments')
     add_chat_param(output_group, '--output', '-o')
+    add_chat_param(output_group, '--output_format', '-of')
     add_chat_param(output_group, '--overwrite',
                    type=str2bool, nargs='?', const=True)
     add_chat_param(output_group, '--sort_keys',

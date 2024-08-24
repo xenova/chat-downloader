@@ -95,6 +95,7 @@ class ChatDownloader():
 
                  # Output
                  output=None,
+                 output_format=None,
                  overwrite=True,
                  sort_keys=True,
                  indent=4,
@@ -149,6 +150,8 @@ class ChatDownloader():
         :param output: Path of the output file, defaults to None (print to
             standard output)
         :type output: str, optional
+        :param output_format: The output file format, like 'jsonl', 'txt', etc.
+        :type output_format: str, optional
         :param overwrite: If True, overwrite output file. Otherwise, append
             to the end of the file. Defaults to True. In both cases, the file
             (and directories) is created if it does not exist.
@@ -266,6 +269,7 @@ class ChatDownloader():
                         indent=params['indent'],
                         sort_keys=params['sort_keys'],
                         overwrite=params['overwrite'],
+                        format=params['output_format'],
                         lazy_initialise=True
                     ))
 
