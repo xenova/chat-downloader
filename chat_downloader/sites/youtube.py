@@ -822,6 +822,28 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
         '¥': 'JPY',
         '￥': 'JPY',
+
+        "؋": "AFN",
+        "฿": "THB",
+        "₵": "GHS",
+        "₡": "CRC",
+        "₫": "VND",
+        "֏": "AMD",
+        "₲": "PYG",
+        "₴": "UAH",
+        "₭": "LAK",
+        "₾": "GEL",
+        "₺": "TRY",
+        "₼": "AZN",
+        "₦": "NGN",
+        "﷼": "IRR",
+        "៛": "KHR",
+        "₽": "RUB",
+        "₪": "ILS",
+        "⃀": "KGS",
+        "৳": "BDT",
+        "₸": "KZT",
+        "₮": "MNT",
     }
 
     # All other currency symbols use the ISO 4217 format:
