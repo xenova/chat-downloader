@@ -1532,7 +1532,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
         }
 
         # live, upcoming or past
-        if video_details.get('isLive') or live_details.get('isLiveNow'):
+        if video_details.get('isLive') or live_details.get('isLiveNow') or live_details.get("isLiveContent"):
             details['status'] = 'live'
 
         elif video_details.get('isUpcoming'):
