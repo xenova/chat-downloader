@@ -1,58 +1,28 @@
 
-from .common import (
-    BaseChatDownloader,
-    Chat,
-    Remapper as r,
-    Image
-)
-
-from ..errors import (
-    ChatDownloaderError,
-    NoChatReplay,
-    ChatDisabled,
-    NoContinuation,
-    ParsingError,
-    VideoUnavailable,
-    LoginRequired,
-    VideoUnplayable,
-    InvalidParameter,
-    UserNotFound,
-    VideoNotFound,
-    NoVideos
-)
-from ..utils.timed_utils import interruptible_sleep
-
-from ..utils.core import (
-    multi_get,
-    time_to_seconds,
-    seconds_to_time,
-    int_or_none,
-    float_or_none,
-    arbg_int_to_rgba,
-    rgba_to_hex,
-    try_get_first_key,
-    try_get_first_value,
-    remove_prefixes,
-    remove_suffixes,
-    camel_case_split,
-    ensure_seconds,
-    attempts,
-    try_parse_json,
-    regex_search,
-    parse_iso8601,
-    get_title_of_webpage
-)
-
-from ..debugging import (log, debug_log)
-
-from itertools import islice
-import time
+import hashlib
 import random
 import re
-import hashlib
-from requests.exceptions import RequestException
+import time
+from itertools import islice
 from json.decoder import JSONDecodeError
 from urllib import parse
+
+from requests.exceptions import RequestException
+
+from ..debugging import debug_log, log
+from ..errors import (ChatDisabled, ChatDownloaderError, InvalidParameter,
+                      LoginRequired, NoChatReplay, NoContinuation, NoVideos,
+                      ParsingError, UserNotFound, VideoNotFound,
+                      VideoUnavailable, VideoUnplayable)
+from ..utils.core import (arbg_int_to_rgba, attempts, camel_case_split,
+                          ensure_seconds, float_or_none, get_title_of_webpage,
+                          int_or_none, multi_get, parse_iso8601, regex_search,
+                          remove_prefixes, remove_suffixes, rgba_to_hex,
+                          seconds_to_time, time_to_seconds, try_get_first_key,
+                          try_get_first_value, try_parse_json)
+from ..utils.timed_utils import interruptible_sleep
+from .common import BaseChatDownloader, Chat, Image
+from .common import Remapper as r
 
 
 class YouTubeChatDownloader(BaseChatDownloader):
@@ -65,6 +35,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
     _SITE_DEFAULT_PARAMS = {
         'format': 'youtube',
+        'message_groups': ['messages', 'superchat']
     }
 
     _TESTS = [
@@ -467,6 +438,7 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             # Gifts
             'sponsorships_gift_purchase_announcement',
+            'sponsorships_gift_redemption_announcement'
         ],
         'tickers': [
             # superchat messages which appear ticker (at the top)
@@ -1526,8 +1498,10 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Parse continuation info
         sub_menu_items = multi_get(yt_initial_data, 'contents', 'twoColumnWatchNextResults', 'conversationBar', 'liveChatRenderer',
                                    'header', 'liveChatHeaderRenderer', 'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems') or {}
+        continuation = multi_get(yt_initial_data, 'contents', 'twoColumnWatchNextResults', 'conversationBar', 'liveChatRenderer',
+                                 'continuations', 0, 'reloadContinuationData', 'continuation')
         details['continuation_info'] = {
-            x['title']: x['continuation']['reloadContinuationData']['continuation']
+            x['title']: continuation
             for x in sub_menu_items
         }
 

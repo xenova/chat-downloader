@@ -201,12 +201,12 @@ class Chat():
     next value is yielded from the object's `chat` generator method.
     """
 
-    def __init__(self, chat=None, title=None, duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
+    def __init__(self, chat=None, title="", duration=None, status=None, video_type=None, start_time=None, id=None, **kwargs):
         """Create a Chat object
 
         :param chat: Generator method for retrieving chat messages, defaults to None
         :type chat: generator, optional
-        :param title: Stream or video title, defaults to None
+        :param title: Stream or video title, defaults to an empty string
         :type title: str, optional
         :param duration: Duration of the stream or video, defaults to None
         :type duration: float, optional
