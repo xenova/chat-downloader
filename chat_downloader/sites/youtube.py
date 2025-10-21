@@ -1527,7 +1527,8 @@ class YouTubeChatDownloader(BaseChatDownloader):
         sub_menu_items = multi_get(yt_initial_data, 'contents', 'twoColumnWatchNextResults', 'conversationBar', 'liveChatRenderer',
                                    'header', 'liveChatHeaderRenderer', 'viewSelector', 'sortFilterSubMenuRenderer', 'subMenuItems') or {}
         details['continuation_info'] = {
-            x['title']: x['continuation']['reloadContinuationData']['continuation']
+            x['title']: yt_initial_data['contents']['twoColumnWatchNextResults']['conversationBar']['liveChatRenderer'][
+                'continuations'][0]['reloadContinuationData']['continuation']
             for x in sub_menu_items
         }
 
