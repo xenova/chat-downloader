@@ -52,7 +52,7 @@ lint: ## check style with flake8
 	flake8 chat_downloader tests
 
 test: ## run tests quickly with the default Python
-	pytest -v --ignore tests/test_generators.py
+	pytest -v
 
 test-all: ## run tests on every Python version with tox
 	tox
@@ -77,12 +77,11 @@ servedocs: docs ## compile the docs watching for changes
 	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
 
 release: dist ## package and upload a release
-	twine upload dist/*
+	twine upload dist/chat_downloader-*
 
 dist: clean ## builds source and wheel package
-	python setup.py sdist
-	python setup.py bdist_wheel
+	pip wheel -w dist .
 	ls -l dist
 
 install: clean ## install the package to the active Python's site-packages
-	python setup.py install
+	pip install .
