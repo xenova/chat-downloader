@@ -2,4 +2,4 @@
 
 __program__ = 'chat_downloader'
 __summary__ = 'A simple tool used to retrieve chat messages from livestreams, videos, clips and past broadcasts. No authentication needed!'
-__version__ = '0.2.8'
+__version__ = '0.3.0'
