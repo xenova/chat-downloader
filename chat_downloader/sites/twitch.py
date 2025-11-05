@@ -509,6 +509,12 @@ class TwitchChatDownloader(BaseChatDownloader):
         'reply-parent-display-name': 'in_reply_to_author_display_name',
         'reply-parent-user-login': 'in_reply_to_author_name',
 
+        'reply-thread-parent-msg-id': 'reply_thread_parent_msg_id',
+        'reply-thread-parent-display-name': 'reply_thread_parent_display_name',
+        'reply-thread-parent-user-id': r(
+            'reply_thread_parent_user_id', str_or_none),
+        'reply-thread-parent-user-login': 'reply_thread_parent_user_login',
+
         'crowd-chant-parent-msg-id': 'crowd_chant_in_reply_to_message_id',
 
         'custom-reward-id': 'custom_reward_id',
