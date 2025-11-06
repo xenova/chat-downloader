@@ -58,7 +58,7 @@ Alternatively, the tool can be installed with ``git``:
 
    $ git clone https://github.com/xenova/chat-downloader.git
    $ cd chat-downloader
-   $ python setup.py install
+   $ pip install .
 
 
 #####
