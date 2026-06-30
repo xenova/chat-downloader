@@ -1173,13 +1173,16 @@ class YouTubeChatDownloader(BaseChatDownloader):
     def _parse_video(video_renderer):
         # Get video type:
         # One of DEFAULT, UPCOMING, LIVE
-        video_type = 'DEFAULT'
+        # Keep existing videoType if it was already resolved by the caller
+        video_type = video_renderer.get('videoType', 'DEFAULT')
+        
         thumbnail_overlays = multi_get(
             video_renderer, 'thumbnailOverlays') or []
         for thumbnail_overlay in thumbnail_overlays:
-            video_type = multi_get(
+            resolved_type = multi_get(
                 thumbnail_overlay, 'thumbnailOverlayTimeStatusRenderer', 'style')
-            if video_type:
+            if resolved_type:
+                video_type = resolved_type
                 break
 
         video_renderer['videoType'] = video_type
@@ -1301,9 +1304,51 @@ class YouTubeChatDownloader(BaseChatDownloader):
 
             continuation = None
             for item in items:
-                vid = multi_get(item, 'richItemRenderer',
-                                'content', 'videoRenderer')
-                continuation_item = item.get('continuationItemRenderer')
+                # 1. Check standard renderers (videos, shorts, older stream layouts)
+                vid = (
+                    multi_get(item, 'richItemRenderer', 'content', 'videoRenderer')
+                    or multi_get(item, 'richItemRenderer', 'content', 'liveStreamRenderer')
+                    or item.get('videoRenderer')
+                    or item.get('liveStreamRenderer')
+                )
+
+                # 2. Handle the new lockupViewModel layout
+                if not vid:
+                    lockup = multi_get(item, 'richItemRenderer', 'content', 'lockupViewModel')
+                    if lockup:
+                        v_id = lockup.get('contentId')
+                        v_title = multi_get(lockup, 'metadata', 'lockupMetadataViewModel', 'title', 'content')
+                        
+                        # Extract the exact badge text from the thumbnail overlays structure
+                        overlays = multi_get(lockup, 'contentImage', 'thumbnailViewModel', 'overlays') or []
+                        
+                        v_type = 'DEFAULT'
+                        for overlay in overlays:
+                            badge_text = multi_get(
+                                overlay, 
+                                'thumbnailBottomOverlayViewModel', 
+                                'badges', 0, 
+                                'thumbnailBadgeViewModel', 
+                                'text'
+                            )
+                            if badge_text:
+                                if badge_text == 'Upcoming':
+                                    v_type = 'UPCOMING'
+                                elif badge_text in ('LIVE', 'Live'):
+                                    v_type = 'LIVE'
+                                break
+
+                        vid = {
+                            'videoId': v_id,
+                            'title': {'runs': [{'text': v_title}]} if v_title else None,
+                            'videoType': v_type
+                        }
+
+                # 3. Check for continuation token (pagination)
+                continuation_item = (
+                    item.get('continuationItemRenderer')
+                    or multi_get(item, 'richItemRenderer', 'content', 'continuationItemRenderer')
+                )
 
                 if vid:
                     yield self._parse_video(vid)
@@ -1424,6 +1469,22 @@ class YouTubeChatDownloader(BaseChatDownloader):
         if params is None:
             params = {}
 
+            # FIX: FORCE LAZY-LOAD COOKIES BEFORE THE INITIAL REQUEST >>
+            # If a cookie file path is provided and the session cookies are not yet initialized
+            cookies_file = params.get('cookies')
+            if cookies_file and not self.session.cookies:
+                import os
+                from urllib.request import MozillaCookieJar
+                if os.path.exists(cookies_file):
+                    try:
+                        cj = MozillaCookieJar()
+                        cj.load(cookies_file, ignore_discard=True, ignore_expires=True)
+                        self.session.cookies.update(cj)
+                        log('debug', f'Successfully forced cookies for the initial request from: {cookies_file}')
+                    except Exception as e:
+                        log('warning', f'Failed to parse cookies at the initial stage: {e}')
+            # FIX: FORCE LAZY-LOAD COOKIES BEFORE THE INITIAL REQUEST <<
+
         max_attempts = params.get('max_attempts', 1)
         for attempt_number in attempts(max_attempts):
             try:
@@ -1541,6 +1602,48 @@ class YouTubeChatDownloader(BaseChatDownloader):
         else:
             details['status'] = 'past'
 
+        # Continuation changes mid October 2025 >>
+        try:
+            client_continuation = \
+            yt_initial_data['contents']['twoColumnWatchNextResults']['conversationBar']['liveChatRenderer'][
+                'continuations'][0]['reloadContinuationData']['continuation']
+
+            if details['status'] != 'past':
+                response = self._session_get(f'https://www.youtube.com/live_chat?continuation={client_continuation}')
+            else:
+                response = self._session_get(f'https://www.youtube.com/live_chat_replay?continuation={client_continuation}')
+
+            html = response.text
+            yt = regex_search(html, self._YT_INITIAL_DATA_RE)
+            dictLiveChats = try_parse_json(yt)
+
+            continuations = \
+                dictLiveChats['continuationContents']['liveChatContinuation']['header']['liveChatHeaderRenderer'][
+                    'viewSelector'][
+                    'sortFilterSubMenuRenderer']['subMenuItems']
+
+            top_continuation = continuations[0]['continuation']['reloadContinuationData']['continuation']
+            live_continuation = continuations[1]['continuation']['reloadContinuationData']['continuation']
+
+            # Store absolute keys inside continuation_info to completely bypass YouTube localization bugs
+            details['continuation_info']['Top'] = top_continuation
+            details['continuation_info']['Live'] = live_continuation
+
+            # Fix: Upcoming video chat was not read correctly >>
+            if details['status'] == 'upcoming':
+                details['continuation_info']['Top chat'] = top_continuation
+                details['continuation_info']['Live chat'] = live_continuation
+            elif details['status'] != 'past':
+            # Fix: Upcoming video chat was not read correctly <<
+                details['continuation_info']['Top chat'] = top_continuation
+                details['continuation_info']['Live chat'] = live_continuation
+            else:
+                details['continuation_info']['Top chat replay'] = top_continuation
+                details['continuation_info']['Live chat replay'] = live_continuation
+        except:
+            pass
+        # Continuation changes mid October 2025 <<
+        
         return details, player_response_info, yt_initial_data, ytcfg
 
     def _get_initial_video_info(self, video_id, params=None, video_type='video'):
@@ -1686,11 +1789,17 @@ class YouTubeChatDownloader(BaseChatDownloader):
         # Top chat replay - Some messages, such as potential spam, may not be visible
         # Live chat replay - All messages are visible
         chat_type = params.get('chat_type', 'live').title()  # Live or Top
-        continuation_index = 0 if chat_type == 'Top' else 1
-        continuation_info = list(initial_continuation_info.items())[
-            continuation_index]
-        continuation = continuation_info[1]
-        log('debug', f'Getting {chat_type} chat ({continuation_info[0]}).')
+        
+        # Safely fetch the pre-resolved tokens from our absolute keys if available
+        if chat_type in initial_continuation_info:
+            continuation = initial_continuation_info[chat_type]
+            log('debug', f'Getting {chat_type} chat using absolute pre-resolved token.')
+        else:
+            # Fallback to legacy index slicing if absolute keys are missing
+            continuation_index = 0 if chat_type == 'Top' else 1
+            continuation_info = list(initial_continuation_info.items())[continuation_index]
+            continuation = continuation_info[1]
+            log('debug', f'Getting {chat_type} chat ({continuation_info[0]}) via legacy fallback index.')
 
         is_replay = status == 'past'
 
@@ -1751,9 +1860,24 @@ class YouTubeChatDownloader(BaseChatDownloader):
                     'authorization': auth
                 })
 
+            # Fix crash when using cookies >>
+            #if first_time:
+            #    # must run to get first few messages, otherwise might miss some
+            #    yt_info = self._get_initial_info(init_page, params)[0]
             if first_time:
-                # must run to get first few messages, otherwise might miss some
-                yt_info = self._get_initial_info(init_page, params)[0]
+                # Must run to get the first few messages, otherwise some might be missed.
+                # Fallback to continuation request if the initial page parsing fails or returns empty data.
+                try:
+                    yt_info = self._get_initial_info(init_page, params)[0]
+                    if not yt_info:
+                        raise ParsingError('Initial video page info is empty or invalid.')
+                except ParsingError:
+                    if click_tracking_params:
+                        continuation_params['context']['clickTracking'] = {
+                            'clickTrackingParams': click_tracking_params}
+                    yt_info = self._get_continuation_info(
+                        continuation_url, params, json=continuation_params)
+            # Fix crash when using cookies <<
 
             else:
                 if is_replay and offset_milliseconds is not None:
