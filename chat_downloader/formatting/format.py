@@ -13,6 +13,7 @@ from copy import deepcopy
 
 
 from ..errors import (
+    FormatError,
     FormatNotFound,
     FormatFileNotFound
 )
@@ -42,8 +43,12 @@ class ItemFormatter:
                 raise FormatFileNotFound(
                     f'Format file not found: "{path}"')
 
-            with open(path) as custom_formats:
-                self.format_file.update(json.load(custom_formats))
+            try:
+                with open(path) as custom_formats:
+                    self.format_file.update(json.load(custom_formats))
+            except json.JSONDecodeError as exc:
+                raise FormatError(
+                    f'Invalid format file "{path}": {exc}') from exc
 
     def _replace(self, match, item, format_object):
         """Replace a match object with
